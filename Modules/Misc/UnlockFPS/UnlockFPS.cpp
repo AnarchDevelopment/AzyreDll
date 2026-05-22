@@ -1,6 +1,11 @@
+/*
+Under an4rch Development Public Source License 1.0
+*/
+
 #include "UnlockFPS.hpp"
 #include "Animations/Animations.hpp"
 #include "ImGui/imgui.h"
+#include "GUI/GUI.hpp"
 #include <Windows.h>
 #include <cstdio>
 #include <cmath>
@@ -85,7 +90,7 @@ void UnlockFPS::UpdateFPS() {
 void UnlockFPS::SetFPS(float fps)
 {
     if (fps < 5.0f) fps = 5.0f;
-    if (fps > 500.0f) fps = 500.0f;
+    if (fps > 1000.0f) fps = 1000.0f;
 
     targetFPS = fps;
     if (perfFrequency.QuadPart == 0) {
@@ -137,7 +142,10 @@ void UnlockFPS::RenderArrayList(ImDrawList* draw, ImVec2 arrayListStart, float& 
 }
 
 void UnlockFPS::RenderMenu() {
-    if (ImGui::Checkbox("Unlock FPS", &g_unlockFpsEnabled)) {
+    bool prev = g_unlockFpsEnabled;
+    ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "This module is very unstable; use it at your own risk.\n It causes tearing and other visual problems.");
+    GUI::RenderCustomSwitch("Unlock FPS", &g_unlockFpsEnabled);
+    if (prev != g_unlockFpsEnabled) {
         if (g_unlockFpsEnabled) {
             g_unlockFpsEnableTime = GetTickCount64();
             g_unlockFpsDisableTime = 0;
@@ -147,9 +155,8 @@ void UnlockFPS::RenderMenu() {
         }
     }
 
-    if (g_unlockFpsEnabled) {
-        ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.40f, 0.18f, 0.28f, 0.8f));
-        ImGui::SliderFloat("FPS Limit", &g_fpsLimit, 5.0f, 240.0f, "%.0f FPS");
-        ImGui::PopStyleColor();
+    if (GUI::BeginModuleSettings("UnlockFPS", &g_unlockFpsEnabled)) {
+        ImGui::SliderFloat("FPS Limit", &g_fpsLimit, 5.0f, 1000.0f, "%.0f FPS");
+        GUI::EndModuleSettings();
     }
 }

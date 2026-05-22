@@ -1,7 +1,12 @@
+/*
+Under an4rch Development Public Source License 1.0
+*/
+
 #include "CPSCounter.hpp"
 #include "../../../Animations/Animations.hpp"
 #include "../../../Utils/HudElement.hpp"
 #include "../../../ImGui/imgui.h"
+#include "../../../GUI/GUI.hpp"
 #include <windows.h>
 #include <cmath>
 #include <algorithm>
@@ -43,37 +48,33 @@ void CPSCounter::Initialize(HudElement* hudElement) {
 }
 
 void CPSCounter::UpdateCPS(ULONGLONG now, bool lmbPressed, bool rmbPressed, bool prevLmbPressed, bool prevRmbPressed) {
-    // LMB CPS Counter
+    // LMB Click tracking
     if (lmbPressed && !prevLmbPressed) {
-        // Save click timestamp
         g_lmbClickTimes[g_lmbClickIndex] = now;
         g_lmbClickIndex = (g_lmbClickIndex + 1) % MAX_CPS_HISTORY;
-        
-        // Count clicks in last 1000ms
-        int count = 0;
-        for (int i = 0; i < MAX_CPS_HISTORY; i++) {
-            if (g_lmbClickTimes[i] > 0 && (now - g_lmbClickTimes[i]) < 1000) {
-                count++;
-            }
-        }
-        g_lmbCps = count;
     }
     
-    // RMB CPS Counter
+    // RMB Click tracking
     if (rmbPressed && !prevRmbPressed) {
-        // Save click timestamp
         g_rmbClickTimes[g_rmbClickIndex] = now;
         g_rmbClickIndex = (g_rmbClickIndex + 1) % MAX_CPS_HISTORY;
-        
-        // Count clicks in last 1000ms
-        int count = 0;
-        for (int i = 0; i < MAX_CPS_HISTORY; i++) {
-            if (g_rmbClickTimes[i] > 0 && (now - g_rmbClickTimes[i]) < 1000) {
-                count++;
-            }
-        }
-        g_rmbCps = count;
     }
+
+    // Recalculate CPS every frame for smooth decay to 0
+    int lmbCount = 0;
+    int rmbCount = 0;
+    for (int i = 0; i < MAX_CPS_HISTORY; i++) {
+        if (g_lmbClickTimes[i] > 0) {
+            if (now - g_lmbClickTimes[i] < 1000) lmbCount++;
+            else g_lmbClickTimes[i] = 0; // Clean up old timestamps
+        }
+        if (g_rmbClickTimes[i] > 0) {
+            if (now - g_rmbClickTimes[i] < 1000) rmbCount++;
+            else g_rmbClickTimes[i] = 0; // Clean up old timestamps
+        }
+    }
+    g_lmbCps = lmbCount;
+    g_rmbCps = rmbCount;
 }
 
 void CPSCounter::UpdateAnimation(ULONGLONG now) {
@@ -208,46 +209,36 @@ void CPSCounter::RenderMenu() {
     static char cpsFormatBuf[256] = "CPS: {lmb} | {rmb}";
     
     // Show CPS Counter toggle
-    ImGui::Checkbox("CPS Counter", &g_showCpsCounter);
+    GUI::RenderCustomSwitch("CPS Counter", &g_showCpsCounter);
     
-    if (g_showCpsCounter) {
-        ImGui::Separator();
-        ImGui::Text("CPS Counter Configuration");
-        
-        ImGui::PushStyleVar(ImGuiStyleVar_Alpha, ImGui::GetStyle().Alpha * 0.8f);
-        
-        // Color picker
-        ImGui::ColorEdit4("CPS Text Color##CPSCounter", &g_cpsTextColor.x);
-        
-        // Format string
-        if (!g_cpsCounterFirstRender) {
-            strncpy_s(cpsFormatBuf, sizeof(cpsFormatBuf), g_cpsCounterFormat.c_str(), _TRUNCATE);
-            g_cpsCounterFirstRender = true;
+    if (GUI::BeginModuleSettings("CPSCounter", &g_showCpsCounter)) {
+        if (ImGui::BeginTabBar("CPSTabs")) {
+            if (ImGui::BeginTabItem("Text")) {
+                if (!g_cpsCounterFirstRender) {
+                    strncpy_s(cpsFormatBuf, sizeof(cpsFormatBuf), g_cpsCounterFormat.c_str(), _TRUNCATE);
+                    g_cpsCounterFirstRender = true;
+                }
+                if (ImGui::InputText("Format String", cpsFormatBuf, sizeof(cpsFormatBuf))) {
+                    g_cpsCounterFormat = std::string(cpsFormatBuf);
+                }
+                ImGui::TextDisabled("{LMB} and {RMB} are placeholders");
+                ImGui::SliderFloat("Scale", &g_cpsTextScale, 0.5f, 2.0f, "%.2f");
+                ImGui::ColorEdit4("Color", &g_cpsTextColor.x);
+                ImGui::EndTabItem();
+            }
+            if (ImGui::BeginTabItem("Visuals")) {
+                const char* alignmentItems[] = { "Left", "Center", "Right" };
+                ImGui::Combo("Alignment", &g_cpsCounterAlignment, alignmentItems, IM_ARRAYSIZE(alignmentItems));
+                GUI::RenderCustomSwitch("Shadow", &g_cpsCounterShadow);
+                if (g_cpsCounterShadow) {
+                    ImGui::SliderFloat("Shadow Offset", &g_cpsCounterShadowOffset, 0.0f, 10.0f, "%.1f");
+                    ImGui::ColorEdit4("Shadow Color", &g_cpsCounterShadowColor.x);
+                }
+                ImGui::EndTabItem();
+            }
+            ImGui::EndTabBar();
         }
-        if (ImGui::InputText("Format String##CPS", cpsFormatBuf, sizeof(cpsFormatBuf))) {
-            g_cpsCounterFormat = std::string(cpsFormatBuf);
-        }
-        ImGui::TextWrapped("Use {LMB} and {RMB} for left and right mouse button CPS");
-        
-        // Text Scale
-        ImGui::SliderFloat("CPS Text Scale##CPSCounter", &g_cpsTextScale, 0.5f, 2.0f, "%.2f");
-        
-        // Position
-        ImGui::SliderFloat("CPS X Position##CPSCounter", &g_cpsCounterX, 0.0f, 1.0f, "%.2f");
-        ImGui::SliderFloat("CPS Y Position##CPSCounter", &g_cpsCounterY, 0.0f, 1.0f, "%.2f");
-        
-        // Alignment
-        const char* alignmentItems[] = { "Left", "Center", "Right" };
-        ImGui::Combo("CPS Text Alignment##CPSCounter", &g_cpsCounterAlignment, alignmentItems, IM_ARRAYSIZE(alignmentItems));
-        
-        // Shadow
-        ImGui::Checkbox("CPS Text Shadow##CPSCounter", &g_cpsCounterShadow);
-        if (g_cpsCounterShadow) {
-            ImGui::SliderFloat("CPS Shadow Offset##CPSCounter", &g_cpsCounterShadowOffset, 0.0f, 10.0f, "%.1f");
-            ImGui::ColorEdit4("CPS Shadow Color##CPSCounter", &g_cpsCounterShadowColor.x);
-        }
-        
-        ImGui::PopStyleVar();  // Alpha
+        GUI::EndModuleSettings();
     }
 }
 

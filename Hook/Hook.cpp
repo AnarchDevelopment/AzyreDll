@@ -1,3 +1,7 @@
+/*
+Under an4rch Development Public Source License 1.0
+*/
+
 #include "Hook.hpp"
 #include "../Modules/Info/Info.hpp"
 #include "../minhook/MinHook.h"
@@ -73,6 +77,9 @@ extern ID3D11RenderTargetView* mainRenderTargetView;
 static DWORD WINAPI UnloadThread(LPVOID lpParam) {
     // Esperamos para estar completamente fuera del contexto de renderizado
     Sleep(500);
+
+    extern void CleanupUwpCursor();
+    CleanupUwpCursor();
 
     // Shutdown Info module
     Info::Shutdown();
@@ -159,15 +166,23 @@ HRESULT STDMETHODCALLTYPE Hook::hkResizeBuffers(IDXGISwapChain* pSwapChain, UINT
     extern float g_lastW, g_lastH;
     g_lastW = 0;
     g_lastH = 0;
+
+    // Force allow tearing for UWP FPS unlock (0x800 = DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING)
+    SwapChainFlags |= 0x800;
+
     return Hook::oResizeBuffers(pSwapChain, BufferCount, Width, Height, NewFormat, SwapChainFlags);
 }
 
+extern void UpdateUwpCursorState();
+
 BOOL WINAPI Hook::hkSetCursorPos(int x, int y) {
+    UpdateUwpCursorState();
     if (g_showMenu) return TRUE;
     return Hook::oSetCursorPos(x, y);
 }
 
 BOOL WINAPI Hook::hkClipCursor(const RECT* lpRect) {
+    UpdateUwpCursorState();
     if (g_showMenu) return Hook::oClipCursor(NULL);
     return Hook::oClipCursor(lpRect);
 }

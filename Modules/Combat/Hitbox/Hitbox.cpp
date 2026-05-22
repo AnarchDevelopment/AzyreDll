@@ -1,7 +1,12 @@
+/*
+Under an4rch Development Public Source License 1.0
+*/
+
 #include "Hitbox.hpp"
 #include "../../../Animations/Animations.hpp"
 #include "../../Alloc/AllocateNear.hpp"
 #include "../../../ImGui/imgui.h"
+#include "../../../GUI/GUI.hpp"
 #include <windows.h>
 #include <cstring>
 #include <cstdio>
@@ -103,15 +108,16 @@ void Hitbox::RenderArrayList(ImDrawList* draw, ImVec2 arrayListStart, float& yPo
 }
 
 void Hitbox::RenderMenu() {
-    // Hitbox Checkbox y Slider
-    if (ImGui::Checkbox("Hitbox Expander", &g_hitboxEnabled)) {
+    bool prev = g_hitboxEnabled;
+    GUI::RenderCustomSwitch("Hitbox Expander", &g_hitboxEnabled);
+    if (prev != g_hitboxEnabled) {
         if (g_hitboxEnabled) Enable(); else Disable();
     }
-    if (g_hitboxEnabled) {
-        ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.40f, 0.18f, 0.28f, 0.8f));
+    
+    if (GUI::BeginModuleSettings("Hitbox", &g_hitboxEnabled)) {
         if (ImGui::SliderFloat("Hitbox Size", &g_hitboxValue, 0.6f, 10.0f, "%.2f")) {
             if (g_hitboxCave) memcpy((BYTE*)g_hitboxCave + 1, &g_hitboxValue, 4);
         }
-        ImGui::PopStyleColor();
+        GUI::EndModuleSettings();
     }
 }

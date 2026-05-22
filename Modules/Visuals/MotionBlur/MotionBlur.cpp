@@ -1,6 +1,11 @@
+/*
+Under an4rch Development Public Source License 1.0
+*/
+
 #include "MotionBlur.hpp"
 #include "../../../ImGui/imgui.h"
 #include "../../../Animations/Animations.hpp"
+#include "../../../GUI/GUI.hpp"
 #include <windows.h>
 #include <cmath>
 #include <cstdio>
@@ -97,7 +102,7 @@ void MotionBlur::RenderArrayList(ImDrawList* draw, ImVec2 arrayListStart, float&
 void MotionBlur::RenderMenu() {
     // Motion Blur warning and checkbox
     ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.2f, 1.0f), "Unstable Feature - May Cause Performance Issues\nMotion Blur may cause performance issues on lower-end systems");
-    ImGui::Checkbox("Motion Blur", &g_motionBlurEnabled);
+    GUI::RenderCustomSwitch("Motion Blur", &g_motionBlurEnabled);
     
     if (g_motionBlurEnabled) {
         ImGui::Separator();
@@ -126,7 +131,7 @@ void MotionBlur::RenderMenu() {
         
         // Dynamic mode for Average Pixel Blur
         if (g_blurType == "Average Pixel Blur") {
-            ImGui::Checkbox("Dynamic Mode##MB", &g_blurDynamicMode);
+            GUI::RenderCustomSwitch("Dynamic Mode##MB", &g_blurDynamicMode);
             if (g_blurDynamicMode) {
                 ImGui::TextDisabled("Adjusts intensity based on FPS");
             }

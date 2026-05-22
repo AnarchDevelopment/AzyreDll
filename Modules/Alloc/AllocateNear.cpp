@@ -1,3 +1,7 @@
+/*
+Under an4rch Development Public Source License 1.0
+*/
+
 #include "AllocateNear.hpp"
 #include <windows.h>
 

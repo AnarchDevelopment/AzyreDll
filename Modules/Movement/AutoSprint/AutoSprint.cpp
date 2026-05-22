@@ -1,7 +1,12 @@
+/*
+Under an4rch Development Public Source License 1.0
+*/
+
 #include "AutoSprint.hpp"
 #include "../../Alloc/AllocateNear.hpp"
 #include "../../../Animations/Animations.hpp"
 #include "../../../ImGui/imgui.h"
+#include "../../../GUI/GUI.hpp"
 #include <windows.h>
 #include <cstring>
 #include <cstdio>
@@ -106,8 +111,9 @@ void AutoSprint::RenderArrayList(ImDrawList* draw, ImVec2 arrayListStart, float&
 }
 
 void AutoSprint::RenderMenu() {
-    // AutoSprint Checkbox
-    if (ImGui::Checkbox("AutoSprint", &g_autoSprintEnabled)) {
+    bool prev = g_autoSprintEnabled;
+    GUI::RenderCustomSwitch("AutoSprint", &g_autoSprintEnabled);
+    if (prev != g_autoSprintEnabled) {
         if (g_autoSprintEnabled) Enable(); else Disable();
     }
 }

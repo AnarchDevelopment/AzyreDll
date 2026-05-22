@@ -1,7 +1,12 @@
+/*
+Under an4rch Development Public Source License 1.0
+*/
+
 #pragma once
 
 #include <cstdint>
 #include <windows.h>
+#include "../../../ImGui/imgui.h"
 
 // Forward declarations
 class ImDrawList;
@@ -18,12 +23,22 @@ public:
     static ULONGLONG g_renderInfoDisableTime;
     static float g_renderInfoAnim;
     static HudElement* g_renderInfoHud;
+    
+    // Settings
+    static bool g_showBackground;
+    static bool g_showGlow;
+    static float g_bgOpacity;
+    static ImVec4 g_staticColor;
+    static float g_scale;
 
     // Initialize renderinfo module
     static void Initialize(HudElement* hud);
 
     // Update animation state
     static void UpdateAnimation(ULONGLONG now);
+    
+    // Global FPS counter update
+    static void UpdateFPS();
 
     // Render renderinfo in array list
     static void RenderArrayList(ImDrawList* draw, ImVec2 arrayListStart, float& yPos, ImVec2& arrayListEnd);

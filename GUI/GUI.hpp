@@ -1,6 +1,13 @@
+/*
+Under an4rch Development Public Source License 1.0
+*/
+
 #pragma once
 
 #include <windows.h>
+#include <map>
+#include <string>
+#include <vector>
 #include "../ImGui/imgui.h"
 
 /// @brief GUI class - Handles all UI logic and rendering
@@ -16,8 +23,44 @@ public:
     static ULONGLONG g_tabChangeTime;
     static float g_tabAnim;
     
+    // Animation states for UI elements
+    static std::map<std::string, float> g_elementAnims;
+    
+    // Theme configurations
+    enum ThemePreset {
+        Theme_AegleClassic,
+        Theme_SakuraBlossom,
+        Theme_Cyberpunk,
+        Theme_EmeraldForest,
+        Theme_DeepSea,
+        Theme_Max
+    };
+    static int g_currentTheme;
+    static ImVec4 g_colorBgMain;
+    static ImVec4 g_colorBgPanel;
+    static ImVec4 g_colorAccent;
+    static ImVec4 g_colorAccentSoft;
+    static ImVec4 g_colorAccentGlow;
+    
+    // Sidebar active indicator tracking
+    static float g_sidebarIndicatorY;
+    static float g_sidebarTargetIndicatorY;
+    
+    // Particle plexus background system
+    struct Particle {
+        ImVec2 pos;
+        ImVec2 vel;
+        float size;
+        float alpha;
+        float speedScale;
+    };
+    static std::vector<Particle> g_particles;
+    static void InitializeParticles();
+    static void RenderParticles(ImDrawList* draw, ImVec2 pos, ImVec2 size, float alpha);
+    
     // Style and theme
     static void ApplyTheme();
+    static void ApplyThemePreset(int presetId);
     static void LoadFont();
     
     // Menu animation update
@@ -26,6 +69,24 @@ public:
     // Menu rendering
     static void RenderMenu(float screenWidth, float screenHeight);
     
+    // UI Helpers
+    static bool RenderSidebarButton(const char* label, int index);
+    static void RenderCustomSwitch(const char* label, bool* value);
+    static void RenderSectionHeader(const char* label);
+    static bool BeginSection(const char* label, bool* open);
+    static void EndSection();
+    
+    // Cascading Modules
+    static bool BeginModuleSettings(const char* label, bool* open);
+    static void EndModuleSettings();
+    
+    // Dashboard / Info
+    static void RenderDashboard();
+    
     // Notification
     static void RenderNotification(float screenWidth, float screenHeight);
+    
+    // Low-level Render Helpers
+    static void DrawShadow(ImDrawList* draw, ImVec2 pos, ImVec2 size, float rounding, float thickness, float opacity);
+    static void AddTextGlow(ImDrawList* draw, ImFont* font, float fontSize, ImVec2 pos, ImU32 col, const char* text, float thickness = 3.0f);
 };

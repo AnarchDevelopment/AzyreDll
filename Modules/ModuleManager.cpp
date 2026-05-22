@@ -1,6 +1,11 @@
-#include "ModuleManager.hpp"
+/*
+Under an4rch Development Public Source License 1.0
+*/
 
-void Module::Initialize(uintptr_t gameBase, HudElement* renderInfoHud, HudElement* watermarkHud, HudElement* keystrokesHud, HudElement* cpsHud) {
+#include "ModuleManager.hpp"
+#include "../ArrayList/ArrayList.hpp"
+
+void Module::Initialize(uintptr_t gameBase, HudElement* renderInfoHud, HudElement* watermarkHud, HudElement* keystrokesHud, HudElement* cpsHud, HudElement* fpsOverlayHud) {
     Reach::Initialize(gameBase);
     Hitbox::Initialize(gameBase);
     Timer::Initialize(gameBase);
@@ -9,16 +14,19 @@ void Module::Initialize(uintptr_t gameBase, HudElement* renderInfoHud, HudElemen
     Watermark::Initialize(watermarkHud);
     Keystrokes::Initialize(keystrokesHud);
     CPSCounter::Initialize(cpsHud);
+    FPSOverlay::Initialize(fpsOverlayHud);
     Terminal::Initialize();
     Info::Initialize();
     UnlockFPS::Initialize();
 }
 
 void Module::UpdateAnimation(unsigned long long now) {
+    RenderInfo::UpdateFPS();
     RenderInfo::UpdateAnimation(now);
     MotionBlur::UpdateAnimation(now);
     Keystrokes::UpdateAnimation(now);
     Watermark::UpdateAnimation(now);
+    FPSOverlay::UpdateAnimation(now);
 }
 
 void Module::RenderDisplay(float sw, float sh) {
@@ -26,18 +34,12 @@ void Module::RenderDisplay(float sw, float sh) {
     Keystrokes::RenderDisplay(sw, sh);
     RenderInfo::RenderWindow();
     CPSCounter::RenderDisplay(sw, sh);
+    FPSOverlay::RenderDisplay((int)sw, (int)sh);
+    
+    // Call new centralized ArrayList
+    ArrayList::Render();
 }
 
 void Module::RenderArrayList(ImDrawList* draw, ImVec2 arrayListStart, float& yPos, ImVec2& arrayListEnd) {
-    Reach::RenderArrayList(draw, arrayListStart, yPos, arrayListEnd);
-    Hitbox::RenderArrayList(draw, arrayListStart, yPos, arrayListEnd);
-    AutoSprint::RenderArrayList(draw, arrayListStart, yPos, arrayListEnd);
-    FullBright::RenderArrayList(draw, arrayListStart, yPos, arrayListEnd);
-    Timer::RenderArrayList(draw, arrayListStart, yPos, arrayListEnd);
-    UnlockFPS::RenderArrayList(draw, arrayListStart, yPos, arrayListEnd);
-    Watermark::RenderArrayList(draw, arrayListStart, yPos, arrayListEnd);
-    RenderInfo::RenderArrayList(draw, arrayListStart, yPos, arrayListEnd);
-    MotionBlur::RenderArrayList(draw, arrayListStart, yPos, arrayListEnd);
-    Keystrokes::RenderArrayList(draw, arrayListStart, yPos, arrayListEnd);
-    CPSCounter::RenderArrayList(draw, arrayListStart, yPos, arrayListEnd);
+    // Legacy function, now handled inside RenderDisplay -> ArrayList::Render()
 }

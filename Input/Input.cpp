@@ -1,6 +1,11 @@
+/*
+Under an4rch Development Public Source License 1.0
+*/
+
 #include "Input.hpp"
 
 // Static member definitions
+
 bool Input::g_keys[256] = {};
 bool Input::g_keysPressed[256] = {};
 bool Input::g_keysReleased[256] = {};

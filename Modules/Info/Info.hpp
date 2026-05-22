@@ -1,3 +1,7 @@
+/*
+Under an4rch Development Public Source License 1.0
+*/
+
 #pragma once
 
 #include "ImGui/imgui.h"
@@ -16,10 +20,14 @@ public:
     /// @brief Cleanup resources
     static void Shutdown();
 
-private:
+    /// @brief Play click sound
+    static void PlayClickSound();
+
     static ImTextureID g_logoTexture;
     static int g_logoWidth;
     static int g_logoHeight;
+
+private:
     
     // Audio resources
     static uint8_t* g_audioData;
@@ -36,7 +44,4 @@ private:
     
     /// @brief Initialize sound from loaded audio data (memory only, no files)
     static void InitSoundFromMemory();
-    
-    /// @brief Play click sound
-    static void PlayClickSound();
 };

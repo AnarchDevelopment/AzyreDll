@@ -1,3 +1,7 @@
+/*
+Under an4rch Development Public Source License 1.0
+*/
+
 #include "Terminal.hpp"
 #include "Modules/ModuleHeader.hpp"
 #include "Modules/Globals.hpp"
@@ -28,6 +32,8 @@
 std::vector<std::string> Terminal::outputLines;
 char Terminal::inputBuffer[256] = {0};
 bool Terminal::scrollToBottom = false;
+std::vector<std::string> Terminal::commandHistory;
+int Terminal::historyIndex = -1;
 
 // Unload confirmation dialog state
 static bool g_showUnloadDialog = false;
@@ -54,18 +60,16 @@ bool Terminal::OpenConfigDirectory() {
 
 void Terminal::Initialize() {
     ConfigManager::Initialize();
-    AddOutput("To use commands type .help");
-    AddOutput(".config save <name>      Save the config");
-    AddOutput(".config load <name>      Load existent config");
-    AddOutput(".config delete <name>    Delete the typed config");
-    AddOutput("All configs is saved in %localappdata%\\Packages\\Microsoft.MinecraftUWP_8wekyb3d8bbwe\\LocalState\\Aegle\\");
+    AddOutput("\x1B[35m[Aegleseeker]\x1B[0m Terminal initialized. Type \x1B[33m.help\x1B[0m for commands.");
+    AddOutput("\x1B[90mAll configs saved in LocalState\\Aegle\\ directory.\x1B[0m");
 }
 
 void Terminal::RenderConsole() {
-    ImGui::BeginChild("TerminalOutput", ImVec2(0, 250), true, ImGuiWindowFlags_HorizontalScrollbar);
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.06f, 0.06f, 0.08f, 1.0f));
+    ImGui::BeginChild("TerminalOutput", ImVec2(0, 300), true, ImGuiWindowFlags_AlwaysVerticalScrollbar);
     
     for (const auto& line : outputLines) {
-        ImGui::TextUnformatted(line.c_str());
+        RenderColoredText(line);
     }
     
     if (scrollToBottom) {
@@ -74,79 +78,108 @@ void Terminal::RenderConsole() {
     }
     
     ImGui::EndChild();
+    ImGui::PopStyleColor();
     
-    ImGui::Separator();
+    ImGui::Spacing();
     
-    // Input field
-    if (ImGui::InputText("##TerminalInput", inputBuffer, sizeof(inputBuffer), ImGuiInputTextFlags_EnterReturnsTrue)) {
-        if (strlen(inputBuffer) > 0) {
-            ExecuteCommand(std::string(inputBuffer));
-            inputBuffer[0] = '\0';
-            scrollToBottom = true;
-        }
-    }
-    
+    // Modern Input Area
+    ImGui::TextColored(ImVec4(0.6f, 0.5f, 1.0f, 1.0f), ">");
     ImGui::SameLine();
-    if (ImGui::Button("Execute")) {
+    
+    ImGui::PushItemWidth(-1);
+    auto callback = [](ImGuiInputTextCallbackData* data) -> int {
+        if (data->EventFlag == ImGuiInputTextFlags_CallbackHistory) {
+            if (commandHistory.empty()) return 0;
+            if (data->EventKey == ImGuiKey_UpArrow) {
+                if (historyIndex == -1) historyIndex = commandHistory.size() - 1;
+                else if (historyIndex > 0) historyIndex--;
+            } else if (data->EventKey == ImGuiKey_DownArrow) {
+                if (historyIndex != -1 && historyIndex < commandHistory.size() - 1) historyIndex++;
+                else historyIndex = -1;
+            }
+            
+            if (historyIndex != -1) {
+                std::string cmd = commandHistory[historyIndex];
+                data->DeleteChars(0, data->BufTextLen);
+                data->InsertChars(0, cmd.c_str());
+            } else {
+                data->DeleteChars(0, data->BufTextLen);
+            }
+        }
+        return 0;
+    };
+
+    if (ImGui::InputText("##TerminalInput", inputBuffer, sizeof(inputBuffer), ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_CallbackHistory, callback)) {
         if (strlen(inputBuffer) > 0) {
-            ExecuteCommand(std::string(inputBuffer));
+            std::string cmd(inputBuffer);
+            ExecuteCommand(cmd);
+            commandHistory.push_back(cmd);
+            historyIndex = -1;
             inputBuffer[0] = '\0';
             scrollToBottom = true;
+            ImGui::SetKeyboardFocusHere(-1); // Keep focus
         }
     }
+    ImGui::PopItemWidth();
     
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Tip: Use Up/Down arrows for history");
+    }
+
     // Render unload confirmation dialog if active
     RenderUnloadDialog();
 }
 
 void Terminal::ExecuteCommand(const std::string& command) {
-    AddOutput("> " + command);
+    AddOutput("\x1B[90m> " + command + "\x1B[0m");
     
     if (command == ".help") {
         ShowHelp();
     } else if (command.substr(0, 13) == ".config save ") {
         std::string name = command.substr(13);
         if (SaveConfig(name)) {
-            AddOutput("Config saved: " + name);
+            AddOutput("\x1B[32mConfig saved:\x1B[0m " + name);
         } else {
-            AddOutput("Failed to save config: " + name);
-            
+            AddOutput("\x1B[31mFailed to save config:\x1B[0m " + name);
         }
     } else if (command.substr(0, 13) == ".config load ") {
         std::string name = command.substr(13);
         if (LoadConfig(name)) {
-            AddOutput("Config loaded: " + name);
+            AddOutput("\x1B[32mConfig loaded:\x1B[0m " + name);
         } else {
-            AddOutput("Failed to load config: " + name);
+            AddOutput("\x1B[31mFailed to load config:\x1B[0m " + name);
         }
     } else if (command.substr(0, 15) == ".config delete ") {
         std::string name = command.substr(15);
         if (DeleteConfig(name)) {
-            AddOutput("Config deleted: " + name);
+            AddOutput("\x1B[33mConfig deleted:\x1B[0m " + name);
         } else {
-            AddOutput("Failed to delete config: " + name);
+            AddOutput("\x1B[31mFailed to delete config:\x1B[0m " + name);
         }
     } else if (command == ".config list") {
         auto configs = ListConfigs();
         if (configs.empty()) {
-            AddOutput("No configs found.");
+            AddOutput("\x1B[33mNo configs found.\x1B[0m");
         } else {
-            AddOutput("Available configs:");
+            AddOutput("\x1B[36mAvailable configs:\x1B[0m");
             for (const auto& config : configs) {
-                AddOutput("  " + config);
+                AddOutput("  \x1B[90m-\x1B[0m " + config);
             }
         }
     } else if (command == ".config opendirectory") {
         if (OpenConfigDirectory()) {
-            AddOutput("Opened config directory: " + ConfigManager::GetConfigDir());
+            AddOutput("\x1B[32mOpened config directory.\x1B[0m");
         } else {
-            AddOutput("Failed to open config directory: " + ConfigManager::GetConfigDir());
+            AddOutput("\x1B[31mFailed to open config directory.\x1B[0m");
         }
     } else if (command == ".deattach") {
-        AddOutput("Detaching DLL...");
+        AddOutput("\x1B[35mDetaching DLL...\x1B[0m");
         Detach();
+    } else if (command == ".clear") {
+        outputLines.clear();
+        AddOutput("\x1B[36mConsole cleared.\x1B[0m");
     } else {
-        AddOutput("Unknown command. Type .help for available commands.");
+        AddOutput("\x1B[31mUnknown command.\x1B[0m Type \x1B[33m.help\x1B[0m for available commands.");
     }
 }
 
@@ -172,14 +205,56 @@ void Terminal::PerformUnload() {
 }
 
 void Terminal::ShowHelp() {
-    AddOutput("Available commands:");
-    AddOutput("  .help                    - Show this help");
-    AddOutput("  .config save <name>      - Save current config");
-    AddOutput("  .config load <name>      - Load config");
-    AddOutput("  .config delete <name>    - Delete config");
-    AddOutput("  .config list             - List available configs");
-    AddOutput("  .config opendirectory    - Open the config directory");
-    AddOutput("  .deattach                - Detach DLL safely");
+    AddOutput("\x1B[36mAvailable commands:\x1B[0m");
+    AddOutput("  \x1B[33m.help\x1B[0m                    - Show this help");
+    AddOutput("  \x1B[33m.config save <name>\x1B[0m      - Save current config");
+    AddOutput("  \x1B[33m.config load <name>\x1B[0m      - Load config");
+    AddOutput("  \x1B[33m.config delete <name>\x1B[0m    - Delete config");
+    AddOutput("  \x1B[33m.config list\x1B[0m             - List available configs");
+    AddOutput("  \x1B[33m.config opendirectory\x1B[0m    - Open the config directory");
+    AddOutput("  \x1B[33m.clear\x1B[0m                   - Clear terminal");
+    AddOutput("  \x1B[33m.deattach\x1B[0m                - Detach DLL safely");
+}
+
+void Terminal::RenderColoredText(const std::string& text) {
+    ImVec4 color = ImGui::GetStyle().Colors[ImGuiCol_Text];
+    size_t lastPos = 0;
+    size_t pos = text.find("\x1B[", 0);
+
+    while (pos != std::string::npos) {
+        if (pos > lastPos) {
+            ImGui::TextColored(color, "%s", text.substr(lastPos, pos - lastPos).c_str());
+            ImGui::SameLine(0, 0);
+        }
+
+        size_t endPos = text.find("m", pos);
+        if (endPos != std::string::npos) {
+            std::string code = text.substr(pos + 2, endPos - (pos + 2));
+            int colorCode = atoi(code.c_str());
+
+            switch (colorCode) {
+                case 0:  color = ImGui::GetStyle().Colors[ImGuiCol_Text]; break; // Reset
+                case 31: color = ImVec4(1.0f, 0.4f, 0.4f, 1.0f); break; // Red
+                case 32: color = ImVec4(0.4f, 1.0f, 0.4f, 1.0f); break; // Green
+                case 33: color = ImVec4(1.0f, 1.0f, 0.4f, 1.0f); break; // Yellow
+                case 34: color = ImVec4(0.4f, 0.6f, 1.0f, 1.0f); break; // Blue
+                case 35: color = ImVec4(1.0f, 0.5f, 1.0f, 1.0f); break; // Magenta (Aegle)
+                case 36: color = ImVec4(0.4f, 1.0f, 1.0f, 1.0f); break; // Cyan
+                case 37: color = ImVec4(1.0f, 1.0f, 1.0f, 1.0f); break; // White
+                case 90: color = ImVec4(0.5f, 0.5f, 0.5f, 1.0f); break; // Gray
+            }
+            lastPos = endPos + 1;
+        } else {
+            lastPos = pos + 2;
+        }
+        pos = text.find("\x1B[", lastPos);
+    }
+
+    if (lastPos < text.length()) {
+        ImGui::TextColored(color, "%s", text.substr(lastPos).c_str());
+    } else {
+        ImGui::NewLine(); // Finish the line if last chunk was colored
+    }
 }
 
 

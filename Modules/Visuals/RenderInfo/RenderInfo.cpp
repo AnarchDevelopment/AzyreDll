@@ -1,8 +1,13 @@
+/*
+Under an4rch Development Public Source License 1.0
+*/
+
 #include "RenderInfo.hpp"
 #include "../../../Animations/Animations.hpp"
 #include "../../../Modules/Misc/UnlockFPS/UnlockFPS.hpp"
 #include "../../../Utils/HudElement.hpp"
 #include "../../../ImGui/imgui.h"
+#include "../../../GUI/GUI.hpp"
 #include <windows.h>
 #include <cstdio>
 #include <cmath>
@@ -15,6 +20,11 @@ ULONGLONG RenderInfo::g_renderInfoEnableTime = 0;
 ULONGLONG RenderInfo::g_renderInfoDisableTime = 0;
 float RenderInfo::g_renderInfoAnim = 0.0f;
 HudElement* RenderInfo::g_renderInfoHud = nullptr;
+bool RenderInfo::g_showBackground = true;
+bool RenderInfo::g_showGlow = true;
+float RenderInfo::g_bgOpacity = 0.6f;
+ImVec4 RenderInfo::g_staticColor = ImVec4(1.00f, 0.40f, 0.80f, 1.00f); // Pink
+float RenderInfo::g_scale = 1.0f;
 
 // Forward declarations for helper functions
 
@@ -59,8 +69,7 @@ void RenderInfo::RenderArrayList(ImDrawList* draw, ImVec2 arrayListStart, float&
             sprintf_s(riBuf, "Render Info");
             float wRI = ImGui::CalcTextSize(riBuf).x;
             float xPosRI = arrayListStart.x + 290.0f - wRI - 10;
-            draw->AddText(ImVec2(xPosRI + slideOffset - 1, yPos + 1), IM_COL32(0, 0, 0, 220), riBuf); // Sombra
-            draw->AddText(ImVec2(xPosRI + slideOffset, yPos), IM_COL32(0, 255, 200, (int)renderInfoAlpha), riBuf);
+            draw->AddText(ImVec2(xPosRI + slideOffset, yPos), ImGui::GetColorU32(g_staticColor), riBuf);
             yPos += 18.0f;
             arrayListEnd.y = yPos;
         }
@@ -76,7 +85,7 @@ void RenderInfo::RenderWindow() {
         float infoAlpha = 0.7f * easedAnim;
         
         // Render info dimensions
-        ImVec2 renderInfoSize = ImVec2(220, 120);
+        ImVec2 renderInfoSize = ImVec2(220, 150);
         g_renderInfoHud->size = renderInfoSize;
         
         // Initialize position on first draw
@@ -101,35 +110,51 @@ void RenderInfo::RenderWindow() {
         if (finalPos.y < -10000 || finalPos.y > 10000) finalPos.y = 50;
         
         ImGui::SetNextWindowPos(finalPos, ImGuiCond_Always);
-        ImGui::SetNextWindowBgAlpha(infoAlpha);
+        ImGui::SetNextWindowBgAlpha(0.0f); // Fully transparent ImGui background, we draw our own
         ImGui::SetNextWindowSize(renderInfoSize, ImGuiCond_Always);
         
         // Allow drag only when menu open
         extern bool g_showMenu;
-        ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs;
+        ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoResize;
         if (!g_showMenu) {
             flags |= ImGuiWindowFlags_NoMove;
         }
         
         if (ImGui::Begin("##RenderInfo", nullptr, flags)) {
-            ImGuiIO& io = ImGui::GetIO();
-            // Calculate real FPS from delta time
-            if (io.DeltaTime > 0.0f) {
-                g_fpsCounter = 1.0f / io.DeltaTime;
+            ImDrawList* draw = ImGui::GetWindowDrawList();
+            ImVec2 p = ImGui::GetWindowPos();
+            ImVec2 s = ImGui::GetWindowSize();
+
+            // Render Custom Background if enabled
+            if (g_showBackground) {
+                GUI::DrawShadow(draw, p, s, 16.0f, 15.0f * easedAnim, 0.4f * easedAnim);
+                draw->AddRectFilled(p, ImVec2(p.x + s.x, p.y + s.y), ImColor(15, 15, 25, (int)(g_bgOpacity * 255 * easedAnim)), 16.0f);
             }
+
+            ImGui::SetCursorPos(ImVec2(20, 20)); // More padding to avoid clipping
             
-            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.0f, 1.0f, 0.5f, easedAnim));
+            // Render Info with Theme
+            ImU32 whiteCol = ImColor(255, 255, 255, (int)(easedAnim * 255));
+            
+            auto RenderItem = [&](const char* label, const char* value, ImU32 valCol) {
+                ImGui::SetCursorPosX(20); // Force indentation for each item
+                ImGui::TextColored(g_staticColor, label);
+                ImGui::SameLine(100);
+                ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(valCol), value);
+            };
+
+            char fpsStr[64]; 
             if (UnlockFPS::g_unlockFpsEnabled) {
-                ImGui::Text("FPS: %.0f (target %.0f)", g_fpsCounter, UnlockFPS::g_fpsLimit);
+                sprintf_s(fpsStr, "%.0f (%.0f lim)", g_fpsCounter, UnlockFPS::g_fpsLimit);
             } else {
-                ImGui::Text("FPS: %.0f", g_fpsCounter);
+                sprintf_s(fpsStr, "%.0f", g_fpsCounter);
             }
-            ImGui::Text("Render: DX11");
-            ImGui::Text("OS: Windows");
-            ImGui::Text("Build: Release");
-            ImGui::Text("Compiler: GCC");
-            ImGui::PopStyleColor();
+            RenderItem("FPS", fpsStr, g_fpsCounter > 60 ? IM_COL32(100, 255, 100, 255) : IM_COL32(255, 100, 100, 255));
             
+            RenderItem("Render", "DX11", whiteCol);
+            RenderItem("System", "Windows", whiteCol);
+            RenderItem("Version", "1.2.6", whiteCol);
+
             ImGui::End();
         }
         
@@ -151,6 +176,30 @@ void RenderInfo::RenderWindow() {
 }
 
 void RenderInfo::RenderMenu() {
-    // Show Render Info
-    ImGui::Checkbox("Render Info", &g_showRenderInfo);
+    GUI::RenderCustomSwitch("Render Info", &g_showRenderInfo);
+    if (GUI::BeginModuleSettings("Render Info", &g_showRenderInfo)) {
+        GUI::RenderCustomSwitch("Show Background", &g_showBackground);
+        ImGui::SliderFloat("Background Opacity", &g_bgOpacity, 0.0f, 1.0f, "%.2f");
+        
+        ImGui::Separator();
+        
+        ImGui::ColorEdit4("Theme Color", (float*)&g_staticColor, ImGuiColorEditFlags_NoInputs);
+        ImGui::SliderFloat("Scale", &g_scale, 0.5f, 2.0f, "%.1fx");
+        
+        GUI::EndModuleSettings();
+    }
+}
+void RenderInfo::UpdateFPS() {
+    static float s_fps = 0;
+    static int s_frames = 0;
+    static ULONGLONG s_lastTime = GetTickCount64();
+    ULONGLONG nowTicks = GetTickCount64();
+    
+    s_frames++;
+    if (nowTicks - s_lastTime > 500) { 
+        s_fps = s_frames * 1000.0f / (nowTicks - s_lastTime);
+        s_lastTime = nowTicks;
+        s_frames = 0;
+    }
+    g_fpsCounter = s_fps;
 }

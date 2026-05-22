@@ -1,4 +1,8 @@
-﻿#include "GUI/DX11/ImGuiRenderer.hpp"
+﻿/*
+Under an4rch Development Public Source License 1.0
+*/
+
+#include "ImGuiRenderer.hpp"
 
 namespace ImGuiDX11 {
     void SyncImGuiAndDX11(IDXGISwapChain* pSwapChain, float& width, float& height)

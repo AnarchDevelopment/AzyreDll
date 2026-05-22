@@ -1,6 +1,11 @@
+/*
+Under an4rch Development Public Source License 1.0
+*/
+
 #include "Timer.hpp"
 #include "Animations/Animations.hpp"
 #include "ImGui/imgui.h"
+#include "GUI/GUI.hpp"
 #include <windows.h>
 #include <cstdio>
 #include <cmath>
@@ -99,17 +104,17 @@ void Timer::RenderArrayList(ImDrawList* draw, ImVec2 arrayListStart, float& yPos
 }
 
 void Timer::RenderMenu() {
-    // Timer/Multiplicador
-    if (ImGui::Checkbox("Timer", &g_timerEnabled)) {
+    bool prev = g_timerEnabled;
+    GUI::RenderCustomSwitch("Timer", &g_timerEnabled);
+    if (prev != g_timerEnabled) {
         if (g_timerEnabled) Enable(); else Disable();
     }
     
-    if (g_timerEnabled) {
-        ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.40f, 0.18f, 0.28f, 0.8f));
+    if (GUI::BeginModuleSettings("Timer", &g_timerEnabled)) {
         if (ImGui::SliderFloat("##timerSlider", &g_timerValue, 0.1f, 20.0f, "Multiplicador: %.1fx")) {
             // Value updates automatically
         }
-        ImGui::PopStyleColor();
-        ImGui::Text("Value in memory (slider * 1000.0f): %.0f", (double)g_timerValue * 1000.0);
+        ImGui::TextDisabled("Value: %.0f", (double)g_timerValue * 1000.0);
+        GUI::EndModuleSettings();
     }
 }

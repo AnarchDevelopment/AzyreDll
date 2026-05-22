@@ -1,4 +1,10 @@
+/*
+Under an4rch Development Public Source License 1.0
+*/
+
 #include "Info.hpp"
+#include "../../GUI/GUI.hpp"
+#include "../../ImGui/imgui.h"
 #include "../Globals.hpp"
 #include "../../Assets/resource.h"
 #include "../../Assets/stb/stb_image.h"
@@ -41,6 +47,8 @@ static bool g_soundsLoaded = false;
 static unsigned int g_soundCount = 0;
 
 void Info::Initialize() {
+    if (g_audioEngineInitialized) return;
+    
     LoadLogoFromResource();
     LoadAudioFromResource();
     
@@ -321,103 +329,61 @@ void Info::PlayClickSound() {
     if (!g_soundsLoaded || g_soundCount == 0) {
         return;
     }
-    
-    // Select a random sound from loaded sounds
+
+    // Select a random sound
     int randomIndex = rand() % g_soundCount;
+
+    // Check engine state
+    if (ma_engine_start(&g_audioEngine) != MA_SUCCESS) {
+        // If starting fails, try to start the device directly
+        ma_device* pAudioDevice = ma_engine_get_device(&g_audioEngine);
+        if (pAudioDevice) {
+            ma_device_start(pAudioDevice);
+        }
+    }
     
-    // Stop any currently playing sound and restart (safe to call even if not playing)
+    // Stop and Reset
     ma_sound_stop(&g_clickSounds[randomIndex]);
     ma_sound_seek_to_pcm_frame(&g_clickSounds[randomIndex], 0);
     
-    // Start playing the selected sound
-    ma_sound_start(&g_clickSounds[randomIndex]);
-    OutputDebugStringA("INFO: Random click sound playing\n");
+    // Attempt play
+    ma_result result = ma_sound_start(&g_clickSounds[randomIndex]);
+    
+    // If still failing (common after Fullscreen Alt-Tab device loss), 
+    // try one last hardware-level kick
+    if (result != MA_SUCCESS) {
+        ma_device* pAudioDevice = ma_engine_get_device(&g_audioEngine);
+        if (pAudioDevice) {
+            ma_device_stop(pAudioDevice);
+            ma_device_start(pAudioDevice);
+            ma_sound_start(&g_clickSounds[randomIndex]);
+        }
+    }
 }
 
 void Info::RenderMenu() {
-    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.95f, 0.88f, 0.92f, 1.0f));
+    GUI::RenderDashboard();
     
-    // Title
-    ImGui::TextWrapped("Aegleseeker");
-    ImGui::Separator();
-    
-    // Repository Information
-    ImGui::TextColored(ImVec4(0.85f, 0.35f, 0.55f, 1.0f), "Repository");
-    ImGui::TextWrapped("https://github.com/iVyz3r/aegleseeker");
-    
-    ImGui::Spacing();
-    ImGui::TextColored(ImVec4(0.85f, 0.35f, 0.55f, 1.0f), "Version");
-    ImGui::TextWrapped("Build 2026-03");
-    
-    ImGui::Spacing();
-    ImGui::Separator();
-    ImGui::Spacing();
-    
-    // Display logo if loaded
-    if (g_logoTexture != 0) {
-        ImVec2 availableSpace = ImGui::GetContentRegionAvail();
-        float maxWidth = availableSpace.x * 0.98f;
-        float maxHeight = availableSpace.y - 40.0f;
+    // Bottom footer panel for theme customizer
+    ImGui::BeginChild("ThemeCustomizer", ImVec2(0, 50), true);
+    {
+        ImGui::SetCursorPos(ImVec2(15, 12));
+        ImGui::TextColored(GUI::g_colorAccent, "THEME CUSTOMIZER");
         
-        if (g_logoWidth > 0 && g_logoHeight > 0) {
-            // Calculate scale to fit in available space
-            float scale = fminf(maxWidth / g_logoWidth, maxHeight / g_logoHeight);
-            ImVec2 displaySize(g_logoWidth * scale, g_logoHeight * scale);
-            
-            // Center the image
-            ImVec2 cursorPos = ImGui::GetCursorPos();
-            float centeredX = (availableSpace.x - displaySize.x) / 2.0f;
-            ImGui::SetCursorPosX(cursorPos.x + centeredX);
-            
-            // Draw rounded background
-            ImVec2 imgPos = ImGui::GetCursorScreenPos();
-            ImVec2 imgPosMax = ImVec2(imgPos.x + displaySize.x, imgPos.y + displaySize.y);
-            float rounding = 12.0f;
-            
-            // Check if hovering over the image area
-            bool hovered = ImGui::IsMouseHoveringRect(imgPos, imgPosMax, false);
-            ImU32 bgColor = hovered 
-                ? IM_COL32(30, 20, 30, 230)
-                : IM_COL32(20, 15, 20, 200);
-            
-            ImGui::GetWindowDrawList()->AddRectFilled(
-                imgPos,
-                imgPosMax,
-                bgColor,
-                rounding
-            );
-            
-            // Draw border
-            ImGui::GetWindowDrawList()->AddRect(
-                imgPos,
-                imgPosMax,
-                IM_COL32(217, 89, 140, 255),
-                rounding,
-                0,
-                2.0f
-            );
-            
-            // Draw image
-            ImGui::Image(g_logoTexture, displaySize);
-            
-            // Detect click on the image
-            if (hovered && ImGui::IsMouseClicked(0)) {
-                PlayClickSound();
-            }
+        ImGui::SameLine(0, 40);
+        ImGui::SetCursorPosY(10);
+        
+        const char* themes[] = { "Aegle Classic", "Sakura Blossom", "Cyberpunk 2077", "Emerald Forest", "Deep Sea" };
+        int currentTheme = GUI::g_currentTheme;
+        
+        ImGui::Text("Active Theme:"); ImGui::SameLine();
+        ImGui::PushItemWidth(180);
+        if (ImGui::Combo("##ActiveTheme", &currentTheme, themes, IM_ARRAYSIZE(themes))) {
+            GUI::ApplyThemePreset(currentTheme);
         }
-    } else {
-        ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.5f, 1.0f), "[Logo could not be loaded]");
+        ImGui::PopItemWidth();
     }
-    
-    ImGui::Spacing();
-    ImGui::Separator();
-    ImGui::Spacing();
-    
-    // Additional Information
-    ImGui::TextColored(ImVec4(0.85f, 0.35f, 0.55f, 1.0f), "About");
-    ImGui::TextWrapped("Aegleseeker is a feature-rich tool designed to enhance your gameplay experience with advanced features including combat enhancements, movement utilities, visual improvements, and more.");
-    
-    ImGui::PopStyleColor();
+    ImGui::EndChild();
 }
 
 

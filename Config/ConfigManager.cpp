@@ -1,6 +1,11 @@
+/*
+Under an4rch Development Public Source License 1.0
+*/
+
 #include "ConfigManager.hpp"
 #include "Modules/ModuleHeader.hpp"
 #include "Modules/Terminal/Terminal.hpp"
+#include "ArrayList/ArrayList.hpp"
 #include <iostream>
 #include <fstream>
 #include <algorithm>
@@ -219,15 +224,68 @@ nlohmann::json ConfigManager::CollectCurrentConfig() {
     config["Visuals"]["FullBright"]["value"] = FullBright::g_fullBrightValue;
 
     config["Visuals"]["RenderInfo"]["enabled"] = RenderInfo::g_showRenderInfo;
+    config["Visuals"]["RenderInfo"]["showBackground"] = RenderInfo::g_showBackground;
+    config["Visuals"]["RenderInfo"]["bgOpacity"] = RenderInfo::g_bgOpacity;
+    config["Visuals"]["RenderInfo"]["scale"] = RenderInfo::g_scale;
+    config["Visuals"]["RenderInfo"]["colors"]["themeColor"] = 
+        nlohmann::json::array({RenderInfo::g_staticColor.x, RenderInfo::g_staticColor.y, 
+                               RenderInfo::g_staticColor.z, RenderInfo::g_staticColor.w});
+
     if (RenderInfo::g_renderInfoHud) {
         config["Visuals"]["RenderInfo"]["position"]["x"] = RenderInfo::g_renderInfoHud->pos.x;
         config["Visuals"]["RenderInfo"]["position"]["y"] = RenderInfo::g_renderInfoHud->pos.y;
     }
 
     config["Visuals"]["Watermark"]["enabled"] = Watermark::g_showWatermark;
+    config["Visuals"]["Watermark"]["useImage"] = Watermark::g_useImage;
+    config["Visuals"]["Watermark"]["customText"] = Watermark::g_customText;
+    config["Visuals"]["Watermark"]["fontSize"] = Watermark::g_fontSize;
+    config["Visuals"]["Watermark"]["bgOpacity"] = Watermark::g_bgOpacity;
+    config["Visuals"]["Watermark"]["showBackground"] = Watermark::g_showBackground;
+    config["Visuals"]["Watermark"]["showShimmer"] = Watermark::g_showShimmer;
+    config["Visuals"]["Watermark"]["showGlow"] = Watermark::g_showGlow;
+    config["Visuals"]["Watermark"]["chromaText"] = Watermark::g_chromaText;
+    config["Visuals"]["Watermark"]["chromaSpeed"] = Watermark::g_chromaSpeed;
+    config["Visuals"]["Watermark"]["chromaDirection"] = Watermark::g_chromaDirection;
+    config["Visuals"]["Watermark"]["mirroredGradient"] = Watermark::g_mirroredGradient;
+    config["Visuals"]["Watermark"]["edgeFade"] = Watermark::g_edgeFade;
+    config["Visuals"]["Watermark"]["imageOpacity"] = Watermark::g_imageOpacity;
+    config["Visuals"]["Watermark"]["imageSize"] = Watermark::g_imageSize;
+    
+    config["Visuals"]["Watermark"]["colors"]["staticColor"] = 
+        nlohmann::json::array({Watermark::g_staticColor.x, Watermark::g_staticColor.y, 
+                               Watermark::g_staticColor.z, Watermark::g_staticColor.w});
+    
+    for (size_t i = 0; i < Watermark::g_chromaColors.size(); i++) {
+        config["Visuals"]["Watermark"]["colors"]["chromaColors"][i] = 
+            nlohmann::json::array({Watermark::g_chromaColors[i].x, Watermark::g_chromaColors[i].y, 
+                                   Watermark::g_chromaColors[i].z, Watermark::g_chromaColors[i].w});
+    }
+
     if (Watermark::g_watermarkHud) {
         config["Visuals"]["Watermark"]["position"]["x"] = Watermark::g_watermarkHud->pos.x;
         config["Visuals"]["Watermark"]["position"]["y"] = Watermark::g_watermarkHud->pos.y;
+    }
+
+    // ArrayList
+    config["Visuals"]["ArrayList"]["enabled"] = ArrayList::g_enabled;
+    config["Visuals"]["ArrayList"]["bgOpacity"] = ArrayList::g_bgOpacity;
+    config["Visuals"]["ArrayList"]["showSideBar"] = ArrayList::g_showSideBar;
+    config["Visuals"]["ArrayList"]["chromaSideBar"] = ArrayList::g_chromaSideBar;
+    config["Visuals"]["ArrayList"]["roundedBorders"] = ArrayList::g_roundedBorders;
+    config["Visuals"]["ArrayList"]["borderRadius"] = ArrayList::g_borderRadius;
+    config["Visuals"]["ArrayList"]["showSuffix"] = ArrayList::g_showSuffix;
+    
+    config["Visuals"]["ArrayList"]["colors"]["bgColor"] = 
+        nlohmann::json::array({ArrayList::g_bgColor.x, ArrayList::g_bgColor.y, 
+                               ArrayList::g_bgColor.z, ArrayList::g_bgColor.w});
+    config["Visuals"]["ArrayList"]["colors"]["sideBarColor"] = 
+        nlohmann::json::array({ArrayList::g_sideBarColor.x, ArrayList::g_sideBarColor.y, 
+                               ArrayList::g_sideBarColor.z, ArrayList::g_sideBarColor.w});
+
+    if (ArrayList::g_hud) {
+        config["Visuals"]["ArrayList"]["position"]["x"] = ArrayList::g_hud->pos.x;
+        config["Visuals"]["ArrayList"]["position"]["y"] = ArrayList::g_hud->pos.y;
     }
 
     config["Visuals"]["MotionBlur"]["enabled"] = MotionBlur::g_motionBlurEnabled;
@@ -263,6 +321,23 @@ nlohmann::json ConfigManager::CollectCurrentConfig() {
     config["Visuals"]["CPSCounter"]["colors"]["shadowColor"] = 
         nlohmann::json::array({CPSCounter::g_cpsCounterShadowColor.x, CPSCounter::g_cpsCounterShadowColor.y, 
                                CPSCounter::g_cpsCounterShadowColor.z, CPSCounter::g_cpsCounterShadowColor.w});
+
+    // FPSOverlay
+    config["Visuals"]["FPSOverlay"]["enabled"] = FPSOverlay::g_showFpsOverlay;
+    config["Visuals"]["FPSOverlay"]["scale"] = FPSOverlay::g_fpsTextScale;
+    config["Visuals"]["FPSOverlay"]["showBackground"] = FPSOverlay::g_showBackground;
+    config["Visuals"]["FPSOverlay"]["bgOpacity"] = FPSOverlay::g_bgOpacity;
+    config["Visuals"]["FPSOverlay"]["colors"]["textColor"] = 
+        nlohmann::json::array({FPSOverlay::g_fpsTextColor.x, FPSOverlay::g_fpsTextColor.y, 
+                               FPSOverlay::g_fpsTextColor.z, FPSOverlay::g_fpsTextColor.w});
+    config["Visuals"]["FPSOverlay"]["colors"]["accentColor"] = 
+        nlohmann::json::array({FPSOverlay::g_accentColor.x, FPSOverlay::g_accentColor.y, 
+                               FPSOverlay::g_accentColor.z, FPSOverlay::g_accentColor.w});
+
+    if (FPSOverlay::g_fpsHud) {
+        config["Visuals"]["FPSOverlay"]["position"]["x"] = FPSOverlay::g_fpsHud->pos.x;
+        config["Visuals"]["FPSOverlay"]["position"]["y"] = FPSOverlay::g_fpsHud->pos.y;
+    }
 
     // Misc modules
     config["Misc"]["UnlockFPS"]["enabled"] = UnlockFPS::g_unlockFpsEnabled;
@@ -318,48 +393,121 @@ void ConfigManager::ApplyConfig(const nlohmann::json& config) {
 
     // Visuals modules
     if (config.contains("Visuals")) {
-        if (config["Visuals"].contains("FullBright")) {
-            if (config["Visuals"]["FullBright"].contains("enabled")) {
-                FullBright::g_fullBrightEnabled = config["Visuals"]["FullBright"]["enabled"];
+        auto& visuals = config["Visuals"];
+        if (visuals.contains("FullBright")) {
+            if (visuals["FullBright"].contains("enabled")) {
+                FullBright::g_fullBrightEnabled = visuals["FullBright"]["enabled"];
             }
-            if (config["Visuals"]["FullBright"].contains("value")) {
-                FullBright::g_fullBrightValue = config["Visuals"]["FullBright"]["value"];
-            }
-        }
-        if (config["Visuals"].contains("RenderInfo")) {
-            if (config["Visuals"]["RenderInfo"].contains("enabled")) {
-                RenderInfo::g_showRenderInfo = config["Visuals"]["RenderInfo"]["enabled"];
-            }
-            if (config["Visuals"]["RenderInfo"].contains("position") && RenderInfo::g_renderInfoHud) {
-                RenderInfo::g_renderInfoHud->pos.x = config["Visuals"]["RenderInfo"]["position"]["x"];
-                RenderInfo::g_renderInfoHud->pos.y = config["Visuals"]["RenderInfo"]["position"]["y"];
+            if (visuals["FullBright"].contains("value")) {
+                FullBright::g_fullBrightValue = visuals["FullBright"]["value"];
             }
         }
-        if (config["Visuals"].contains("Watermark")) {
-            if (config["Visuals"]["Watermark"].contains("enabled")) {
-                Watermark::g_showWatermark = config["Visuals"]["Watermark"]["enabled"];
+        if (visuals.contains("RenderInfo")) {
+            if (visuals["RenderInfo"].contains("enabled")) {
+                RenderInfo::g_showRenderInfo = visuals["RenderInfo"]["enabled"];
             }
-            if (config["Visuals"]["Watermark"].contains("position") && Watermark::g_watermarkHud) {
-                Watermark::g_watermarkHud->pos.x = config["Visuals"]["Watermark"]["position"]["x"];
-                Watermark::g_watermarkHud->pos.y = config["Visuals"]["Watermark"]["position"]["y"];
+            if (visuals["RenderInfo"].contains("showBackground")) RenderInfo::g_showBackground = visuals["RenderInfo"]["showBackground"];
+            if (visuals["RenderInfo"].contains("bgOpacity")) RenderInfo::g_bgOpacity = visuals["RenderInfo"]["bgOpacity"];
+            if (visuals["RenderInfo"].contains("scale")) RenderInfo::g_scale = visuals["RenderInfo"]["scale"];
+            
+            if (visuals["RenderInfo"].contains("colors")) {
+                auto& c = visuals["RenderInfo"]["colors"]["themeColor"];
+                if (c.is_array() && c.size() == 4) {
+                    RenderInfo::g_staticColor = ImVec4(c[0], c[1], c[2], c[3]);
+                }
+            }
+
+            if (visuals["RenderInfo"].contains("position") && RenderInfo::g_renderInfoHud) {
+                RenderInfo::g_renderInfoHud->pos.x = visuals["RenderInfo"]["position"]["x"];
+                RenderInfo::g_renderInfoHud->pos.y = visuals["RenderInfo"]["position"]["y"];
             }
         }
-        if (config["Visuals"].contains("MotionBlur")) {
-            if (config["Visuals"]["MotionBlur"].contains("enabled")) {
-                MotionBlur::g_motionBlurEnabled = config["Visuals"]["MotionBlur"]["enabled"];
+        if (visuals.contains("Watermark")) {
+            auto& wm = visuals["Watermark"];
+            if (wm.contains("enabled")) Watermark::g_showWatermark = wm["enabled"];
+            if (wm.contains("useImage")) Watermark::g_useImage = wm["useImage"];
+            if (wm.contains("customText")) strcpy_s(Watermark::g_customText, std::string(wm["customText"]).c_str());
+            if (wm.contains("fontSize")) Watermark::g_fontSize = wm["fontSize"];
+            if (wm.contains("bgOpacity")) Watermark::g_bgOpacity = wm["bgOpacity"];
+            if (wm.contains("showBackground")) Watermark::g_showBackground = wm["showBackground"];
+            if (wm.contains("showShimmer")) Watermark::g_showShimmer = wm["showShimmer"];
+            if (wm.contains("showGlow")) Watermark::g_showGlow = wm["showGlow"];
+            if (wm.contains("chromaText")) Watermark::g_chromaText = wm["chromaText"];
+            if (wm.contains("chromaSpeed")) Watermark::g_chromaSpeed = wm["chromaSpeed"];
+            if (wm.contains("chromaDirection")) Watermark::g_chromaDirection = wm["chromaDirection"];
+            if (wm.contains("mirroredGradient")) Watermark::g_mirroredGradient = wm["mirroredGradient"];
+            if (wm.contains("edgeFade")) Watermark::g_edgeFade = wm["edgeFade"];
+            if (wm.contains("imageOpacity")) Watermark::g_imageOpacity = wm["imageOpacity"];
+            if (wm.contains("imageSize")) Watermark::g_imageSize = wm["imageSize"];
+            
+            if (wm.contains("colors")) {
+                if (wm["colors"].contains("staticColor") && wm["colors"]["staticColor"].size() == 4) {
+                    Watermark::g_staticColor = ImVec4(wm["colors"]["staticColor"][0], wm["colors"]["staticColor"][1], 
+                                                      wm["colors"]["staticColor"][2], wm["colors"]["staticColor"][3]);
+                }
+                if (wm["colors"].contains("chromaColors") && wm["colors"]["chromaColors"].is_array()) {
+                    Watermark::g_chromaColors.clear();
+                    for (size_t i = 0; i < wm["colors"]["chromaColors"].size(); i++) {
+                        if (wm["colors"]["chromaColors"][i].size() == 4) {
+                            Watermark::g_chromaColors.push_back(ImVec4(
+                                wm["colors"]["chromaColors"][i][0], 
+                                wm["colors"]["chromaColors"][i][1], 
+                                wm["colors"]["chromaColors"][i][2], 
+                                wm["colors"]["chromaColors"][i][3]
+                            ));
+                        }
+                    }
+                }
+            }
+
+            if (wm.contains("position") && Watermark::g_watermarkHud) {
+                Watermark::g_watermarkHud->pos.x = wm["position"]["x"];
+                Watermark::g_watermarkHud->pos.y = wm["position"]["y"];
             }
         }
-        if (config["Visuals"].contains("Keystrokes")) {
-            if (config["Visuals"]["Keystrokes"].contains("enabled")) {
-                Keystrokes::g_showKeystrokes = config["Visuals"]["Keystrokes"]["enabled"];
+        
+        if (visuals.contains("ArrayList")) {
+            auto& al = visuals["ArrayList"];
+            if (al.contains("enabled")) ArrayList::g_enabled = al["enabled"];
+            if (al.contains("bgOpacity")) ArrayList::g_bgOpacity = al["bgOpacity"];
+            if (al.contains("showSideBar")) ArrayList::g_showSideBar = al["showSideBar"];
+            if (al.contains("chromaSideBar")) ArrayList::g_chromaSideBar = al["chromaSideBar"];
+            if (al.contains("roundedBorders")) ArrayList::g_roundedBorders = al["roundedBorders"];
+            if (al.contains("borderRadius")) ArrayList::g_borderRadius = al["borderRadius"];
+            if (al.contains("showSuffix")) ArrayList::g_showSuffix = al["showSuffix"];
+            
+            if (al.contains("colors")) {
+                if (al["colors"].contains("bgColor") && al["colors"]["bgColor"].size() == 4) {
+                    ArrayList::g_bgColor = ImVec4(al["colors"]["bgColor"][0], al["colors"]["bgColor"][1], 
+                                                  al["colors"]["bgColor"][2], al["colors"]["bgColor"][3]);
+                }
+                if (al["colors"].contains("sideBarColor") && al["colors"]["sideBarColor"].size() == 4) {
+                    ArrayList::g_sideBarColor = ImVec4(al["colors"]["sideBarColor"][0], al["colors"]["sideBarColor"][1], 
+                                                       al["colors"]["sideBarColor"][2], al["colors"]["sideBarColor"][3]);
+                }
             }
-            if (config["Visuals"]["Keystrokes"].contains("position") && Keystrokes::g_keystrokesHud) {
-                Keystrokes::g_keystrokesHud->pos.x = config["Visuals"]["Keystrokes"]["position"]["x"];
-                Keystrokes::g_keystrokesHud->pos.y = config["Visuals"]["Keystrokes"]["position"]["y"];
+
+            if (al.contains("position") && ArrayList::g_hud) {
+                ArrayList::g_hud->pos.x = al["position"]["x"];
+                ArrayList::g_hud->pos.y = al["position"]["y"];
+            }
+        }
+        if (visuals.contains("MotionBlur")) {
+            if (visuals["MotionBlur"].contains("enabled")) {
+                MotionBlur::g_motionBlurEnabled = visuals["MotionBlur"]["enabled"];
+            }
+        }
+        if (visuals.contains("Keystrokes")) {
+            if (visuals["Keystrokes"].contains("enabled")) {
+                Keystrokes::g_showKeystrokes = visuals["Keystrokes"]["enabled"];
+            }
+            if (visuals["Keystrokes"].contains("position") && Keystrokes::g_keystrokesHud) {
+                Keystrokes::g_keystrokesHud->pos.x = visuals["Keystrokes"]["position"]["x"];
+                Keystrokes::g_keystrokesHud->pos.y = visuals["Keystrokes"]["position"]["y"];
             }
             // Load Keystrokes colors
-            if (config["Visuals"]["Keystrokes"].contains("colors")) {
-                auto& colors = config["Visuals"]["Keystrokes"]["colors"];
+            if (visuals["Keystrokes"].contains("colors")) {
+                auto& colors = visuals["Keystrokes"]["colors"];
                 if (colors.contains("bgColor") && colors["bgColor"].size() == 4) {
                     Keystrokes::g_keystrokesBgColor = ImVec4(colors["bgColor"][0], colors["bgColor"][1], 
                                                                colors["bgColor"][2], colors["bgColor"][3]);
@@ -378,17 +526,42 @@ void ConfigManager::ApplyConfig(const nlohmann::json& config) {
                 }
             }
         }
-        if (config["Visuals"].contains("CPSCounter")) {
-            if (config["Visuals"]["CPSCounter"].contains("enabled")) {
-                CPSCounter::g_showCpsCounter = config["Visuals"]["CPSCounter"]["enabled"];
+        if (visuals.contains("CPSCounter")) {
+            if (visuals["CPSCounter"].contains("enabled")) {
+                CPSCounter::g_showCpsCounter = visuals["CPSCounter"]["enabled"];
             }
-            if (config["Visuals"]["CPSCounter"].contains("position") && CPSCounter::g_cpsHud) {
-                CPSCounter::g_cpsHud->pos.x = config["Visuals"]["CPSCounter"]["position"]["x"];
-                CPSCounter::g_cpsHud->pos.y = config["Visuals"]["CPSCounter"]["position"]["y"];
+            if (visuals.contains("CPSCounter") && visuals["CPSCounter"].contains("position")) {
+                if (CPSCounter::g_cpsHud) {
+                    CPSCounter::g_cpsHud->pos.x = visuals["CPSCounter"]["position"]["x"];
+                    CPSCounter::g_cpsHud->pos.y = visuals["CPSCounter"]["position"]["y"];
+                }
+            }
+
+            if (visuals.contains("FPSOverlay")) {
+                auto& fps = visuals["FPSOverlay"];
+                if (fps.contains("enabled")) FPSOverlay::g_showFpsOverlay = fps["enabled"];
+                if (fps.contains("scale")) FPSOverlay::g_fpsTextScale = fps["scale"];
+                if (fps.contains("showBackground")) FPSOverlay::g_showBackground = fps["showBackground"];
+                if (fps.contains("bgOpacity")) FPSOverlay::g_bgOpacity = fps["bgOpacity"];
+                
+                if (fps.contains("colors")) {
+                    auto& c = fps["colors"];
+                    if (c.contains("textColor")) {
+                        FPSOverlay::g_fpsTextColor = ImVec4(c["textColor"][0], c["textColor"][1], c["textColor"][2], c["textColor"][3]);
+                    }
+                    if (c.contains("accentColor")) {
+                        FPSOverlay::g_accentColor = ImVec4(c["accentColor"][0], c["accentColor"][1], c["accentColor"][2], c["accentColor"][3]);
+                    }
+                }
+
+                if (fps.contains("position") && FPSOverlay::g_fpsHud) {
+                    FPSOverlay::g_fpsHud->pos.x = fps["position"]["x"];
+                    FPSOverlay::g_fpsHud->pos.y = fps["position"]["y"];
+                }
             }
             // Load CPSCounter colors
-            if (config["Visuals"]["CPSCounter"].contains("colors")) {
-                auto& colors = config["Visuals"]["CPSCounter"]["colors"];
+            if (visuals["CPSCounter"].contains("colors")) {
+                auto& colors = visuals["CPSCounter"]["colors"];
                 if (colors.contains("textColor") && colors["textColor"].size() == 4) {
                     CPSCounter::g_cpsTextColor = ImVec4(colors["textColor"][0], colors["textColor"][1], 
                                                          colors["textColor"][2], colors["textColor"][3]);

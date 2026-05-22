@@ -1,7 +1,12 @@
+/*
+Under an4rch Development Public Source License 1.0
+*/
+
 #include "FullBright.hpp"
 #include "../../../Animations/Animations.hpp"
 #include "../../Alloc/AllocateNear.hpp"
 #include "../../../ImGui/imgui.h"
+#include "../../../GUI/GUI.hpp"
 #include <windows.h>
 #include <cstring>
 #include <cstdio>
@@ -100,7 +105,9 @@ void FullBright::RenderArrayList(ImDrawList* draw, ImVec2 arrayListStart, float&
 void FullBright::RenderMenu() {
     // FullBright Checkbox
     ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.2f, 1.0f), "Unstable Feature - May Cause Performance Issues\nFullBright is a little buggy");
-    if (ImGui::Checkbox("FullBright", &g_fullBrightEnabled)) {
+    bool prev = g_fullBrightEnabled;
+    GUI::RenderCustomSwitch("FullBright", &g_fullBrightEnabled);
+    if (prev != g_fullBrightEnabled) {
         if (g_fullBrightEnabled) Enable(); else Disable();
     }
 }

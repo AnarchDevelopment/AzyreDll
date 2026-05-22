@@ -24,7 +24,12 @@ if ($BuildType -eq "--debug") {
 } else {
     $BinDir = "build/Release"
 }
-$Output      = Join-Path $BinDir "aegledll.dll"
+
+if ($BuildType -eq "--debug") {
+    $Output = Join-Path $BinDir "aegledll_debug.dll"
+} else {
+    $Output = Join-Path $BinDir "aegledll.dll"
+}
 
 $Sources =  "dllmain.cpp", 
             "ImGui/imgui.cpp", 
@@ -46,10 +51,12 @@ $Sources =  "dllmain.cpp",
             "Modules/Visuals/MotionBlur/MotionBlur.cpp",
             "Modules/Visuals/Keystrokes/Keystrokes.cpp",
             "Modules/Visuals/CPSCounter/CPSCounter.cpp",
+            "Modules/Visuals/FPSOverlay/FPSOverlay.cpp",
             "Modules/Misc/UnlockFPS/UnlockFPS.cpp",
             "Modules/Terminal/Terminal.cpp",
             "Modules/Info/Info.cpp",
             "Modules/ModuleManager.cpp",
+            "ArrayList/ArrayList.cpp",
             "GUI/GUI.cpp",
             "GUI/DX11/ImGuiRenderer.cpp",
             "Hook/Hook.cpp",
@@ -68,14 +75,19 @@ if ($BuildType -eq "--debug") {
     Write-Log "Building in DEBUG mode..." "Info"
     $Flags = "-g", "-O0", "-fpermissive", "-m64", "-march=x86-64", "-static", "-static-libgcc", "-static-libstdc++", "-I."
 } else {
+    # dont put -static, breaks the hooks
     Write-Log "Building in RELEASE mode..." "Info"
     $Flags = "-O2", "-s", "-fpermissive", "-m64", "-march=x86-64", "-static", "-static-libgcc", "-static-libstdc++", "-I."
 }
 
-$Libs  = "-ld3d11", "-ldxgi", "-ld3dcompiler", "-ldwmapi", "-limm32", "-luser32", "-lgdi32", "-lpsapi", "-lshell32", "-lole32"
+$Libs  = "-ld3d11", "-ldxgi", "-ld3dcompiler", "-ldwmapi", "-limm32", "-luser32", "-lgdi32", "-lpsapi", "-lshell32", "-lole32", "-luuid"
 
 Clear-Host
-Write-Log "Starting Build of $ProjectName (x64)..." "Info"
+if ($BuildType -eq "--debug") {
+    Write-Log "Starting Build of $ProjectName (DEBUG, x64)..." "Info"
+} else {
+    Write-Log "Starting Build of $ProjectName (RELEASE, x64)..." "Info"
+}
 
 if (!(Test-Path $BuildDir)) { New-Item -ItemType Directory -Path $BuildDir | Out-Null }
 if (!(Test-Path $BinDir))   { New-Item -ItemType Directory -Path $BinDir | Out-Null }
@@ -128,13 +140,15 @@ Write-Log "Linking binary in directory: $BinDir" "Link"
 & g++ -shared -o $Output $ObjectFiles $Flags $Libs
 
 if ($LASTEXITCODE -eq 0) {
-    $Size = [Math]::Round((Get-Item $Output).Length / 1KB, 2)
+    $Size = [Math]::Round((Get-Item $Output).Length / 1MB, 2)
+    $SizeKB = [Math]::Round((Get-Item $Output).Length / 1KB, 2)
+    
     Write-Log "Process completed successfully." "Success"
-    Write-Host "----------------------------------" -ForegroundColor Gray
-    Write-Host "Generated DLL: $Output"
-    Write-Host "File Size:       $Size KB"
-    Write-Host "----------------------------------" -ForegroundColor Gray
-    Write-Host "Exit Code: $LASTEXITCODE" -ForegroundColor Gray
+    Write-Host "----------------------------------" 
+    Write-Host "Generated DLL: $Output" 
+    Write-Host "File Size:     $Size MB ($SizeKB KB)" 
+    Write-Host "----------------------------------" 
+    Write-Host "Exit Code: $LASTEXITCODE"
 } else {
     Write-Log "Error occurred while generating the DLL." "Error"
 }

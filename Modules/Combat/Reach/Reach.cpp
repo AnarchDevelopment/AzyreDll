@@ -1,6 +1,11 @@
+/*
+Under an4rch Development Public Source License 1.0
+*/
+
 #include "Reach.hpp"
 #include "../../../Animations/Animations.hpp"
 #include "../../../ImGui/imgui.h"
+#include "../../../GUI/GUI.hpp"
 #include <windows.h>
 #include <cstdio>
 #include <cmath>
@@ -83,15 +88,16 @@ void Reach::RenderArrayList(ImDrawList* draw, ImVec2 arrayListStart, float& yPos
 }
 
 void Reach::RenderMenu() {
-    if (ImGui::Checkbox("Enable Reach", &g_reachEnabled)) {
+    bool prev = g_reachEnabled;
+    GUI::RenderCustomSwitch("Enable Reach", &g_reachEnabled);
+    if (prev != g_reachEnabled) {
         SetEnabled(g_reachEnabled);
     }
 
-    if (g_reachEnabled) {
-        ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.40f, 0.18f, 0.28f, 0.8f));
+    if (GUI::BeginModuleSettings("Reach", &g_reachEnabled)) {
         if (ImGui::SliderFloat("Reach Distance", &g_reachValue, 3.0f, 15.0f, "%.2f")) {
             UpdateValue(g_reachValue);
         }
-        ImGui::PopStyleColor();
+        GUI::EndModuleSettings();
     }
 }

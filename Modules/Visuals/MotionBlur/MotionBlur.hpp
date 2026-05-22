@@ -1,3 +1,7 @@
+/*
+Under an4rch Development Public Source License 1.0
+*/
+
 #pragma once
 
 #include <d3d11.h>

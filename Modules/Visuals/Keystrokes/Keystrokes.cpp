@@ -1,8 +1,13 @@
+/*
+Under an4rch Development Public Source License 1.0
+*/
+
 #include "Keystrokes.hpp"
 #include "../../../Utils/HudElement.hpp"
 #include "Helper/HelperFunctions.hpp"
 #include "../../../Animations/Animations.hpp"
 #include "../../../ImGui/imgui.h"
+#include "../../../GUI/GUI.hpp"
 #include <windows.h>
 #include <cmath>
 #include <cstdio>
@@ -73,8 +78,8 @@ std::string Keystrokes::g_keystrokesLMBFormatText = "{value} CPS";
 std::string Keystrokes::g_keystrokesRMBFormatText = "{value} CPS";
 
 // CPS tracking for LMB and RMB
-std::vector<ULONGLONG> Keystrokes::g_lmbClickTimes(10, 0);
-std::vector<ULONGLONG> Keystrokes::g_rmbClickTimes(10, 0);
+std::vector<ULONGLONG> Keystrokes::g_lmbClickTimes(100, 0);
+std::vector<ULONGLONG> Keystrokes::g_rmbClickTimes(100, 0);
 int Keystrokes::g_lmbClickIndex = 0;
 int Keystrokes::g_rmbClickIndex = 0;
 int Keystrokes::g_lmbCps = 0;
@@ -173,15 +178,20 @@ void Keystrokes::RenderDisplay(float sw, float sh) {
         
         // Keystrokes layout size calculation
         float scaledSize = 130.0f * g_keystrokesUIScale;
-        float scaledSpacebarWidth = (scaledSize * 3.0f + g_keystrokesKeySpacing * 2.0f * g_keystrokesUIScale) * g_keystrokesSpacebarWidth;
         float keySpacing = g_keystrokesKeySpacing * g_keystrokesUIScale;
         float keyHeight = 38.0f * g_keystrokesUIScale;
-        ImVec2 keystrokesSize = ImVec2(
-            scaledSize, 
-            scaledSize * 1.15f + 
-            (g_keystrokesShowMouseButtons ? (scaledSize * 0.5f) : 0.0f) +
-            (g_keystrokesShowSpacebar ? (keyHeight + keySpacing) : 0.0f)
-        );
+        float padding = 6.0f * g_keystrokesUIScale;
+        
+        float calculatedHeight = padding + keyHeight + keySpacing + keyHeight; // W + ASD
+        if (g_keystrokesShowMouseButtons) {
+            calculatedHeight += keySpacing + keyHeight;
+        }
+        if (g_keystrokesShowSpacebar) {
+            calculatedHeight += keySpacing + (keyHeight * 0.7f); // Spacebar height is 0.7 * keyHeight
+        }
+        calculatedHeight += padding; // Bottom padding
+
+        ImVec2 keystrokesSize = ImVec2(scaledSize, calculatedHeight);
         g_keystrokesHud->size = keystrokesSize;
         
         // Initialize position on first draw
@@ -375,30 +385,33 @@ void Keystrokes::RenderDisplay(float sw, float sh) {
                 // Track CPS for LMB
                 if (lmbPressed && !g_prevLmbPressed) {
                     g_lmbClickTimes[g_lmbClickIndex] = GetTickCount64();
-                    g_lmbClickIndex = (g_lmbClickIndex + 1) % 10;
-                    int count = 0;
-                    for (int i = 0; i < 10; i++) {
-                        if (g_lmbClickTimes[i] > 0 && (GetTickCount64() - g_lmbClickTimes[i]) < 1000) {
-                            count++;
-                        }
-                    }
-                    g_lmbCps = count;
+                    g_lmbClickIndex = (g_lmbClickIndex + 1) % 100;
                 }
                 g_prevLmbPressed = lmbPressed;
                 
                 // Track CPS for RMB
                 if (rmbPressed && !g_prevRmbPressed) {
                     g_rmbClickTimes[g_rmbClickIndex] = GetTickCount64();
-                    g_rmbClickIndex = (g_rmbClickIndex + 1) % 10;
-                    int count = 0;
-                    for (int i = 0; i < 10; i++) {
-                        if (g_rmbClickTimes[i] > 0 && (GetTickCount64() - g_rmbClickTimes[i]) < 1000) {
-                            count++;
-                        }
-                    }
-                    g_rmbCps = count;
+                    g_rmbClickIndex = (g_rmbClickIndex + 1) % 100;
                 }
                 g_prevRmbPressed = rmbPressed;
+
+                // Recalculate CPS every frame for smooth decay to 0
+                int lmbCount = 0;
+                int rmbCount = 0;
+                ULONGLONG now = GetTickCount64();
+                for (int i = 0; i < 100; i++) {
+                    if (g_lmbClickTimes[i] > 0) {
+                        if (now - g_lmbClickTimes[i] < 1000) lmbCount++;
+                        else g_lmbClickTimes[i] = 0;
+                    }
+                    if (g_rmbClickTimes[i] > 0) {
+                        if (now - g_rmbClickTimes[i] < 1000) rmbCount++;
+                        else g_rmbClickTimes[i] = 0;
+                    }
+                }
+                g_lmbCps = lmbCount;
+                g_rmbCps = rmbCount;
                 
                 if (g_keystrokesShowMouseButtons) {
                     float lmbRmbWidth = (containerWidth - keySpacing) / 2.0f;
@@ -530,145 +543,34 @@ void Keystrokes::RenderDisplay(float sw, float sh) {
 }
 
 void Keystrokes::RenderMenu() {
-    // Show Keystrokes
-    ImGui::Checkbox("Keystrokes", &g_showKeystrokes);
+    GUI::RenderCustomSwitch("Keystrokes", &g_showKeystrokes);
     
-    if (g_showKeystrokes) {
-        ImGui::Separator();
-        ImGui::Text("Keystrokes Configuration");
-        
-        // UI Scale
-        ImGui::SliderFloat("Keystrokes Scale", &g_keystrokesUIScale, 0.5f, 2.0f, "%.2f");
-        
-        // Visual Effects
-        ImGui::Checkbox("Blur Effect##KS", &g_keystrokesBlurEffect);
-        ImGui::SliderFloat("Keystrokes Rounding", &g_keystrokesRounding, 0.0f, 20.0f, "%.1f");
-        
-        // Background & Shadow
-        ImGui::Checkbox("Show Background##KS", &g_keystrokesShowBg);
-        if (g_keystrokesShowBg) {
-            ImGui::Checkbox("Background Shadow##KS", &g_keystrokesRectShadow);
-            if (g_keystrokesRectShadow) {
-                ImGui::SliderFloat("Shadow Offset##KS", &g_keystrokesRectShadowOffset, 0.0f, 0.1f, "%.3f");
+    if (GUI::BeginModuleSettings("Keystrokes", &g_showKeystrokes)) {
+        if (ImGui::BeginTabBar("KeystrokesTabs")) {
+            if (ImGui::BeginTabItem("General")) {
+                ImGui::SliderFloat("Scale", &g_keystrokesUIScale, 0.5f, 2.0f, "%.2f");
+                ImGui::SliderFloat("Rounding", &g_keystrokesRounding, 0.0f, 20.0f, "%.1f");
+                GUI::RenderCustomSwitch("Blur Effect", &g_keystrokesBlurEffect);
+                GUI::RenderCustomSwitch("Show Background", &g_keystrokesShowBg);
+                ImGui::Checkbox("Border", &g_keystrokesBorder);
+                ImGui::EndTabItem();
             }
-        }
-        
-        // Border
-        ImGui::Checkbox("Border##KS", &g_keystrokesBorder);
-        if (g_keystrokesBorder) {
-            ImGui::SliderFloat("Border Width##KS", &g_keystrokesBorderWidth, 0.5f, 4.0f, "%.1f");
-        }
-        
-        // Glow Effects
-        ImGui::Checkbox("Glow (Disabled)##KS", &g_keystrokesGlow);
-        if (g_keystrokesGlow) {
-            ImGui::SliderFloat("Glow Amount##KS", &g_keystrokesGlowAmount, 0.0f, 100.0f, "%.0f");
-        }
-        
-        ImGui::Checkbox("Glow (Enabled)##KS", &g_keystrokesGlowEnabled);
-        if (g_keystrokesGlowEnabled) {
-            ImGui::SliderFloat("Enabled Glow Amount##KS", &g_keystrokesGlowEnabledAmount, 0.0f, 100.0f, "%.0f");
-            ImGui::SliderFloat("Glow Speed##KS", &g_keystrokesGlowSpeed, 0.1f, 10.0f, "%.1f");
-        }
-        
-        // Spacing & Speed
-        ImGui::SliderFloat("Key Spacing##KS", &g_keystrokesKeySpacing, 0.5f, 5.0f, "%.2f");
-        ImGui::SliderFloat("Highlight Speed##KS", &g_keystrokesEdSpeed, 0.1f, 10.0f, "%.1f");
-        
-        // Text Settings
-        ImGui::SliderFloat("WASD Text Scale##KS", &g_keystrokesTextScale, 0.5f, 2.0f, "%.2f");
-        ImGui::SliderFloat("Mouse Text Scale##KS", &g_keystrokesTextScale2, 0.5f, 2.0f, "%.2f");
-        ImGui::SliderFloat("Text X Offset##KS", &g_keystrokesTextXOffset, 0.0f, 1.0f, "%.2f");
-        ImGui::SliderFloat("Text Y Offset##KS", &g_keystrokesTextYOffset, 0.0f, 1.0f, "%.2f");
-        
-        ImGui::Checkbox("Text Shadow##KS", &g_keystrokesTextShadow);
-        if (g_keystrokesTextShadow) {
-            ImGui::SliderFloat("Text Shadow Offset##KS", &g_keystrokesTextShadowOffset, 0.0f, 0.1f, "%.3f");
-        }
-        
-        ImGui::Separator();
-        ImGui::Text("Keystrokes Colors");
-        
-        // Background Colors
-        float bgColorDisabled[4] = {g_keystrokesBgColor.x, g_keystrokesBgColor.y, g_keystrokesBgColor.z, g_keystrokesBgColor.w};
-        if (ImGui::ColorEdit4("Background Disabled##KS", bgColorDisabled)) {
-            g_keystrokesBgColor = ImVec4(bgColorDisabled[0], bgColorDisabled[1], bgColorDisabled[2], bgColorDisabled[3]);
-        }
-        ImGui::SliderFloat("Background Disabled Opacity##KS", &g_keystrokesBgColor.w, 0.0f, 1.0f, "%.2f");
-        
-        float bgColorEnabled[4] = {g_keystrokesEnabledColor.x, g_keystrokesEnabledColor.y, g_keystrokesEnabledColor.z, g_keystrokesEnabledColor.w};
-        if (ImGui::ColorEdit4("Background Enabled##KS", bgColorEnabled)) {
-            g_keystrokesEnabledColor = ImVec4(bgColorEnabled[0], bgColorEnabled[1], bgColorEnabled[2], bgColorEnabled[3]);
-        }
-        ImGui::SliderFloat("Background Enabled Opacity##KS", &g_keystrokesEnabledColor.w, 0.0f, 1.0f, "%.2f");
-        
-        // Text Colors
-        float textColorDisabled[4] = {g_keystrokesTextColor.x, g_keystrokesTextColor.y, g_keystrokesTextColor.z, g_keystrokesTextColor.w};
-        if (ImGui::ColorEdit4("Text Disabled##KS", textColorDisabled)) {
-            g_keystrokesTextColor = ImVec4(textColorDisabled[0], textColorDisabled[1], textColorDisabled[2], textColorDisabled[3]);
-        }
-        ImGui::SliderFloat("Text Disabled Opacity##KS", &g_keystrokesTextColor.w, 0.0f, 1.0f, "%.2f");
-        
-        float textColorEnabled[4] = {g_keystrokesTextEnabledColor.x, g_keystrokesTextEnabledColor.y, g_keystrokesTextEnabledColor.z, g_keystrokesTextEnabledColor.w};
-        if (ImGui::ColorEdit4("Text Enabled##KS", textColorEnabled)) {
-            g_keystrokesTextEnabledColor = ImVec4(textColorEnabled[0], textColorEnabled[1], textColorEnabled[2], textColorEnabled[3]);
-        }
-        ImGui::SliderFloat("Text Enabled Opacity##KS", &g_keystrokesTextEnabledColor.w, 0.0f, 1.0f, "%.2f");
-        
-        ImGui::Separator();
-        ImGui::Text("Advanced Effects");
-        
-        // Background Shadow Color
-        if (g_keystrokesShowBg && g_keystrokesRectShadow) {
-            float rectShadowCol[4] = {g_keystrokesRectShadowColor.x, g_keystrokesRectShadowColor.y, g_keystrokesRectShadowColor.z, g_keystrokesRectShadowColor.w};
-            if (ImGui::ColorEdit4("Background Shadow Color##KS", rectShadowCol)) {
-                g_keystrokesRectShadowColor = ImVec4(rectShadowCol[0], rectShadowCol[1], rectShadowCol[2], rectShadowCol[3]);
+            if (ImGui::BeginTabItem("Layout")) {
+                ImGui::Checkbox("Mouse Buttons", &g_keystrokesShowMouseButtons);
+                ImGui::Checkbox("Spacebar", &g_keystrokesShowSpacebar);
+                ImGui::SliderFloat("Key Spacing", &g_keystrokesKeySpacing, 0.5f, 5.0f, "%.2f");
+                ImGui::SliderFloat("Highlight Speed", &g_keystrokesEdSpeed, 0.1f, 10.0f, "%.1f");
+                ImGui::EndTabItem();
             }
-            ImGui::SliderFloat("Background Shadow Opacity##KS", &g_keystrokesRectShadowColor.w, 0.0f, 1.0f, "%.2f");
-        }
-        
-        // Text Shadow Color
-        if (g_keystrokesTextShadow) {
-            float textShadowCol[4] = {g_keystrokesTextShadowColor.x, g_keystrokesTextShadowColor.y, g_keystrokesTextShadowColor.z, g_keystrokesTextShadowColor.w};
-            if (ImGui::ColorEdit4("Text Shadow Color##KS", textShadowCol)) {
-                g_keystrokesTextShadowColor = ImVec4(textShadowCol[0], textShadowCol[1], textShadowCol[2], textShadowCol[3]);
+            if (ImGui::BeginTabItem("Glow")) {
+                ImGui::Checkbox("Disabled Glow", &g_keystrokesGlow);
+                ImGui::Checkbox("Enabled Glow", &g_keystrokesGlowEnabled);
+                ImGui::SliderFloat("Glow Speed", &g_keystrokesGlowSpeed, 0.1f, 10.0f, "%.1f");
+                ImGui::EndTabItem();
             }
-            ImGui::SliderFloat("Text Shadow Opacity##KS", &g_keystrokesTextShadowColor.w, 0.0f, 1.0f, "%.2f");
+            ImGui::EndTabBar();
         }
-        
-        // Border Color
-        if (g_keystrokesBorder) {
-            float borderCol[4] = {g_keystrokesBorderColor.x, g_keystrokesBorderColor.y, g_keystrokesBorderColor.z, g_keystrokesBorderColor.w};
-            if (ImGui::ColorEdit4("Border Color##KS", borderCol)) {
-                g_keystrokesBorderColor = ImVec4(borderCol[0], borderCol[1], borderCol[2], borderCol[3]);
-            }
-            ImGui::SliderFloat("Border Opacity##KS", &g_keystrokesBorderColor.w, 0.0f, 1.0f, "%.2f");
-        }
-        
-        // Glow Colors
-        if (g_keystrokesGlow) {
-            float glowCol[4] = {g_keystrokesGlowColor.x, g_keystrokesGlowColor.y, g_keystrokesGlowColor.z, g_keystrokesGlowColor.w};
-            if (ImGui::ColorEdit4("Glow Color (Disabled)##KS", glowCol)) {
-                g_keystrokesGlowColor = ImVec4(glowCol[0], glowCol[1], glowCol[2], glowCol[3]);
-            }
-            ImGui::SliderFloat("Glow Disabled Opacity##KS", &g_keystrokesGlowColor.w, 0.0f, 1.0f, "%.2f");
-        }
-        
-        if (g_keystrokesGlowEnabled) {
-            float glowEnabledCol[4] = {g_keystrokesGlowEnabledColor.x, g_keystrokesGlowEnabledColor.y, g_keystrokesGlowEnabledColor.z, g_keystrokesGlowEnabledColor.w};
-            if (ImGui::ColorEdit4("Glow Color (Enabled)##KS", glowEnabledCol)) {
-                g_keystrokesGlowEnabledColor = ImVec4(glowEnabledCol[0], glowEnabledCol[1], glowEnabledCol[2], glowEnabledCol[3]);
-            }
-            ImGui::SliderFloat("Glow Enabled Opacity##KS", &g_keystrokesGlowEnabledColor.w, 0.0f, 1.0f, "%.2f");
-        }
-        
-        ImGui::Separator();
-        ImGui::Text("Mouse Buttons and Spacebar");
-        
-        ImGui::Checkbox("Show Mouse Buttons##KS", &g_keystrokesShowMouseButtons);
-        ImGui::Checkbox("Show LMB & RMB##KS", &g_keystrokesShowLMBRMB);
-        ImGui::Checkbox("Show Spacebar##KS", &g_keystrokesShowSpacebar);
-        ImGui::SliderFloat("Spacebar Width##KS", &g_keystrokesSpacebarWidth, 0.1f, 2.0f, "%.2f");
+        GUI::EndModuleSettings();
     }
 }
 
