@@ -66,28 +66,33 @@ This generates the DLL in `build/` directory.
 aegledll/
 │   build.ps1
 │   dllmain.cpp
-│   README.md
-│   
+│
 ├───Animations
 │       Animations.cpp
 │       Animations.hpp
-│       
+│
+├───ArrayList
+│       ArrayList.cpp
+│       ArrayList.hpp
+│
 ├───Assets
+│   │   aeglewatermark.png
 │   │   clicksound.mp3
 │   │   clicksound_1.mp3
 │   │   clicksound_2.mp3
 │   │   logo.png
+│   │   ProductSans.ttf
 │   │   resource.h
 │   │   resources.rc
-│   │   
+│   │
 │   └───stb
 │           stb_image.h
 │           stb_image_impl.cpp
-│           
+│
 ├───Config
 │       ConfigManager.cpp
 │       ConfigManager.hpp
-│       
+│
 ├───GUI
 │   │   GUI.cpp
 │   │   GUI.hpp
@@ -95,11 +100,11 @@ aegledll/
 │   └───DX11
 │           ImGuiRenderer.cpp
 │           ImGuiRenderer.hpp
-│           
+│
 ├───Hook
 │       Hook.cpp
 │       Hook.hpp
-│       
+│
 ├───ImGui
 │   │   imconfig.h
 │   │   imgui.cpp
@@ -112,20 +117,20 @@ aegledll/
 │   │   imstb_rectpack.h
 │   │   imstb_textedit.h
 │   │   imstb_truetype.h
-│   │   
+│   │
 │   ├───backend
 │   │       imgui_impl_dx11.cpp
 │   │       imgui_impl_dx11.h
 │   │       imgui_impl_win32.cpp
 │   │       imgui_impl_win32.h
-│   │       
+│   │
 │   └───imgui-markdown
 │           imgui-markdown.h
-│           
+│
 ├───Input
 │       Input.cpp
 │       Input.hpp
-│       
+│
 ├───minhook
 │       buffer.c
 │       buffer.h
@@ -142,86 +147,90 @@ aegledll/
 │       table64.h
 │       trampoline.c
 │       trampoline.h
-│       
+│
 ├───miniaudio
 │       miniaudio.h
-│       
+│
 ├───Modules
 │   │   Globals.hpp
 │   │   ModuleHeader.hpp
 │   │   ModuleManager.cpp
 │   │   ModuleManager.hpp
-│   │   
+│   │
 │   ├───Alloc
 │   │       AllocateNear.cpp
 │   │       AllocateNear.hpp
-│   │       
+│   │
 │   ├───Combat
 │   │   ├───Hitbox
 │   │   │       Hitbox.cpp
 │   │   │       Hitbox.hpp
-│   │   │       
+│   │   │
 │   │   └───Reach
 │   │           Reach.cpp
 │   │           Reach.hpp
-│   │           
+│   │
 │   ├───Info
 │   │       Info.cpp
 │   │       Info.hpp
-│   │       
+│   │
 │   ├───Misc
 │   │   └───UnlockFPS
 │   │           UnlockFPS.cpp
 │   │           UnlockFPS.hpp
-│   │           
+│   │
 │   ├───Movement
 │   │   ├───AutoSprint
 │   │   │       AutoSprint.cpp
 │   │   │       AutoSprint.hpp
-│   │   │       
+│   │   │
 │   │   └───Timer
 │   │           Timer.cpp
 │   │           Timer.hpp
-│   │           
+│   │
 │   ├───PatternScan
 │   │       PatternScan.cpp
 │   │       PatternScan.hpp
-│   │       
+│   │
 │   ├───Terminal
 │   │       Terminal.cpp
 │   │       Terminal.hpp
-│   │       
+│   │
 │   └───Visuals
 │       ├───CPSCounter
 │       │       CPSCounter.cpp
 │       │       CPSCounter.hpp
-│       │       
+│       │
+│       ├───FPSOverlay
+│       │       FPSOverlay.cpp
+│       │       FPSOverlay.hpp
+│       │
 │       ├───FullBright
 │       │       FullBright.cpp
 │       │       FullBright.hpp
-│       │       
+│       │
 │       ├───Keystrokes
 │       │   │   Keystrokes.cpp
 │       │   │   Keystrokes.hpp
-│       │   │   
+│       │   │
 │       │   └───Helper
 │       │           HelperFunctions.hpp
-│       │           
+│       │
 │       ├───MotionBlur
 │       │       MotionBlur.cpp
 │       │       MotionBlur.hpp
-│       │       
+│       │
 │       ├───RenderInfo
 │       │       RenderInfo.cpp
 │       │       RenderInfo.hpp
-│       │       
+│       │
 │       └───Watermark
 │               Watermark.cpp
 │               Watermark.hpp
-│               
+│
 ├───nlohmann
 │       json.hpp
-│       
+│
 └───Utils
         HudElement.hpp
 ```
