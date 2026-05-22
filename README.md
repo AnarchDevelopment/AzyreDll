@@ -357,7 +357,7 @@ Features are organized in a hierarchical module system:
 
 ## License
 
-This project is licensed under the [MIT license](LICENSE)
+This project is licensed under the [an4rch Development Public Source License](LICENSE)
 
 ## Disclaimer
 
