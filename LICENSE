@@ -1,21 +1,58 @@
-MIT License
+an4rch Development Public Source License (ADPSL) v1.0
 
-Copyright (c) 2026 NqtVyzer
+Copyright (c) 2026 an4rch Development
+All rights reserved.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+Permission is granted to use, study, modify, fork,
+compile, and distribute this software and its source code,
+under the following conditions:
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+1. Same License Requirement
+Any fork, modification, or derivative work of this
+software must remain licensed under this same license.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+2. Source Code Availability
+If you distribute compiled binaries, executables,
+or modified versions of this software, you must also
+provide access to the complete corresponding source code.
+
+3. Attribution
+You may not claim this software or derivative works
+as your own original work.
+
+All distributions and derivative works must clearly include:
+- the original author or organization,
+- the original project name,
+- and this license.
+
+4. Commercial Use
+Commercial use, redistribution, and selling are permitted,
+provided that:
+- proper attribution is given,
+- the original author or organization is credited,
+- and this license is included.
+
+5. License Preservation
+This license file and all copyright notices must remain
+included in all copies, forks, and derivative works.
+
+6. Future License Versions
+This project is licensed under the an4rch Development
+Public Source License (ADPSL) version 1.0
+or any later version published by an4rch Development.
+
+7. Liability
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY
+OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT
+LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT.
+
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
+BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY,
+WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE,
+ARISING FROM, OUT OF, OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+8. Termination
+Any violation of these terms automatically revokes
+the rights granted under this license.
