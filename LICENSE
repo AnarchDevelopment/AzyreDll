@@ -1,27 +1,63 @@
 an4rch Development Public Source License (ADPSL) v1.0
 
 Copyright (c) 2026 an4rch Development
-Some rights reserved.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to use, study, modify, fork, compile, and distribute the Software and its source code, subject to the following conditions:
+Permission is granted to use, study, modify, fork,
+compile, and distribute this software and its source code,
+under the following conditions:
 
 1. Same License Requirement
-Any fork, modification, or derivative work of this Software must be distributed and remain licensed under the exact same terms and conditions of this license.
+Any fork, modification, or derivative work of this
+software must remain licensed under this same license.
 
 2. Source Code Availability
-If you distribute the Software or derivative works in compiled, binary, or executable form, you must also provide immediate, free, and unrestricted public access to the complete corresponding machine-readable source code (e.g., via a publicly accessible repository or a direct download link).
+If you distribute compiled binaries, executables,
+or modified versions of this software, you must also
+provide access to the complete corresponding source code.
 
-3. Attribution and Preservation
-You may not claim this Software or any derivative works as your own original work. This license file, including the copyright notice above, and all original authorship attributions must be preserved and clearly included in all copies, forks, or substantial portions of the Software.
+The source code must be provided through:
+- a public repository,
+- a direct download,
+- or another freely accessible method.
+
+Access to the corresponding source code must remain
+available for as long as the binaries or executable
+forms of the software are distributed.
+
+3. Attribution
+You may not claim this software or derivative works
+as your own original work.
+
+All distributions and derivative works must clearly include:
+- the original author or organization,
+- the original project name,
+- and this license.
 
 4. Commercial Use
-Commercial use, commercial redistribution, and selling of the Software or derivative works are permitted, provided that all other conditions of this license—including source code availability, attribution, and license preservation—are strictly met.
+Commercial use, redistribution, and selling are permitted
+under the conditions of this license.
 
-5. Future License Versions
-This project is licensed under the an4rch Development Public Source License (ADPSL) version 1.0, or (at your option) any later version published by an4rch Development.
+5. License Preservation
+This license file and all copyright notices must remain
+included in all copies, forks, and derivative works.
 
-6. Termination
-Any use, modification, or distribution of the Software not in compliance with the terms of this license automatically terminates your rights under it.
+6. Future License Versions
+Projects may choose to use version 1.0
+or any later version published by an4rch Development,
+if explicitly stated by the project or copyright holder.
 
-7. Disclaimer of Warranty
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+7. Liability
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY
+OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT
+LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT.
+
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
+BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY,
+WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE,
+ARISING FROM, OUT OF, OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+8. Termination
+Any violation of these terms automatically revokes
+the rights granted under this license.
