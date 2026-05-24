@@ -12,6 +12,9 @@ A DirectX 11 internal hook with an ImGui interface for runtime client modificati
   <img src="https://img.shields.io/github/issues/iVyz3r/aegledll" alt="Issues" />
   <img src="https://img.shields.io/github/last-commit/iVyz3r/aegledll" alt="Last Commit" />
   <img src="https://img.shields.io/github/topics/iVyz3r/aegledll?label=topics" alt="Topics" />
+    <a href="https://discord.gg/mbvxS2zxbu">
+    <img src="https://img.shields.io/discord/1503215502959317103?label=Discord&logo=discord" alt="Discord" />
+  </a>
 </p>
 
 ## Overview
