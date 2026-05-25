@@ -78,9 +78,6 @@ static DWORD WINAPI UnloadThread(LPVOID lpParam) {
     // Esperamos para estar completamente fuera del contexto de renderizado
     Sleep(500);
 
-    extern void CleanupUwpCursor();
-    CleanupUwpCursor();
-
     // Shutdown Info module
     Info::Shutdown();
 
@@ -173,16 +170,12 @@ HRESULT STDMETHODCALLTYPE Hook::hkResizeBuffers(IDXGISwapChain* pSwapChain, UINT
     return Hook::oResizeBuffers(pSwapChain, BufferCount, Width, Height, NewFormat, SwapChainFlags);
 }
 
-extern void UpdateUwpCursorState();
-
 BOOL WINAPI Hook::hkSetCursorPos(int x, int y) {
-    UpdateUwpCursorState();
     if (g_showMenu) return TRUE;
     return Hook::oSetCursorPos(x, y);
 }
 
 BOOL WINAPI Hook::hkClipCursor(const RECT* lpRect) {
-    UpdateUwpCursorState();
     if (g_showMenu) return Hook::oClipCursor(NULL);
     return Hook::oClipCursor(lpRect);
 }
