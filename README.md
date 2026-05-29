@@ -10,7 +10,7 @@ A DirectX 11 internal hook with an ImGui interface for runtime client modificati
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/github/license/iVyz3r/aegledll" alt="License" />
+  <img src="https://img.shields.io/badge/license-ADPSLv1.0-blue" alt="License" />
   <img src="https://img.shields.io/github/stars/iVyz3r/aegledll" alt="Stars" />
   <img src="https://img.shields.io/github/issues/iVyz3r/aegledll" alt="Issues" />
   <img src="https://img.shields.io/github/last-commit/iVyz3r/aegledll" alt="Last Commit" />
