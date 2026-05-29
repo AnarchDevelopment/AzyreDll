@@ -20,6 +20,12 @@ A DirectX 11 internal hook with an ImGui interface for runtime client modificati
   </a>
 </p>
 
+## TP libraries
+- [MinHook | Tsuda Kageyu](https://github.com/TsudaKageyu/minhook)
+- [ImGui | ocornut](https://github.com/ocornut/imgui)
+- [JSON for C++ | Niels Lohmann](https://github.com/nlohmann/json)
+- [miniaudio | mackron](https://github.com/mackron/miniaudio)
+
 ## Overview
 
 Aegleseeker is an internal client modification framework that hooks into DirectX 11 applications. It provides:
