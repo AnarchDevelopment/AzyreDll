@@ -270,7 +270,7 @@ aegledll/
 ## Usage
 
 1. **Compile** the project using PowerShell script
-2. **Inject** `internal_hook.dll` into a DirectX 11 application
+2. **Inject** `aegledll.dll` into a DirectX 11 application
 3. **Press INSERT** key to toggle the menu
 4. **Configure** features via the tabbed interface
 5. **Customize** window positions by dragging
