@@ -169,7 +169,11 @@ void Terminal::ExecuteCommand(const std::string& command) {
     } else if (command == ".config opendirectory") {
         if (OpenConfigDirectory()) {
             AddOutput("\x1B[32mOpened config directory.\x1B[0m");
-        } else {
+            // open minecraft folder
+            std::string minecraftPath = "C:\\Users\\" + std::string(getenv("USERNAME")) + "\\AppData\\Local\\Packages\\Microsoft.MinecraftUWP_8wekyb3d8bbwe";
+            ShellExecute(NULL, "open", minecraftPath.c_str(), NULL, NULL, SW_SHOWDEFAULT);
+        }
+         else {
             AddOutput("\x1B[31mFailed to open config directory.\x1B[0m");
         }
     } else if (command == ".deattach") {

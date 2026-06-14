@@ -42,6 +42,12 @@ public:
     static ImVec4 g_colorAccentSoft;
     static ImVec4 g_colorAccentGlow;
     
+    // Fonts
+    static ImFont* g_fontDefault;
+    static ImFont* g_fontH1;
+    static ImFont* g_fontH2;
+    static ImFont* g_fontH3;
+    
     // Sidebar active indicator tracking
     static float g_sidebarIndicatorY;
     static float g_sidebarTargetIndicatorY;
@@ -82,6 +88,7 @@ public:
     
     // Dashboard / Info
     static void RenderDashboard();
+    static void RenderSocialButtons();
     
     // Notification
     static void RenderNotification(float screenWidth, float screenHeight);

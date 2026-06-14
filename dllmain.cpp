@@ -82,6 +82,7 @@ HudElement g_arrayListHud = { ImVec2(0, 10), ImVec2(300, 400) };
 HudElement g_keystrokesHud = { ImVec2(30, 0), ImVec2(140, 150) };
 HudElement g_cpsHud = { ImVec2(500, 400), ImVec2(80, 30) };
 HudElement g_fpsOverlayHud = { ImVec2(10, 250), ImVec2(100, 35) };
+HudElement g_pingHud = { ImVec2(0, 0), ImVec2(130, 28) };
 
 LRESULT CALLBACK KeyboardBlockHookProc(int nCode, WPARAM wParam, LPARAM lParam) {
     if (nCode < 0) {
@@ -177,7 +178,7 @@ HRESULT STDMETHODCALLTYPE hkPresent_Impl(IDXGISwapChain* pSwapChain, UINT SyncIn
             Watermark::InitializeTextures();
             
             // Centralized Module Initialization
-            Module::Initialize(g_gameBase, &g_renderInfoHud, &g_watermarkHud, &g_keystrokesHud, &g_cpsHud, &g_fpsOverlayHud);
+            Module::Initialize(g_gameBase, &g_renderInfoHud, &g_watermarkHud, &g_keystrokesHud, &g_cpsHud, &g_fpsOverlayHud, &g_pingHud);
             
             Watermark::g_watermarkEnableTime = GetTickCount64();
             Watermark::g_watermarkAnim = 1.0f;
@@ -238,7 +239,7 @@ HRESULT STDMETHODCALLTYPE hkPresent_Impl(IDXGISwapChain* pSwapChain, UINT SyncIn
     }
 
     if (sw <= 0) return Hook::oPresent(pSwapChain, 0, Flags);
-    if ((GetAsyncKeyState(VK_INSERT) & 0x8000) && (GetTickCount64() - g_lastToggle) > 400) {
+    if (((GetAsyncKeyState(VK_INSERT) & 0x8000) || (GetAsyncKeyState(VK_RSHIFT) & 0x8000)) && (GetTickCount64() - g_lastToggle) > 400) {
         g_showMenu = !g_showMenu;
         GUI::g_showMenu = g_showMenu;
         g_lastToggle = GetTickCount64();

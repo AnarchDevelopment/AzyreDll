@@ -291,6 +291,21 @@ nlohmann::json ConfigManager::CollectCurrentConfig() {
     config["Visuals"]["MotionBlur"]["enabled"] = MotionBlur::g_motionBlurEnabled;
     
     config["Visuals"]["Keystrokes"]["enabled"] = Keystrokes::g_showKeystrokes;
+    config["Visuals"]["Keystrokes"]["scale"] = Keystrokes::g_keystrokesUIScale;
+    config["Visuals"]["Keystrokes"]["blurEffect"] = Keystrokes::g_keystrokesBlurEffect;
+    config["Visuals"]["Keystrokes"]["rounding"] = Keystrokes::g_keystrokesRounding;
+    config["Visuals"]["Keystrokes"]["showBg"] = Keystrokes::g_keystrokesShowBg;
+    config["Visuals"]["Keystrokes"]["rectShadow"] = Keystrokes::g_keystrokesRectShadow;
+    config["Visuals"]["Keystrokes"]["border"] = Keystrokes::g_keystrokesBorder;
+    config["Visuals"]["Keystrokes"]["glow"] = Keystrokes::g_keystrokesGlow;
+    config["Visuals"]["Keystrokes"]["glowEnabled"] = Keystrokes::g_keystrokesGlowEnabled;
+    config["Visuals"]["Keystrokes"]["glowSpeed"] = Keystrokes::g_keystrokesGlowSpeed;
+    config["Visuals"]["Keystrokes"]["keySpacing"] = Keystrokes::g_keystrokesKeySpacing;
+    config["Visuals"]["Keystrokes"]["edSpeed"] = Keystrokes::g_keystrokesEdSpeed;
+    config["Visuals"]["Keystrokes"]["textShadow"] = Keystrokes::g_keystrokesTextShadow;
+    config["Visuals"]["Keystrokes"]["showMouseButtons"] = Keystrokes::g_keystrokesShowMouseButtons;
+    config["Visuals"]["Keystrokes"]["showSpacebar"] = Keystrokes::g_keystrokesShowSpacebar;
+
     if (Keystrokes::g_keystrokesHud) {
         config["Visuals"]["Keystrokes"]["position"]["x"] = Keystrokes::g_keystrokesHud->pos.x;
         config["Visuals"]["Keystrokes"]["position"]["y"] = Keystrokes::g_keystrokesHud->pos.y;
@@ -308,6 +323,27 @@ nlohmann::json ConfigManager::CollectCurrentConfig() {
     config["Visuals"]["Keystrokes"]["colors"]["textEnabledColor"] = 
         nlohmann::json::array({Keystrokes::g_keystrokesTextEnabledColor.x, Keystrokes::g_keystrokesTextEnabledColor.y, 
                                Keystrokes::g_keystrokesTextEnabledColor.z, Keystrokes::g_keystrokesTextEnabledColor.w});
+    config["Visuals"]["Keystrokes"]["colors"]["borderColor"] = 
+        nlohmann::json::array({Keystrokes::g_keystrokesBorderColor.x, Keystrokes::g_keystrokesBorderColor.y, 
+                               Keystrokes::g_keystrokesBorderColor.z, Keystrokes::g_keystrokesBorderColor.w});
+    config["Visuals"]["Keystrokes"]["colors"]["glowColor"] = 
+        nlohmann::json::array({Keystrokes::g_keystrokesGlowColor.x, Keystrokes::g_keystrokesGlowColor.y, 
+                               Keystrokes::g_keystrokesGlowColor.z, Keystrokes::g_keystrokesGlowColor.w});
+    config["Visuals"]["Keystrokes"]["colors"]["glowEnabledColor"] = 
+        nlohmann::json::array({Keystrokes::g_keystrokesGlowEnabledColor.x, Keystrokes::g_keystrokesGlowEnabledColor.y, 
+                               Keystrokes::g_keystrokesGlowEnabledColor.z, Keystrokes::g_keystrokesGlowEnabledColor.w});
+    config["Visuals"]["Keystrokes"]["colors"]["rectShadowColor"] = 
+        nlohmann::json::array({Keystrokes::g_keystrokesRectShadowColor.x, Keystrokes::g_keystrokesRectShadowColor.y, 
+                               Keystrokes::g_keystrokesRectShadowColor.z, Keystrokes::g_keystrokesRectShadowColor.w});
+    config["Visuals"]["Keystrokes"]["colors"]["textShadowColor"] = 
+        nlohmann::json::array({Keystrokes::g_keystrokesTextShadowColor.x, Keystrokes::g_keystrokesTextShadowColor.y, 
+                               Keystrokes::g_keystrokesTextShadowColor.z, Keystrokes::g_keystrokesTextShadowColor.w});
+    config["Visuals"]["Keystrokes"]["colors"]["enabledShadowColor"] = 
+        nlohmann::json::array({Keystrokes::g_keystrokesEnabledShadowColor.x, Keystrokes::g_keystrokesEnabledShadowColor.y, 
+                               Keystrokes::g_keystrokesEnabledShadowColor.z, Keystrokes::g_keystrokesEnabledShadowColor.w});
+    config["Visuals"]["Keystrokes"]["colors"]["disabledShadowColor"] = 
+        nlohmann::json::array({Keystrokes::g_keystrokesDisabledShadowColor.x, Keystrokes::g_keystrokesDisabledShadowColor.y, 
+                               Keystrokes::g_keystrokesDisabledShadowColor.z, Keystrokes::g_keystrokesDisabledShadowColor.w});
 
     config["Visuals"]["CPSCounter"]["enabled"] = CPSCounter::g_showCpsCounter;
     if (CPSCounter::g_cpsHud) {
@@ -337,6 +373,26 @@ nlohmann::json ConfigManager::CollectCurrentConfig() {
     if (FPSOverlay::g_fpsHud) {
         config["Visuals"]["FPSOverlay"]["position"]["x"] = FPSOverlay::g_fpsHud->pos.x;
         config["Visuals"]["FPSOverlay"]["position"]["y"] = FPSOverlay::g_fpsHud->pos.y;
+    }
+
+    // PingCounter
+    config["Visuals"]["PingCounter"]["enabled"] = PingCounter::g_showPingCounter;
+    config["Visuals"]["PingCounter"]["textScale"] = PingCounter::g_pingTextScale;
+    config["Visuals"]["PingCounter"]["showBackground"] = PingCounter::g_showBackground;
+    config["Visuals"]["PingCounter"]["bgOpacity"] = PingCounter::g_bgOpacity;
+    config["Visuals"]["PingCounter"]["textShadow"] = PingCounter::g_pingTextShadow;
+    config["Visuals"]["PingCounter"]["minPing"] = PingCounter::g_minPing;
+    config["Visuals"]["PingCounter"]["maxPing"] = PingCounter::g_maxPing;
+    config["Visuals"]["PingCounter"]["updateInterval"] = PingCounter::g_pingUpdateInterval;
+    config["Visuals"]["PingCounter"]["colors"]["textColor"] =
+        nlohmann::json::array({PingCounter::g_pingTextColor.x, PingCounter::g_pingTextColor.y,
+                               PingCounter::g_pingTextColor.z, PingCounter::g_pingTextColor.w});
+    config["Visuals"]["PingCounter"]["colors"]["shadowColor"] =
+        nlohmann::json::array({PingCounter::g_pingCounterShadowColor.x, PingCounter::g_pingCounterShadowColor.y,
+                               PingCounter::g_pingCounterShadowColor.z, PingCounter::g_pingCounterShadowColor.w});
+    if (PingCounter::g_pingHud) {
+        config["Visuals"]["PingCounter"]["position"]["x"] = PingCounter::g_pingHud->pos.x;
+        config["Visuals"]["PingCounter"]["position"]["y"] = PingCounter::g_pingHud->pos.y;
     }
 
     // Misc modules
@@ -501,6 +557,21 @@ void ConfigManager::ApplyConfig(const nlohmann::json& config) {
             if (visuals["Keystrokes"].contains("enabled")) {
                 Keystrokes::g_showKeystrokes = visuals["Keystrokes"]["enabled"];
             }
+            if (visuals["Keystrokes"].contains("scale")) Keystrokes::g_keystrokesUIScale = visuals["Keystrokes"]["scale"];
+            if (visuals["Keystrokes"].contains("blurEffect")) Keystrokes::g_keystrokesBlurEffect = visuals["Keystrokes"]["blurEffect"];
+            if (visuals["Keystrokes"].contains("rounding")) Keystrokes::g_keystrokesRounding = visuals["Keystrokes"]["rounding"];
+            if (visuals["Keystrokes"].contains("showBg")) Keystrokes::g_keystrokesShowBg = visuals["Keystrokes"]["showBg"];
+            if (visuals["Keystrokes"].contains("rectShadow")) Keystrokes::g_keystrokesRectShadow = visuals["Keystrokes"]["rectShadow"];
+            if (visuals["Keystrokes"].contains("border")) Keystrokes::g_keystrokesBorder = visuals["Keystrokes"]["border"];
+            if (visuals["Keystrokes"].contains("glow")) Keystrokes::g_keystrokesGlow = visuals["Keystrokes"]["glow"];
+            if (visuals["Keystrokes"].contains("glowEnabled")) Keystrokes::g_keystrokesGlowEnabled = visuals["Keystrokes"]["glowEnabled"];
+            if (visuals["Keystrokes"].contains("glowSpeed")) Keystrokes::g_keystrokesGlowSpeed = visuals["Keystrokes"]["glowSpeed"];
+            if (visuals["Keystrokes"].contains("keySpacing")) Keystrokes::g_keystrokesKeySpacing = visuals["Keystrokes"]["keySpacing"];
+            if (visuals["Keystrokes"].contains("edSpeed")) Keystrokes::g_keystrokesEdSpeed = visuals["Keystrokes"]["edSpeed"];
+            if (visuals["Keystrokes"].contains("textShadow")) Keystrokes::g_keystrokesTextShadow = visuals["Keystrokes"]["textShadow"];
+            if (visuals["Keystrokes"].contains("showMouseButtons")) Keystrokes::g_keystrokesShowMouseButtons = visuals["Keystrokes"]["showMouseButtons"];
+            if (visuals["Keystrokes"].contains("showSpacebar")) Keystrokes::g_keystrokesShowSpacebar = visuals["Keystrokes"]["showSpacebar"];
+
             if (visuals["Keystrokes"].contains("position") && Keystrokes::g_keystrokesHud) {
                 Keystrokes::g_keystrokesHud->pos.x = visuals["Keystrokes"]["position"]["x"];
                 Keystrokes::g_keystrokesHud->pos.y = visuals["Keystrokes"]["position"]["y"];
@@ -523,6 +594,34 @@ void ConfigManager::ApplyConfig(const nlohmann::json& config) {
                 if (colors.contains("textEnabledColor") && colors["textEnabledColor"].size() == 4) {
                     Keystrokes::g_keystrokesTextEnabledColor = ImVec4(colors["textEnabledColor"][0], colors["textEnabledColor"][1], 
                                                                         colors["textEnabledColor"][2], colors["textEnabledColor"][3]);
+                }
+                if (colors.contains("borderColor") && colors["borderColor"].size() == 4) {
+                    Keystrokes::g_keystrokesBorderColor = ImVec4(colors["borderColor"][0], colors["borderColor"][1], 
+                                                                        colors["borderColor"][2], colors["borderColor"][3]);
+                }
+                if (colors.contains("glowColor") && colors["glowColor"].size() == 4) {
+                    Keystrokes::g_keystrokesGlowColor = ImVec4(colors["glowColor"][0], colors["glowColor"][1], 
+                                                                        colors["glowColor"][2], colors["glowColor"][3]);
+                }
+                if (colors.contains("glowEnabledColor") && colors["glowEnabledColor"].size() == 4) {
+                    Keystrokes::g_keystrokesGlowEnabledColor = ImVec4(colors["glowEnabledColor"][0], colors["glowEnabledColor"][1], 
+                                                                        colors["glowEnabledColor"][2], colors["glowEnabledColor"][3]);
+                }
+                if (colors.contains("rectShadowColor") && colors["rectShadowColor"].size() == 4) {
+                    Keystrokes::g_keystrokesRectShadowColor = ImVec4(colors["rectShadowColor"][0], colors["rectShadowColor"][1], 
+                                                                        colors["rectShadowColor"][2], colors["rectShadowColor"][3]);
+                }
+                if (colors.contains("textShadowColor") && colors["textShadowColor"].size() == 4) {
+                    Keystrokes::g_keystrokesTextShadowColor = ImVec4(colors["textShadowColor"][0], colors["textShadowColor"][1], 
+                                                                        colors["textShadowColor"][2], colors["textShadowColor"][3]);
+                }
+                if (colors.contains("enabledShadowColor") && colors["enabledShadowColor"].size() == 4) {
+                    Keystrokes::g_keystrokesEnabledShadowColor = ImVec4(colors["enabledShadowColor"][0], colors["enabledShadowColor"][1], 
+                                                                        colors["enabledShadowColor"][2], colors["enabledShadowColor"][3]);
+                }
+                if (colors.contains("disabledShadowColor") && colors["disabledShadowColor"].size() == 4) {
+                    Keystrokes::g_keystrokesDisabledShadowColor = ImVec4(colors["disabledShadowColor"][0], colors["disabledShadowColor"][1], 
+                                                                        colors["disabledShadowColor"][2], colors["disabledShadowColor"][3]);
                 }
             }
         }
@@ -570,6 +669,29 @@ void ConfigManager::ApplyConfig(const nlohmann::json& config) {
                     CPSCounter::g_cpsCounterShadowColor = ImVec4(colors["shadowColor"][0], colors["shadowColor"][1], 
                                                                    colors["shadowColor"][2], colors["shadowColor"][3]);
                 }
+            }
+        }
+        // PingCounter
+        if (visuals.contains("PingCounter")) {
+            auto& pc = visuals["PingCounter"];
+            if (pc.contains("enabled")) PingCounter::g_showPingCounter = pc["enabled"];
+            if (pc.contains("textScale")) PingCounter::g_pingTextScale = pc["textScale"];
+            if (pc.contains("showBackground")) PingCounter::g_showBackground = pc["showBackground"];
+            if (pc.contains("bgOpacity")) PingCounter::g_bgOpacity = pc["bgOpacity"];
+            if (pc.contains("textShadow")) PingCounter::g_pingTextShadow = pc["textShadow"];
+            if (pc.contains("minPing")) PingCounter::g_minPing = pc["minPing"];
+            if (pc.contains("maxPing")) PingCounter::g_maxPing = pc["maxPing"];
+            if (pc.contains("updateInterval")) PingCounter::g_pingUpdateInterval = pc["updateInterval"];
+            if (pc.contains("colors")) {
+                auto& c = pc["colors"];
+                if (c.contains("textColor") && c["textColor"].size() == 4)
+                    PingCounter::g_pingTextColor = ImVec4(c["textColor"][0], c["textColor"][1], c["textColor"][2], c["textColor"][3]);
+                if (c.contains("shadowColor") && c["shadowColor"].size() == 4)
+                    PingCounter::g_pingCounterShadowColor = ImVec4(c["shadowColor"][0], c["shadowColor"][1], c["shadowColor"][2], c["shadowColor"][3]);
+            }
+            if (pc.contains("position") && PingCounter::g_pingHud) {
+                PingCounter::g_pingHud->pos.x = pc["position"]["x"];
+                PingCounter::g_pingHud->pos.y = pc["position"]["y"];
             }
         }
     }

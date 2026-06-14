@@ -6,6 +6,7 @@ Under an4rch Development Public Source License 1.0
 
 #include "ImGui/imgui.h"
 #include <windows.h>
+#include <string>
 #include <cstdint>
 
 /// @brief Info module - Displays information about the menu, repository, and logo
@@ -26,6 +27,16 @@ public:
     static ImTextureID g_logoTexture;
     static int g_logoWidth;
     static int g_logoHeight;
+
+    // GitHub release info
+    static std::string g_releaseBody;   // Markdown body of the latest release
+    static bool g_fetchInProgress;      // true while background thread is running
+    static bool g_fetchDone;            // true once fetch has completed (success or fail)
+    static bool g_fetchFailed;          // true if fetch resulted in an error
+    static bool g_showReleaseModal;     // controls the popup window
+
+    /// @brief Kick off a WinHTTP background fetch of the latest GitHub release body
+    static void FetchLatestRelease();
 
 private:
     

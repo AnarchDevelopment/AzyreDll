@@ -5,7 +5,7 @@ Under an4rch Development Public Source License 1.0
 #include "ModuleManager.hpp"
 #include "../ArrayList/ArrayList.hpp"
 
-void Module::Initialize(uintptr_t gameBase, HudElement* renderInfoHud, HudElement* watermarkHud, HudElement* keystrokesHud, HudElement* cpsHud, HudElement* fpsOverlayHud) {
+void Module::Initialize(uintptr_t gameBase, HudElement* renderInfoHud, HudElement* watermarkHud, HudElement* keystrokesHud, HudElement* cpsHud, HudElement* fpsOverlayHud, HudElement* pingHud) {
     Reach::Initialize(gameBase);
     Hitbox::Initialize(gameBase);
     Timer::Initialize(gameBase);
@@ -15,6 +15,7 @@ void Module::Initialize(uintptr_t gameBase, HudElement* renderInfoHud, HudElemen
     Keystrokes::Initialize(keystrokesHud);
     CPSCounter::Initialize(cpsHud);
     FPSOverlay::Initialize(fpsOverlayHud);
+    PingCounter::Initialize(pingHud);
     Terminal::Initialize();
     Info::Initialize();
     UnlockFPS::Initialize();
@@ -27,6 +28,7 @@ void Module::UpdateAnimation(unsigned long long now) {
     Keystrokes::UpdateAnimation(now);
     Watermark::UpdateAnimation(now);
     FPSOverlay::UpdateAnimation(now);
+    PingCounter::UpdateAnimation(now);
 }
 
 void Module::RenderDisplay(float sw, float sh) {
@@ -35,6 +37,7 @@ void Module::RenderDisplay(float sw, float sh) {
     RenderInfo::RenderWindow();
     CPSCounter::RenderDisplay(sw, sh);
     FPSOverlay::RenderDisplay((int)sw, (int)sh);
+    PingCounter::RenderDisplay(sw, sh);
     
     // Call new centralized ArrayList
     ArrayList::Render();

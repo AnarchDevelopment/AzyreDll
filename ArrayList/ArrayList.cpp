@@ -60,6 +60,7 @@ namespace ArrayList {
         currentStates.push_back({"Keystrokes", "", Keystrokes::g_showKeystrokes});
         currentStates.push_back({"CPSCounter", "", CPSCounter::g_showCpsCounter});
         currentStates.push_back({"FPS Overlay", "", FPSOverlay::g_showFpsOverlay});
+        currentStates.push_back({"Ping Counter", std::to_string(PingCounter::g_currentPing) + "ms", PingCounter::g_showPingCounter});
         currentStates.push_back({"Render Info", "", RenderInfo::g_showRenderInfo});
         currentStates.push_back({"Watermark", "", Watermark::g_showWatermark});
 

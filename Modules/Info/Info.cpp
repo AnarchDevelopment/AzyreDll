@@ -5,16 +5,22 @@ Under an4rch Development Public Source License 1.0
 #include "Info.hpp"
 #include "../../GUI/GUI.hpp"
 #include "../../ImGui/imgui.h"
+#include "../../ImGui/imgui-markdown/imgui-markdown.h"
 #include "../Globals.hpp"
 #include "../../Assets/resource.h"
 #include "../../Assets/stb/stb_image.h"
+#include "../../nlohmann/json.hpp"
 #include <d3d11.h>
 #include <windows.h>
+#include <winhttp.h>
 #include <cmath>
 #include <cstring>
 #include <cstdio>
 #include <cstdlib>
+#include <shellapi.h>
 #include <ctime>
+#include <string>
+#include <mutex>
 
 extern "C" {
 #define MINIAUDIO_IMPLEMENTATION
@@ -32,6 +38,15 @@ int Info::g_logoWidth = 0;
 int Info::g_logoHeight = 0;
 uint8_t* Info::g_audioData = nullptr;
 uint32_t Info::g_audioDataSize = 0;
+
+// GitHub release statics
+std::string Info::g_releaseBody = "";
+bool Info::g_fetchInProgress = false;
+bool Info::g_fetchDone = false;
+bool Info::g_fetchFailed = false;
+bool Info::g_showReleaseModal = false;
+float Info::g_releaseModalAnim = 0.0f;
+static std::mutex g_releaseMutex;
 
 // Audio context global
 static const int NUM_CLICK_SOUNDS = 3;
@@ -361,8 +376,289 @@ void Info::PlayClickSound() {
     }
 }
 
+static std::string GetGitHubTokenFromResource() {
+    HRSRC hRes = FindResource(g_hModule, MAKEINTRESOURCE(IDR_GITHUB_INI), RT_RCDATA);
+    if (!hRes) return "";
+    
+    HGLOBAL hGlobal = LoadResource(g_hModule, hRes);
+    if (!hGlobal) return "";
+    
+    DWORD dwSize = SizeofResource(g_hModule, hRes);
+    if (dwSize == 0) return "";
+    
+    const char* pData = (const char*)LockResource(hGlobal);
+    if (!pData) return "";
+    
+    std::string content(pData, dwSize);
+    size_t tokenPos = content.find("token=");
+    if (tokenPos == std::string::npos) return "";
+    
+    tokenPos += 6; // skip "token="
+    size_t endPos = content.find_first_of("\r\n \t;", tokenPos);
+    if (endPos == std::string::npos) {
+        return content.substr(tokenPos);
+    }
+    return content.substr(tokenPos, endPos - tokenPos);
+}
+
+void Info::FetchLatestRelease() {
+    if (g_fetchInProgress) return;
+    g_fetchInProgress = true;
+    g_fetchDone = false;
+    g_fetchFailed = false;
+
+    // Fire off a background thread — WinHTTP is safe off the render thread
+    CreateThread(nullptr, 0, [](LPVOID) -> DWORD {
+        std::string result;
+        bool failed = false;
+
+        HINTERNET hSession = WinHttpOpen(
+            L"AegleDLL/1.0",
+            WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
+            WINHTTP_NO_PROXY_NAME,
+            WINHTTP_NO_PROXY_BYPASS,
+            0);
+
+        if (hSession) {
+            HINTERNET hConnect = WinHttpConnect(
+                hSession,
+                L"api.github.com",
+                INTERNET_DEFAULT_HTTPS_PORT,
+                0);
+
+            if (hConnect) {
+                HINTERNET hRequest = WinHttpOpenRequest(
+                    hConnect,
+                    L"GET",
+                    L"/repos/AnarchDevelopment/aegledll/releases/latest",
+                    nullptr,
+                    WINHTTP_NO_REFERER,
+                    WINHTTP_DEFAULT_ACCEPT_TYPES,
+                    WINHTTP_FLAG_SECURE);
+
+                if (hRequest) {
+                    // Get token and add Authorization header if present
+                    std::string token = GetGitHubTokenFromResource();
+                    if (!token.empty() && token != "gph_xxxxx") { // It works the same with github_pat_xxxxxxxxxx
+                        std::wstring authHeader = L"Authorization: token " + std::wstring(token.begin(), token.end());
+                        WinHttpAddRequestHeaders(hRequest,
+                            authHeader.c_str(),
+                            (DWORD)-1L,
+                            WINHTTP_ADDREQ_FLAG_ADD);
+                    }
+
+                    // GitHub API requires a User-Agent header
+                    WinHttpAddRequestHeaders(hRequest,
+                        L"User-Agent: AegleDLL/1.0",
+                        (DWORD)-1L,
+                        WINHTTP_ADDREQ_FLAG_ADD);
+
+                    WinHttpAddRequestHeaders(hRequest,
+                        L"Accept: application/vnd.github+json",
+                        (DWORD)-1L,
+                        WINHTTP_ADDREQ_FLAG_ADD);
+
+                    if (WinHttpSendRequest(hRequest,
+                            WINHTTP_NO_ADDITIONAL_HEADERS, 0,
+                            WINHTTP_NO_REQUEST_DATA, 0, 0, 0) &&
+                        WinHttpReceiveResponse(hRequest, nullptr)) {
+
+                        DWORD dwSize = 0;
+                        std::string raw;
+                        do {
+                            dwSize = 0;
+                            WinHttpQueryDataAvailable(hRequest, &dwSize);
+                            if (dwSize == 0) break;
+                            std::string chunk(dwSize, '\0');
+                            DWORD dwDownloaded = 0;
+                            WinHttpReadData(hRequest, &chunk[0], dwSize, &dwDownloaded);
+                            raw.append(chunk, 0, dwDownloaded);
+                        } while (dwSize > 0);
+
+                        // Parse JSON and extract "body"
+                        try {
+                            auto j = nlohmann::json::parse(raw);
+                            if (j.contains("body") && j["body"].is_string()) {
+                                result = j["body"].get<std::string>();
+                            } else if (j.contains("message") && j["message"].is_string()) {
+                                result = "**GitHub API Error:** " + j["message"].get<std::string>() + "\n\nRaw response:\n```json\n" + raw + "\n```";
+                            } else {
+                                result = "_No release notes found._\n\nRaw response:\n```\n" + raw + "\n```";
+                            }
+                        } catch (...) {
+                            failed = true;
+                            result = "**Error:** Could not parse GitHub API response. Raw response:\n```\n" + raw + "\n```";
+                        }
+                    } else {
+                        failed = true;
+                        result = "**Error:** HTTP request failed.";
+                    }
+                    WinHttpCloseHandle(hRequest);
+                } else {
+                    failed = true;
+                    result = "**Error:** Could not open HTTP request.";
+                }
+                WinHttpCloseHandle(hConnect);
+            } else {
+                failed = true;
+                result = "**Error:** Could not connect to api.github.com.";
+            }
+            WinHttpCloseHandle(hSession);
+        } else {
+            failed = true;
+            result = "**Error:** WinHTTP session could not be created.";
+        }
+
+        {
+            std::lock_guard<std::mutex> lock(g_releaseMutex);
+            Info::g_releaseBody = result;
+            Info::g_fetchFailed = failed;
+            Info::g_fetchDone = true;
+            Info::g_fetchInProgress = false;
+        }
+        return 0;
+    }, nullptr, 0, nullptr);
+}
+
 void Info::RenderMenu() {
     GUI::RenderDashboard();
+    GUI::RenderSocialButtons();
+
+    // ── Release Notes Modal ──────────────────────────────────────────────────
+    float targetAnim = g_showReleaseModal ? 1.0f : 0.0f;
+    g_releaseModalAnim += (targetAnim - g_releaseModalAnim) * 0.12f;
+
+    if (g_releaseModalAnim > 0.001f) {
+        float scale = 0.85f + 0.15f * g_releaseModalAnim;
+        float alpha = g_releaseModalAnim;
+
+        ImVec2 baseSize = ImVec2(600, 440);
+        ImVec2 size = ImVec2(baseSize.x * scale, baseSize.y * scale);
+
+        ImGui::SetNextWindowSize(size, ImGuiCond_Always);
+        ImGui::SetNextWindowPos(
+            ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f),
+            ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+
+        // Suppress default border — we draw a custom animated one
+        ImGui::PushStyleVar(ImGuiStyleVar_Alpha, alpha);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 12.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+
+        // Capture window rect inside Begin (valid even if Begin returns true)
+        ImVec2 wMin, wMax;
+
+        if (ImGui::Begin("##ReleaseNotes", nullptr,
+                ImGuiWindowFlags_NoTitleBar |
+                ImGuiWindowFlags_NoResize   |
+                ImGuiWindowFlags_NoMove     |
+                ImGuiWindowFlags_NoCollapse)) {
+
+            wMin = ImGui::GetWindowPos();
+            wMax = ImVec2(wMin.x + ImGui::GetWindowWidth(), wMin.y + ImGui::GetWindowHeight());
+
+            // Title bar area
+            ImGui::PushStyleColor(ImGuiCol_Text, GUI::g_colorAccent);
+            ImGui::Text("  Current Version Info");
+            ImGui::PopStyleColor();
+            ImGui::SameLine();
+            float closeX = ImGui::GetWindowWidth() - 30.0f;
+            ImGui::SetCursorPosX(closeX);
+            if (ImGui::Button("X##CloseRelease")) {
+                g_showReleaseModal = false;
+            }
+            ImGui::Separator();
+            ImGui::Spacing();
+
+            if (g_fetchInProgress) {
+                float t = (float)(GetTickCount64() % 900) / 300.0f;
+                const char* dots[] = { "Loading .  ", "Loading .. ", "Loading ..." };
+                ImGui::SetCursorPosX((ImGui::GetWindowWidth() - ImGui::CalcTextSize(dots[0]).x) * 0.5f);
+                ImGui::TextDisabled("%s", dots[(int)t % 3]);
+            } else if (!g_releaseBody.empty()) {
+                ImGui::BeginChild("##MarkdownScroll", ImVec2(0, 0), false,
+                    ImGuiWindowFlags_AlwaysVerticalScrollbar);
+
+                ImGui::MarkdownConfig mdConfig;
+                mdConfig.linkCallback    = [](ImGui::MarkdownLinkCallbackData data) {
+                    std::string url(data.link, data.linkLength);
+                    ShellExecuteA(nullptr, "open", url.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+                };
+                mdConfig.tooltipCallback = nullptr;
+                mdConfig.imageCallback   = nullptr;
+                mdConfig.linkIcon        = "";
+                mdConfig.headingFormats[0] = { GUI::g_fontH1 ? GUI::g_fontH1 : ImGui::GetIO().Fonts->Fonts[0], true };
+                mdConfig.headingFormats[1] = { GUI::g_fontH2 ? GUI::g_fontH2 : ImGui::GetIO().Fonts->Fonts[0], true };
+                mdConfig.headingFormats[2] = { GUI::g_fontH3 ? GUI::g_fontH3 : ImGui::GetIO().Fonts->Fonts[0], false };
+                mdConfig.formatCallback = [](const ImGui::MarkdownFormatInfo& markdownFormatInfo_, bool start_) {
+                    ImGui::defaultMarkdownFormatCallback(markdownFormatInfo_, start_);
+                    if (markdownFormatInfo_.type == ImGui::MarkdownFormatType::HEADING) {
+                        if (start_) ImGui::PushStyleColor(ImGuiCol_Text, GUI::g_colorAccent);
+                        else        ImGui::PopStyleColor();
+                    }
+                };
+
+                std::lock_guard<std::mutex> lock(g_releaseMutex);
+                ImGui::Markdown(g_releaseBody.c_str(), g_releaseBody.size(), mdConfig);
+
+                ImGui::EndChild();
+            } else {
+                ImGui::TextDisabled("No data available.");
+            }
+        }
+        ImGui::End();
+        ImGui::PopStyleVar(3); // Alpha, WindowRounding, WindowBorderSize
+
+        // ── Animated glowing border drawn on the foreground draw list ─────────
+        if (wMax.x > wMin.x && wMax.y > wMin.y) {
+            ImDrawList* fg = ImGui::GetForegroundDrawList();
+            const float rounding = 12.0f;
+            const ImVec4& ac = GUI::g_colorAccent;
+
+            // 1. Base thick border (slightly transparent accent color)
+            fg->AddRect(wMin, wMax,
+                ImColor(ac.x, ac.y, ac.z, alpha * 0.55f),
+                rounding, 0, 3.5f);
+
+            // 2. Outer soft glow layer (thicker, very transparent)
+            fg->AddRect(
+                ImVec2(wMin.x - 1, wMin.y - 1),
+                ImVec2(wMax.x + 1, wMax.y + 1),
+                ImColor(ac.x, ac.y, ac.z, alpha * 0.18f),
+                rounding + 1.0f, 0, 8.0f);
+
+            // 3. Moving spotlight along the perimeter (clockwise, 3-second loop)
+            float W = wMax.x - wMin.x;
+            float H = wMax.y - wMin.y;
+            float perimeter = 2.0f * (W + H);
+            float tLight = fmodf((float)(GetTickCount64()) / 3000.0f, 1.0f);
+
+            // Compute position(s) for the spotlight (draw primary + a 2nd halfway around for symmetry)
+            for (int pass = 0; pass < 2; pass++) {
+                float tPass = fmodf(tLight + pass * 0.5f, 1.0f);
+                float dist = tPass * perimeter;
+
+                ImVec2 lightPos;
+                if (dist < W) {                     // top edge →
+                    lightPos = ImVec2(wMin.x + dist, wMin.y);
+                } else if (dist < W + H) {          // right edge ↓
+                    lightPos = ImVec2(wMax.x, wMin.y + (dist - W));
+                } else if (dist < 2.0f*W + H) {    // bottom edge ←
+                    lightPos = ImVec2(wMax.x - (dist - W - H), wMax.y);
+                } else {                            // left edge ↑
+                    lightPos = ImVec2(wMin.x, wMax.y - (dist - 2.0f*W - H));
+                }
+
+                // Draw soft halo layers (outermost → innermost)
+                fg->AddCircleFilled(lightPos, 28.0f, ImColor(ac.x, ac.y, ac.z, alpha * 0.07f));
+                fg->AddCircleFilled(lightPos, 18.0f, ImColor(ac.x, ac.y, ac.z, alpha * 0.15f));
+                fg->AddCircleFilled(lightPos, 10.0f, ImColor(ac.x, ac.y, ac.z, alpha * 0.35f));
+                fg->AddCircleFilled(lightPos,  5.0f, ImColor(ac.x, ac.y, ac.z, alpha * 0.70f));
+                // Bright white core
+                fg->AddCircleFilled(lightPos,  2.5f, ImColor(1.0f, 1.0f, 1.0f, alpha * 0.85f));
+            }
+        }
+    }
     
     // Bottom footer panel for theme customizer
     ImGui::BeginChild("ThemeCustomizer", ImVec2(0, 50), true);
@@ -381,6 +677,7 @@ void Info::RenderMenu() {
         if (ImGui::Combo("##ActiveTheme", &currentTheme, themes, IM_ARRAYSIZE(themes))) {
             GUI::ApplyThemePreset(currentTheme);
         }
+        
         ImGui::PopItemWidth();
     }
     ImGui::EndChild();

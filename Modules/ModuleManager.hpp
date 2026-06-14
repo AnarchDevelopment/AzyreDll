@@ -10,7 +10,7 @@ Under an4rch Development Public Source License 1.0
 
 class Module {
 public:
-    static void Initialize(uintptr_t gameBase, HudElement* renderInfoHud, HudElement* watermarkHud, HudElement* keystrokesHud, HudElement* cpsHud, HudElement* fpsOverlayHud);
+    static void Initialize(uintptr_t gameBase, HudElement* renderInfoHud, HudElement* watermarkHud, HudElement* keystrokesHud, HudElement* cpsHud, HudElement* fpsOverlayHud, HudElement* pingHud);
     static void UpdateAnimation(unsigned long long now);
     static void RenderDisplay(float sw, float sh);
     static void RenderArrayList(ImDrawList* draw, ImVec2 arrayListStart, float& yPos, ImVec2& arrayListEnd);

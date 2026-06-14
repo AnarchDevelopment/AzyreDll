@@ -1,10 +1,40 @@
 #include "resource.h"
+#include <windows.h>
 
-IDR_LOGO RCDATA "logo.png"
-IDR_INFO_IMAGE RCDATA "logo.png"
-IDR_CLICK_SOUND RCDATA "clicksound.mp3"
-IDR_CLICK_SOUND_1 RCDATA "clicksound_1.mp3"
-IDR_CLICK_SOUND_2 RCDATA "clicksound_2.mp3"
+IDR_LOGO            RCDATA "logo.png"
+IDR_INFO_IMAGE      RCDATA "logo.png"
+IDR_CLICK_SOUND     RCDATA "clicksound.mp3"
+IDR_CLICK_SOUND_1   RCDATA "clicksound_1.mp3"
+IDR_CLICK_SOUND_2   RCDATA "clicksound_2.mp3"
 IDR_WATERMARK_IMAGE RCDATA "aeglewatermark.png"
-IDR_FONT RCDATA "ProductSans.ttf"
+IDR_FONT            RCDATA "ProductSans.ttf"
+IDR_GITHUB_INI      RCDATA "github.ini"
 
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION     1,0,0,0
+PRODUCTVERSION  1,0,0,0
+FILEFLAGSMASK   VS_FFI_FILEFLAGSMASK
+FILEFLAGS       0x0L
+FILEOS          VOS_NT_WINDOWS32
+FILETYPE        VFT_APP
+FILESUBTYPE     VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040a04b0"
+        BEGIN
+            VALUE "CompanyName",      "an4rch Development\0"
+            VALUE "FileDescription",  "Aegleseeker Client\0"
+            VALUE "FileVersion",      "1.0.4\0"
+            VALUE "InternalName",     "Aegleseeker Client\0"
+            VALUE "LegalCopyright",   "an4rch Development | https://anarchdevelopment.github.io/\0"
+            VALUE "OriginalFilename", "aegledll.dll\0"
+            VALUE "ProductName",      "Aegleseeker Client\0"
+            VALUE "ProductVersion",   "1.0.4\0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x40a, 1200 
+    END
+END

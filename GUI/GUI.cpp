@@ -43,6 +43,10 @@ float GUI::g_sidebarIndicatorY = 85.0f;
 float GUI::g_sidebarTargetIndicatorY = 85.0f;
 
 std::vector<GUI::Particle> GUI::g_particles;
+ImFont* GUI::g_fontDefault = nullptr;
+ImFont* GUI::g_fontH1 = nullptr;
+ImFont* GUI::g_fontH2 = nullptr;
+ImFont* GUI::g_fontH3 = nullptr;
 
 std::map<std::string, float> GUI::g_elementAnims;
 char g_notifTitle[64] = "Aegleseeker | an4rch development";
@@ -248,15 +252,26 @@ void GUI::LoadFont() {
             void* pData = LockResource(hData);
             DWORD size = SizeofResource(g_hModule, hRes);
             if (pData && size > 0) {
-                io.Fonts->AddFontFromMemoryTTF(pData, size, 18.0f, &cfg);
+                g_fontDefault = io.Fonts->AddFontFromMemoryTTF(pData, size, 18.0f, &cfg);
+                g_fontH1 = io.Fonts->AddFontFromMemoryTTF(pData, size, 26.0f, &cfg);
+                g_fontH2 = io.Fonts->AddFontFromMemoryTTF(pData, size, 22.0f, &cfg);
+                g_fontH3 = io.Fonts->AddFontFromMemoryTTF(pData, size, 18.0f, &cfg);
                 return;
             }
         }
     }
 
     // Fallback if resource fails
-    if (!io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\segoeui.ttf", 18.0f, &cfg)) {
-        io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\arial.ttf", 18.0f, &cfg);
+    if (io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\segoeui.ttf", 18.0f, &cfg)) {
+        g_fontDefault = io.Fonts->Fonts.back();
+        g_fontH1 = io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\segoeui.ttf", 26.0f, &cfg);
+        g_fontH2 = io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\segoeui.ttf", 22.0f, &cfg);
+        g_fontH3 = io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\segoeui.ttf", 18.0f, &cfg);
+    } else {
+        g_fontDefault = io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\arial.ttf", 18.0f, &cfg);
+        g_fontH1 = io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\arial.ttf", 26.0f, &cfg);
+        g_fontH2 = io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\arial.ttf", 22.0f, &cfg);
+        g_fontH3 = io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\arial.ttf", 18.0f, &cfg);
     }
 }
 
@@ -478,7 +493,7 @@ void GUI::EndModuleSettings() {
 }
 
 void GUI::RenderDashboard() {
-    ImGui::BeginChild("Dashboard", ImVec2(0, -65), false, ImGuiWindowFlags_NoScrollbar);
+    ImGui::BeginChild("Dashboard", ImVec2(0, -115), false, ImGuiWindowFlags_NoScrollbar);
     {
         ImVec2 avail = ImGui::GetContentRegionAvail();
         float cardWidth = (avail.x - 20) * 0.5f;
@@ -519,7 +534,6 @@ void GUI::RenderDashboard() {
             
             ImGui::SetCursorPos(ImVec2(15, 65));
             ImGui::Text("Latency: "); ImGui::SameLine();
-            // Fake real-looking latency with slight jitter
             static float ping = 18.0f;
             ping += (rand() % 3 - 1) * 0.5f;
             if (ping < 5.0f) ping = 5.0f;
@@ -542,12 +556,13 @@ void GUI::RenderDashboard() {
             // Render Changelog on the left
             ImGui::SetCursorPos(ImVec2(20, 15));
             ImGui::TextColored(g_colorAccent, "LATEST UPDATES");
+            // soon api github auto update
+            
             ImGui::Separator();
             
             ImGui::SetCursorPos(ImVec2(20, 45));
-            ImGui::BulletText("v1.2.6 - Added real-time dashboard data");
-            ImGui::BulletText("v1.2.5 - Added cascading animations to modules");
-            ImGui::BulletText("v1.2.4 - Improved notification toast system");
+            ImGui::BulletText("v1.0.4 - Stable Release");
+
             
             // Render Logo on the right
             if (Info::g_logoTexture != 0) {
@@ -565,32 +580,41 @@ void GUI::RenderDashboard() {
             }
         }
         ImGui::EndChild();
-        
-        ImGui::Spacing();
-        
-        // Socials / Quick Links
-        ImGui::SetCursorPosX(avail.x * 0.5f - 100);
-        if (ImGui::Button("DISCORD", ImVec2(90, 35))) {
-            ShellExecuteA(0, "open", "https://discord.gg/7hJjTCfyJ2", 0, 0, SW_SHOWNORMAL);
-            WinExec("explorer https://discord.gg/7hJjTCfyJ2", SW_SHOWNORMAL);
-            ImGui::SetClipboardText("https://discord.gg/7hJjTCfyJ2");
-            
-            strcpy(g_notifTitle, "Discord");
-            strcpy(g_notifMessage, "Link copied to clipboard!");
-            g_notifStart = GetTickCount64();
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("GITHUB", ImVec2(90, 35))) {
-            ShellExecuteA(0, "open", "https://github.com/iVyz3r/aegledll", 0, 0, SW_SHOWNORMAL);
-            WinExec("explorer https://github.com/iVyz3r/aegledll", SW_SHOWNORMAL);
-            ImGui::SetClipboardText("https://github.com/iVyz3r/aegledll");
-            
-            strcpy(g_notifTitle, "Github");
-            strcpy(g_notifMessage, "Link copied to clipboard!");
-            g_notifStart = GetTickCount64();
+    }
+    ImGui::EndChild(); // Dashboard
+}
+
+void GUI::RenderSocialButtons() {
+    ImVec2 avail = ImGui::GetContentRegionAvail();
+    ImGui::Spacing();
+    // Center the 3 buttons: 90 + 8(gap) + 90 + 8(gap) + 110 = 306 total
+    ImGui::SetCursorPosX((avail.x - 306.0f) * 0.5f);
+    if (ImGui::Button("DISCORD", ImVec2(90, 35))) {
+        ShellExecuteA(0, "open", "https://discord.gg/7hJjTCfyJ2", 0, 0, SW_SHOWNORMAL);
+        WinExec("explorer https://discord.gg/7hJjTCfyJ2", SW_SHOWNORMAL);
+        ImGui::SetClipboardText("https://discord.gg/7hJjTCfyJ2");
+        strcpy(g_notifTitle, "Discord");
+        strcpy(g_notifMessage, "Link copied to clipboard!");
+        g_notifStart = GetTickCount64();
+    }
+    ImGui::SameLine(0, 8);
+    if (ImGui::Button("GITHUB", ImVec2(90, 35))) {
+        ShellExecuteA(0, "open", "https://github.com/iVyx3r/aegledll", 0, 0, SW_SHOWNORMAL);
+        ImGui::SetClipboardText("https://github.com/iVyx3r/aegledll");
+        strcpy(g_notifTitle, "Github");
+        strcpy(g_notifMessage, "Link copied to clipboard!");
+        g_notifStart = GetTickCount64();
+    }
+    ImGui::SameLine(0, 8);
+    if (ImGui::Button("VERSION INFO", ImVec2(110, 35))) {
+        Info::g_showReleaseModal = true;
+        if (!Info::g_fetchDone && !Info::g_fetchInProgress) {
+            Info::FetchLatestRelease();
         }
     }
-    ImGui::EndChild();
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Fetch latest release notes from GitHub");
+    }
 }
 
 void GUI::RenderSectionHeader(const char* label) {
@@ -780,7 +804,7 @@ void GUI::RenderMenu(float screenWidth, float screenHeight) {
                 ImGui::SetCursorPosY(ImGui::GetWindowHeight() - 35 * sc);
                 ImGui::SetCursorPosX(25);
                 ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.4f, 0.4f, 0.5f, 0.8f));
-                ImGui::Text("v1.2.5 Premium");
+                ImGui::Text("v1.0.4 - release");
                 ImGui::PopStyleColor();
             }
             ImGui::EndChild();
@@ -836,6 +860,7 @@ void GUI::RenderMenu(float screenWidth, float screenHeight) {
                                 Keystrokes::RenderMenu();
                                 CPSCounter::RenderMenu();
                                 FPSOverlay::RenderMenu();
+                                PingCounter::RenderMenu();
                                 FullBright::RenderMenu();
                                 MotionBlur::RenderMenu();
                                 EndSection();

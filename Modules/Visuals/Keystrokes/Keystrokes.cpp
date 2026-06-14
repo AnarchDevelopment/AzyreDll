@@ -552,6 +552,8 @@ void Keystrokes::RenderMenu() {
                 ImGui::SliderFloat("Rounding", &g_keystrokesRounding, 0.0f, 20.0f, "%.1f");
                 GUI::RenderCustomSwitch("Blur Effect", &g_keystrokesBlurEffect);
                 GUI::RenderCustomSwitch("Show Background", &g_keystrokesShowBg);
+                ImGui::Checkbox("Background Shadow", &g_keystrokesRectShadow);
+                ImGui::Checkbox("Text Shadow", &g_keystrokesTextShadow);
                 ImGui::Checkbox("Border", &g_keystrokesBorder);
                 ImGui::EndTabItem();
             }
@@ -566,6 +568,20 @@ void Keystrokes::RenderMenu() {
                 ImGui::Checkbox("Disabled Glow", &g_keystrokesGlow);
                 ImGui::Checkbox("Enabled Glow", &g_keystrokesGlowEnabled);
                 ImGui::SliderFloat("Glow Speed", &g_keystrokesGlowSpeed, 0.1f, 10.0f, "%.1f");
+                ImGui::EndTabItem();
+            }
+            if (ImGui::BeginTabItem("Colors")) {
+                ImGui::ColorEdit4("Background Color", (float*)&g_keystrokesBgColor, ImGuiColorEditFlags_AlphaBar | ImGuiColorEditFlags_NoInputs);
+                ImGui::ColorEdit4("Enabled Color", (float*)&g_keystrokesEnabledColor, ImGuiColorEditFlags_AlphaBar | ImGuiColorEditFlags_NoInputs);
+                ImGui::ColorEdit4("Text Color", (float*)&g_keystrokesTextColor, ImGuiColorEditFlags_AlphaBar | ImGuiColorEditFlags_NoInputs);
+                ImGui::ColorEdit4("Text Enabled Color", (float*)&g_keystrokesTextEnabledColor, ImGuiColorEditFlags_AlphaBar | ImGuiColorEditFlags_NoInputs);
+                ImGui::ColorEdit4("Border Color", (float*)&g_keystrokesBorderColor, ImGuiColorEditFlags_AlphaBar | ImGuiColorEditFlags_NoInputs);
+                ImGui::ColorEdit4("Glow Color", (float*)&g_keystrokesGlowColor, ImGuiColorEditFlags_AlphaBar | ImGuiColorEditFlags_NoInputs);
+                ImGui::ColorEdit4("Glow Enabled Color", (float*)&g_keystrokesGlowEnabledColor, ImGuiColorEditFlags_AlphaBar | ImGuiColorEditFlags_NoInputs);
+                ImGui::ColorEdit4("Rect Shadow Color", (float*)&g_keystrokesRectShadowColor, ImGuiColorEditFlags_AlphaBar | ImGuiColorEditFlags_NoInputs);
+                ImGui::ColorEdit4("Text Shadow Color", (float*)&g_keystrokesTextShadowColor, ImGuiColorEditFlags_AlphaBar | ImGuiColorEditFlags_NoInputs);
+                ImGui::ColorEdit4("Enabled Shadow", (float*)&g_keystrokesEnabledShadowColor, ImGuiColorEditFlags_AlphaBar | ImGuiColorEditFlags_NoInputs);
+                ImGui::ColorEdit4("Disabled Shadow", (float*)&g_keystrokesDisabledShadowColor, ImGuiColorEditFlags_AlphaBar | ImGuiColorEditFlags_NoInputs);
                 ImGui::EndTabItem();
             }
             ImGui::EndTabBar();
