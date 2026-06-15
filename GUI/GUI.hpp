@@ -22,6 +22,7 @@ public:
     static int g_previousTab;
     static ULONGLONG g_tabChangeTime;
     static float g_tabAnim;
+    static float g_ircShiftAnim;
     
     // Animation states for UI elements
     static std::map<std::string, float> g_elementAnims;

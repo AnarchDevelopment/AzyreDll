@@ -154,6 +154,7 @@ $Sources =  "dllmain.cpp",
             "Modules/Visuals/Keystrokes/Keystrokes.cpp",
             "Modules/Visuals/CPSCounter/CPSCounter.cpp",
             "Modules/Visuals/FPSOverlay/FPSOverlay.cpp",
+            "Modules/Visuals/PingCounter/PingCounter.cpp",
             "Modules/Misc/UnlockFPS/UnlockFPS.cpp",
             "Modules/Terminal/Terminal.cpp",
             "Modules/Info/Info.cpp",
@@ -168,7 +169,9 @@ $Sources =  "dllmain.cpp",
             "minhook/buffer.c", 
             "minhook/hook.c", 
             "minhook/trampoline.c", 
-            "minhook/hde64.c"
+            "minhook/hde64.c",
+            "Networking/Client/IRCClient.cpp",
+            "Networking/IRChat.cpp"
 
 $ResourceFile = "Assets/resources.rc"
 
@@ -182,7 +185,7 @@ if ($BuildType -eq "--debug") {
     $Flags = "-O2", "-s", "-fpermissive", "-m64", "-march=x86-64", "-static", "-static-libgcc", "-static-libstdc++", "-I."
 }
 
-$Libs  = "-ld3d11", "-ldxgi", "-ld3dcompiler", "-ldwmapi", "-limm32", "-luser32", "-lgdi32", "-lpsapi", "-lshell32", "-lole32", "-luuid"
+$Libs  = "-ld3d11", "-ldxgi", "-ld3dcompiler", "-ldwmapi", "-limm32", "-luser32", "-lgdi32", "-lpsapi", "-lshell32", "-lole32", "-luuid", "-lwinhttp", "-lws2_32"
 
 Clear-Host
 Write-Log "Starting Build of $ProjectName (x64)..." "Info"
@@ -242,10 +245,11 @@ Write-Log "Linking binary in directory: $BinDir" "Link"
 
 if ($LASTEXITCODE -eq 0) {
     $Size = [Math]::Round((Get-Item $Output).Length / 1KB, 2)
+    $SizeMB = [Math]::Round((Get-Item $Output).Length / 1MB, 2)
     Write-Log "Process completed successfully." "Success"
     Write-Host "----------------------------------" -ForegroundColor Gray
     Write-Host "Generated DLL: $Output"
-    Write-Host "File Size:       $Size KB"
+    Write-Host "File Size:     $Size KB ($SizeMB MB)"
     Write-Host "----------------------------------" -ForegroundColor Gray
     Write-Host "Exit Code: $LASTEXITCODE" -ForegroundColor Gray
 } else {

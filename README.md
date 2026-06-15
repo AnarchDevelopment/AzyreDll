@@ -10,7 +10,7 @@ A DirectX 11 internal hook with an ImGui interface for runtime client modificati
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/license-ADPSLv1.0-blue" alt="License" />
+  <img src="https://img.shields.io/github/license/iVyz3r/aegledll" alt="License" />
   <img src="https://img.shields.io/github/stars/iVyz3r/aegledll" alt="Stars" />
   <img src="https://img.shields.io/github/issues/iVyz3r/aegledll" alt="Issues" />
   <img src="https://img.shields.io/github/last-commit/iVyz3r/aegledll" alt="Last Commit" />
@@ -19,12 +19,6 @@ A DirectX 11 internal hook with an ImGui interface for runtime client modificati
     <img src="https://img.shields.io/discord/1503215502959317103?label=Discord&logo=discord" alt="Discord" />
   </a>
 </p>
-
-## TP libraries
-- [MinHook | Tsuda Kageyu](https://github.com/TsudaKageyu/minhook)
-- [ImGui | ocornut](https://github.com/ocornut/imgui)
-- [JSON for C++ | Niels Lohmann](https://github.com/nlohmann/json)
-- [miniaudio | mackron](https://github.com/mackron/miniaudio)
 
 ## Overview
 
@@ -276,7 +270,7 @@ aegledll/
 ## Usage
 
 1. **Compile** the project using PowerShell script
-2. **Inject** `aegledll.dll` into a DirectX 11 application
+2. **Inject** `internal_hook.dll` into a DirectX 11 application
 3. **Press INSERT** key to toggle the menu
 4. **Configure** features via the tabbed interface
 5. **Customize** window positions by dragging

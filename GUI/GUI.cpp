@@ -6,6 +6,9 @@ Under an4rch Development Public Source License 1.0
 #include "../Animations/Animations.hpp"
 #include "../Modules/Terminal/Terminal.hpp"
 #include "../Modules/Info/Info.hpp"
+#include "../Networking/IRChat.hpp"
+#include "../Config/ConfigManager.hpp"
+#include "../Networking/Client/IRCClient.hpp"
 #include <windows.h>
 #include <shellapi.h>
 #include "../Assets/resource.h"
@@ -23,6 +26,7 @@ int GUI::g_currentTab = 0;
 int GUI::g_previousTab = 0;
 ULONGLONG GUI::g_tabChangeTime = 0;
 float GUI::g_tabAnim = 1.0f; // Start at 1.0f so it's visible on first open
+float GUI::g_ircShiftAnim = 0.0f;
 extern ULONGLONG g_notifStart;
 extern bool g_showMenu;
 extern bool g_firstTabOpen;
@@ -562,6 +566,7 @@ void GUI::RenderDashboard() {
             
             ImGui::SetCursorPos(ImVec2(20, 45));
             ImGui::BulletText("v1.0.4 - Stable Release");
+            ImGui::BulletText("v1.0.5 - Stable Release | IRC Chat added");
 
             
             // Render Logo on the right
@@ -643,6 +648,13 @@ void GUI::UpdateAnimation(ULONGLONG now, float dt) {
     
     // Smooth active sidebar indicator sliding
     g_sidebarIndicatorY = Animations::Approach(g_sidebarIndicatorY, g_sidebarTargetIndicatorY, dt, 14.0f);
+
+    // Anim for shifting the menu left when IRC Chat tab is active
+    if (GUI::g_showMenu && GUI::g_currentTab == 6) {
+        GUI::g_ircShiftAnim = Animations::Approach(GUI::g_ircShiftAnim, 1.0f, dt, 10.0f);
+    } else {
+        GUI::g_ircShiftAnim = Animations::Approach(GUI::g_ircShiftAnim, 0.0f, dt, 10.0f);
+    }
 }
 
 void GUI::RenderMenu(float screenWidth, float screenHeight) {
@@ -661,7 +673,8 @@ void GUI::RenderMenu(float screenWidth, float screenHeight) {
         float sc = 0.94f + (0.06f * e);
         ImVec2 baseSize = ImVec2(850, 580);
         ImVec2 winSize = ImVec2(baseSize.x * sc, baseSize.y * sc);
-        ImVec2 winPos = ImVec2(screenWidth / 2 - winSize.x / 2, screenHeight / 2 - winSize.y / 2);
+        float shiftAmt = 110.0f * sc * GUI::g_ircShiftAnim;
+        ImVec2 winPos = ImVec2(screenWidth / 2 - winSize.x / 2 - shiftAmt, screenHeight / 2 - winSize.y / 2);
         
         ImGui::SetNextWindowSize(winSize, ImGuiCond_Always);
         ImGui::SetNextWindowPos(winPos, ImGuiCond_Always);
@@ -785,6 +798,7 @@ void GUI::RenderMenu(float screenWidth, float screenHeight) {
                 RenderSidebarButton("Misc", 3);
                 RenderSidebarButton("Terminal", 4);
                 RenderSidebarButton("Info", 5);
+                RenderSidebarButton("IRC Chat", 6);
                 
                 // Sliding indicator pill
                 ImVec2 sidebarPos = ImGui::GetWindowPos();
@@ -804,7 +818,7 @@ void GUI::RenderMenu(float screenWidth, float screenHeight) {
                 ImGui::SetCursorPosY(ImGui::GetWindowHeight() - 35 * sc);
                 ImGui::SetCursorPosX(25);
                 ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.4f, 0.4f, 0.5f, 0.8f));
-                ImGui::Text("v1.0.4 - release");
+                ImGui::Text("v1.0.5 - release");
                 ImGui::PopStyleColor();
             }
             ImGui::EndChild();
@@ -823,7 +837,7 @@ void GUI::RenderMenu(float screenWidth, float screenHeight) {
                 
                 ImGui::PushStyleVar(ImGuiStyleVar_Alpha, tab_e * e);
                 
-                const char* tabNames[] = { "Combat", "Movement", "Visuals", "Misc", "Terminal", "Info" };
+                const char* tabNames[] = { "Combat", "Movement", "Visuals", "Misc", "Terminal", "Info", "IRC Chat" };
                 ImGui::PushFont(ImGui::GetIO().Fonts->Fonts[0]);
                 ImVec2 tabTextPos = ImGui::GetCursorScreenPos();
                 AddTextGlow(ImGui::GetWindowDrawList(), ImGui::GetFont(), ImGui::GetFontSize(), tabTextPos, ImColor(g_colorAccent.x, g_colorAccent.y, g_colorAccent.z, 1.0f), tabNames[GUI::g_currentTab], 5.0f);
@@ -878,6 +892,9 @@ void GUI::RenderMenu(float screenWidth, float screenHeight) {
                         case 5: // Info
                             Info::RenderMenu();
                             break;
+                        case 6: // IRC Chat
+                            IRChat::RenderMenu();
+                            break;
                     }
                 }
                 ImGui::EndChild();
@@ -888,6 +905,77 @@ void GUI::RenderMenu(float screenWidth, float screenHeight) {
             
             ImGui::End();
         }
+
+        if (GUI::g_ircShiftAnim > 0.001f) {
+            float sidebarAlpha = GUI::g_ircShiftAnim * e;
+            float sidebarWidth = 220.0f * sc * Animations::EaseOutQuart(GUI::g_ircShiftAnim);
+            float sidebarX = winPos.x + winSize.x + 15.0f * sc;
+            
+            ImGui::SetNextWindowSize(ImVec2(sidebarWidth, winSize.y), ImGuiCond_Always);
+            ImGui::SetNextWindowPos(ImVec2(sidebarX, winPos.y), ImGuiCond_Always);
+            
+            ImGui::PushStyleVar(ImGuiStyleVar_Alpha, sidebarAlpha);
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 12.0f * sc);
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(14.0f * sc, 12.0f * sc));
+            
+            ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.06f, 0.06f, 0.09f, 0.98f));
+            
+            // Draw matching shadow
+            DrawShadow(ImGui::GetBackgroundDrawList(), ImVec2(sidebarX, winPos.y), ImVec2(sidebarWidth, winSize.y), 12.0f * sc, 20.0f * GUI::g_ircShiftAnim, 0.35f * GUI::g_ircShiftAnim);
+            
+            if (ImGui::Begin("IRC Config Sidebar", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar)) {
+                
+                ImGui::PushFont(GUI::g_fontH3 ? GUI::g_fontH3 : ImGui::GetFont());
+                ImGui::SetCursorPosY(15.0f * sc);
+                if (sidebarWidth > 100.0f * sc) {
+                    float textWidth = ImGui::CalcTextSize("IRC Configs").x;
+                    ImGui::SetCursorPosX((sidebarWidth - textWidth) * 0.5f);
+                    ImGui::TextColored(g_colorAccent, "IRC Configs");
+                }
+                ImGui::PopFont();
+                
+                ImGui::Spacing();
+                ImGui::Separator();
+                ImGui::Spacing();
+                
+                if (sidebarWidth > 150.0f * sc) {
+                    if (ConfigManager::GetConfigDir().empty())
+                        ConfigManager::Initialize();
+                    
+                    auto configs = ConfigManager::ListConfigs();
+                    if (configs.empty()) {
+                        ImGui::TextDisabled("No configs found.");
+                    } else {
+                        ImGui::TextDisabled("Drag to the chat:\n");
+                        ImGui::Spacing();
+                        
+                        ImGui::BeginChild("SidebarConfigList", ImVec2(0, 0), false, ImGuiWindowFlags_None);
+                        for (const auto& cfg : configs) {
+                            ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(g_colorAccent.x, g_colorAccent.y, g_colorAccent.z, 0.4f));
+                            ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(g_colorAccent.x, g_colorAccent.y, g_colorAccent.z, 0.2f));
+                            
+                            ImGui::Selectable(cfg.c_str(), false, ImGuiSelectableFlags_SpanAllColumns);
+                            
+                            // Drag Drop Source
+                            if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {
+                                ImGui::SetDragDropPayload("DRAG_IRC_CONFIG", cfg.c_str(), cfg.size() + 1);
+                                ImGui::Text("Enviar %s.json", cfg.c_str());
+                                ImGui::EndDragDropSource();
+                            }
+                            
+                            ImGui::PopStyleColor(2);
+                        }
+                        ImGui::EndChild();
+                    }
+                }
+                ImGui::End();
+            }
+            
+            ImGui::PopStyleColor(1);
+            ImGui::PopStyleVar(4);
+        }
+
         ImGui::PopStyleVar();
     }
 }
