@@ -34,6 +34,7 @@ public:
     static bool g_fetchDone;            // true once fetch has completed (success or fail)
     static bool g_fetchFailed;          // true if fetch resulted in an error
     static bool g_showReleaseModal;     // controls the popup window
+    static float g_releaseModalAnim;    // ease animation progress [0..1]
 
     /// @brief Kick off a WinHTTP background fetch of the latest GitHub release body
     static void FetchLatestRelease();

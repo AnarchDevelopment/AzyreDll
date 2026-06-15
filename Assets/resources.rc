@@ -25,12 +25,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName",      "an4rch Development\0"
             VALUE "FileDescription",  "Aegleseeker Client\0"
-            VALUE "FileVersion",      "1.0.5\0"
+            VALUE "FileVersion",      "1.0.4\0"
             VALUE "InternalName",     "Aegleseeker Client\0"
             VALUE "LegalCopyright",   "an4rch Development | https://anarchdevelopment.github.io/\0"
             VALUE "OriginalFilename", "aegledll.dll\0"
             VALUE "ProductName",      "Aegleseeker Client\0"
-            VALUE "ProductVersion",   "1.0.5\0"
+            VALUE "ProductVersion",   "1.0.4\0"
         END
     END
     BLOCK "VarFileInfo"
