@@ -6,3 +6,4 @@ build-tool
 build_og.ps1
 LICENSE
 *.md
+*.sh
