@@ -1,63 +1,115 @@
-an4rch Development Public Source License (ADPSL) v1.0
+an4rch Development Public Source License (ADPSL) v1.1
 
 Copyright (c) 2026 an4rch Development
 
-Permission is granted to use, study, modify, fork,
-compile, and distribute this software and its source code,
-under the following conditions:
+SPDX-License-Identifier: ADPSL-1.1
 
-1. Same License Requirement
-Any fork, modification, or derivative work of this
-software must remain licensed under this same license.
+0. LICENSE CLASSIFICATION
 
-2. Source Code Availability
-If you distribute compiled binaries, executables,
-or modified versions of this software, you must also
-provide access to the complete corresponding source code.
+This license is intended as a source-available permissive license
+with attribution requirements.
 
-The source code must be provided through:
-- a public repository,
-- a direct download,
-- or another freely accessible method.
+It is NOT intended to be interpreted as an OSI-approved open source
+license under the definition of the Open Source Initiative (OSI).
 
-Access to the corresponding source code must remain
-available for as long as the binaries or executable
-forms of the software are distributed.
+1. DEFINITIONS
 
-3. Attribution
-You may not claim this software or derivative works
-as your own original work.
+"Software" refers to the original work, its source code,
+associated files, documentation, assets, configuration files,
+and any derivative works distributed under this license.
 
-All distributions and derivative works must clearly include:
-- the original author or organization,
-- the original project name,
-- and this license.
+"Derivative Work" refers to any modification, fork, integration,
+or software substantially based on the Software.
 
-4. Commercial Use
-Commercial use, redistribution, and selling are permitted
-under the conditions of this license.
+2. PERMISSIONS
 
-5. License Preservation
-This license file and all copyright notices must remain
-included in all copies, forks, and derivative works.
+Permission is hereby granted to any person obtaining a copy of this Software
+to use, study, modify, fork, compile, distribute, sublicense, and sell
+the Software and Derivative Works, including in proprietary or closed-source
+software, subject to the conditions of this license.
 
-6. Future License Versions
-Projects may choose to use version 1.0
-or any later version published by an4rch Development,
-if explicitly stated by the project or copyright holder.
+3. ATTRIBUTION
 
-7. Liability
+You may not claim this Software or any Derivative Work
+as your own original creation.
+
+All distributions must clearly and visibly include:
+- the original author or organization
+- the original project name
+- a copy of this license
+
+Attribution must be reasonably visible in at least one of:
+documentation, about sections, license files,
+source code headers, or distributed materials.
+
+All original copyright and attribution notices must be preserved.
+
+4. LICENSE FLEXIBILITY
+
+Derivative Works and forks may remain under this license
+or may be relicensed under a different license chosen
+by the modifier or distributor.
+
+However:
+- original attribution must be preserved
+- original project identity must be acknowledged
+- this license must remain included within documentation or legal notices
+
+5. SOURCE CODE
+
+Distribution of source code is optional but encouraged.
+
+If source code is distributed, it must include all modifications
+necessary to build and understand the distributed version,
+including relevant build scripts when applicable.
+
+6. COMMERCIAL USE
+
+Commercial use, redistribution, private modification,
+sublicensing, and sale are permitted.
+
+7. TRADEMARK AND BRANDING
+
+This license does not grant permission to use the original project name,
+logos, trademarks, or branding in a way that implies official affiliation,
+endorsement, or representation of the original authors.
+
+8. CONTRIBUTIONS
+
+Any contribution intentionally submitted for inclusion in the Software
+shall be licensed under this license unless explicitly stated otherwise.
+
+9. PATENT GRANT
+
+Each contributor to the Software grants to any recipient
+a perpetual, worldwide, non-exclusive, royalty-free,
+irrevocable patent license to make, use, modify, sell,
+and distribute the Software, to the extent such rights
+are necessarily infringed by their contributions alone
+or in combination.
+
+10. SEVERABILITY
+
+If any provision of this license is held to be invalid or unenforceable,
+the remaining provisions shall remain in full force and effect.
+
+11. WARRANTY AND LIABILITY
+
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY
-OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT
-LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT.
+OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
+THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE,
+AND NON-INFRINGEMENT.
 
 IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
 BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY,
 WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE,
-ARISING FROM, OUT OF, OR IN CONNECTION WITH THE
-SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE
+OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-8. Termination
-Any violation of these terms automatically revokes
-the rights granted under this license.
+12. TERMINATION
+
+Any violation of this license automatically revokes
+the rights granted under it.
+
+Rights may be restored only if the violation is corrected
+and all infringing distribution is ceased.
