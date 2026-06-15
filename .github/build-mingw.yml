@@ -1,0 +1,34 @@
+name: Build DLL (MinGW)
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup MinGW
+      uses: egor-tensin/setup-mingw@v2
+      with:
+        platform: x64
+
+    - name: Verify compiler
+      run: g++ --version
+
+    - name: Build project
+      shell: pwsh
+      run: |
+        ./build.ps1
+
+    - name: Upload DLL artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: AegleInternal
+        path: build/internal_hook.dll
