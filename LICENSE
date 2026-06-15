@@ -1,0 +1,63 @@
+an4rch Development Public Source License (ADPSL) v1.0
+
+Copyright (c) 2026 an4rch Development
+
+Permission is granted to use, study, modify, fork,
+compile, and distribute this software and its source code,
+under the following conditions:
+
+1. Same License Requirement
+Any fork, modification, or derivative work of this
+software must remain licensed under this same license.
+
+2. Source Code Availability
+If you distribute compiled binaries, executables,
+or modified versions of this software, you must also
+provide access to the complete corresponding source code.
+
+The source code must be provided through:
+- a public repository,
+- a direct download,
+- or another freely accessible method.
+
+Access to the corresponding source code must remain
+available for as long as the binaries or executable
+forms of the software are distributed.
+
+3. Attribution
+You may not claim this software or derivative works
+as your own original work.
+
+All distributions and derivative works must clearly include:
+- the original author or organization,
+- the original project name,
+- and this license.
+
+4. Commercial Use
+Commercial use, redistribution, and selling are permitted
+under the conditions of this license.
+
+5. License Preservation
+This license file and all copyright notices must remain
+included in all copies, forks, and derivative works.
+
+6. Future License Versions
+Projects may choose to use version 1.0
+or any later version published by an4rch Development,
+if explicitly stated by the project or copyright holder.
+
+7. Liability
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY
+OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT
+LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT.
+
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
+BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY,
+WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE,
+ARISING FROM, OUT OF, OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+8. Termination
+Any violation of these terms automatically revokes
+the rights granted under this license.
