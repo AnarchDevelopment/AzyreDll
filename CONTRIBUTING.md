@@ -1,4 +1,4 @@
-# Contributing to AegleInternal
+# Contributing to Aegleseeker
 
 Thank you for your interest in contributing to AegleInternal! This document provides guidelines and instructions for contributing to the project.
 
