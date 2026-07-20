@@ -1,0 +1,73 @@
+name: MSBuild
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+  workflow_dispatch:
+
+env:
+  SOLUTION_FILE_PATH: AegleDllMSVC.slnx
+  BUILD_CONFIGURATION: Release
+  BUILD_PLATFORM: x64
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build AegleDllMSVC
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Show MSVC environment
+        run: |
+          msbuild -version
+          echo Platform: ${{ env.BUILD_PLATFORM }}
+          echo Configuration: ${{ env.BUILD_CONFIGURATION }}
+
+      - name: Restore dependencies
+        run: |
+          msbuild ${{ env.SOLUTION_FILE_PATH }} ^
+            /t:Restore ^
+            /p:Configuration=${{ env.BUILD_CONFIGURATION }} ^
+            /p:Platform=${{ env.BUILD_PLATFORM }}
+
+      - name: Build solution
+        run: |
+          msbuild ${{ env.SOLUTION_FILE_PATH }} ^
+            /m ^
+            /verbosity:minimal ^
+            /p:Configuration=${{ env.BUILD_CONFIGURATION }} ^
+            /p:Platform=${{ env.BUILD_PLATFORM }}
+
+      - name: Verify output
+        shell: powershell
+        run: |
+          $dll = Get-ChildItem -Path . -Filter "AegleDllMSVC.dll" -Recurse
+
+          if ($null -eq $dll) {
+              Write-Error "DLL not found!"
+              exit 1
+          }
+
+          Write-Host "Found:"
+          $dll.FullName
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AegleDllMSVC-${{ env.BUILD_PLATFORM }}-${{ env.BUILD_CONFIGURATION }}
+          path: |
+            **/AegleDllMSVC.dll
+          if-no-files-found: error
