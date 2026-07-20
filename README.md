@@ -1,10 +1,10 @@
-# AegleDllMSVC
+# Aegleseeker
 
 ![C++](https://img.shields.io/badge/C%2B%2B-Visual%20Studio-blue)
 ![DirectX 11](https://img.shields.io/badge/Graphics-DirectX%2011-purple)
 ![Windows](https://img.shields.io/badge/Platform-Windows-0078D6)
 
-AegleDllMSVC is the Visual Studio/MSVC port of **Aegle DLL**, a C++ project built around a DirectX 11 rendering layer, modular architecture and custom GUI system.
+Aegleseeker is the Visual Studio/MSVC port of **Aegle DLL**, a C++ project built around a DirectX 11 rendering layer, modular architecture and custom GUI system.
 
 The project uses **Dear ImGui**, **DirectX 11**, **MinHook** and multiple internal systems for rendering, configuration, input handling and module management.
 
@@ -13,7 +13,7 @@ The project uses **Dear ImGui**, **DirectX 11**, **MinHook** and multiple intern
 ## 📁 Project Structure
 
 ```
-AegleDllMSVC
+Aegleseeker
 │
 ├── Animations/
 │   └── Animation system
@@ -162,7 +162,7 @@ git clone <repository-url>
 2. Open:
 
 ```
-AegleDllMSVC.slnx
+Aegleseeker.slnx
 ```
 
 3. Select:
