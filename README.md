@@ -248,7 +248,7 @@ Modules/
 
 # License
 
-This repository is provided for educational and development purposes.
+This project is licensed under the [ADPSL license](LICENSE)
 
 ---
 
