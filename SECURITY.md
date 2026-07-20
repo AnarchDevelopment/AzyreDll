@@ -2,7 +2,7 @@
 
 ## Supported Versions
 
-Security updates are provided for the latest stable version of AegleDllMSVC.
+Security updates are provided for the latest stable version of Aegleseeker.
 
 | Version | Supported |
 |-|-|
@@ -59,4 +59,4 @@ Security reports may include:
 - Dependency issues
 - Problems affecting project stability
 
-Thank you for helping improve AegleDllMSVC.
+Thank you for helping improve Aegleseeker.
