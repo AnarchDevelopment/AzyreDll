@@ -1,0 +1,415 @@
+// ==========================================
+// Aegleseeker Client SCSS Page Sections
+// Pink-Purple Gradient Aesthetic
+// ==========================================
+
+@use 'variables' as *;
+@use 'mixins' as *;
+
+// Hero Section
+.hero {
+  padding: 9rem 0 5rem;
+  position: relative;
+  overflow: hidden;
+
+  .hero-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 3.5rem;
+    align-items: center;
+
+    @include desktop {
+      grid-template-columns: 1.1fr 0.9fr;
+    }
+  }
+
+  .hero-content {
+    .hero-title {
+      font-size: 2.75rem;
+      font-weight: 900;
+      line-height: 1.15;
+      letter-spacing: -0.02em;
+      margin: 1.25rem 0;
+      color: $text-bright;
+
+      @include tablet {
+        font-size: 2.25rem;
+      }
+    }
+
+    .hero-subtitle {
+      font-size: 1.1rem;
+      color: #e2d9f3;
+      margin-bottom: 2rem;
+      max-width: 580px;
+    }
+
+    .hero-cta {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+  }
+
+  // Interactive Live Client Window Preview
+  .hero-preview {
+    position: relative;
+
+    .hud-window {
+      @include glass-panel($bg: rgba(14, 10, 22, 0.88), $blur: 24px, $border: rgba(232, 121, 249, 0.35));
+      border-radius: $radius-lg;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8), 0 0 40px rgba(217, 70, 239, 0.2);
+      overflow: hidden;
+
+      .hud-header {
+        background: rgba(255, 255, 255, 0.04);
+        padding: 0.75rem 1rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+
+        .window-dots {
+          display: flex;
+          gap: 0.4rem;
+
+          span {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+
+            &:nth-child(1) { background: #ff5f56; }
+            &:nth-child(2) { background: #ffbd2e; }
+            &:nth-child(3) { background: #27c93f; }
+          }
+        }
+
+        .window-title {
+          font-size: 0.8rem;
+          font-family: $font-mono;
+          color: $text-muted;
+        }
+      }
+
+      .hud-body {
+        padding: 1.5rem;
+        min-height: 280px;
+        position: relative;
+        background: radial-gradient(circle at center, rgba(28, 18, 44, 0.7) 0%, rgba(9, 7, 14, 0.96) 100%);
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+
+        // In-game HUD Mock Elements
+        .hud-watermark {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          background: rgba(0, 0, 0, 0.55);
+          padding: 0.4rem 0.8rem;
+          border-radius: $radius-sm;
+          border-left: 3px solid $pink-magenta;
+          width: fit-content;
+          font-weight: 700;
+          font-size: 0.85rem;
+          color: $text-bright;
+
+          span {
+            color: $pink-magenta;
+          }
+        }
+
+        .hud-middle-row {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-end;
+          gap: 1rem;
+          margin: 1.5rem 0;
+
+          .keystrokes-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 36px);
+            gap: 4px;
+
+            .key-box {
+              height: 36px;
+              background: rgba(0, 0, 0, 0.55);
+              border: 1px solid rgba(255, 255, 255, 0.1);
+              border-radius: 4px;
+              @include flex-center;
+              font-family: $font-mono;
+              font-size: 0.8rem;
+              font-weight: 700;
+              color: $text-secondary;
+
+              &.key-w { grid-column: 2; }
+              &.key-a { grid-column: 1; }
+              &.key-s { grid-column: 2; }
+              &.key-d { grid-column: 3; }
+
+              &.active {
+                background: rgba(232, 121, 249, 0.3);
+                border-color: $pink-magenta;
+                color: $text-bright;
+                box-shadow: 0 0 12px rgba(232, 121, 249, 0.45);
+              }
+            }
+          }
+
+          .arraylist-box {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 0.25rem;
+
+            .array-item {
+              font-family: $font-mono;
+              font-size: 0.75rem;
+              font-weight: 600;
+              padding: 0.15rem 0.5rem;
+              background: rgba(0, 0, 0, 0.65);
+              border-right: 2px solid $pink-light;
+              border-radius: 2px;
+              color: $text-bright;
+
+              &:nth-child(2) { border-color: $pink-magenta; }
+              &:nth-child(3) { border-color: $purple-pink; }
+              &:nth-child(4) { border-color: $purple-deep; }
+            }
+          }
+        }
+
+        .hud-stats-bar {
+          display: flex;
+          gap: 1.25rem;
+          background: rgba(0, 0, 0, 0.45);
+          padding: 0.4rem 0.8rem;
+          border-radius: $radius-sm;
+          font-family: $font-mono;
+          font-size: 0.75rem;
+          color: $text-muted;
+
+          strong {
+            color: $pink-magenta;
+          }
+        }
+      }
+    }
+  }
+}
+
+// Stats Counter Banner
+.stats-banner {
+  padding: 3rem 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(14, 10, 22, 0.45);
+
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 2rem;
+    text-align: center;
+
+    @include desktop {
+      grid-template-columns: repeat(4, 1fr);
+    }
+
+    .stat-item {
+      .stat-number {
+        font-size: 2.25rem;
+        font-weight: 800;
+        @include gradient-text($gradient-primary);
+        margin-bottom: 0.2rem;
+      }
+
+      .stat-label {
+        font-size: 0.85rem;
+        color: $text-muted;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+    }
+  }
+}
+
+// Section Header
+.section-header {
+  text-align: center;
+  max-width: 680px;
+  margin: 0 auto 3.5rem;
+
+  .section-title {
+    font-size: 2rem;
+    font-weight: 800;
+    color: $text-bright;
+    margin: 0.75rem 0;
+  }
+
+  .section-desc {
+    color: #cbd5e1;
+    font-size: 1rem;
+  }
+}
+
+// Modules Section
+.modules-section {
+  padding: 6rem 0;
+
+  .modules-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+
+    @include tablet {
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    @include desktop {
+      grid-template-columns: repeat(3, 1fr);
+    }
+  }
+}
+
+// Architecture / Features Section
+.features-section {
+  padding: 6rem 0;
+  background: radial-gradient(circle at 50% 50%, rgba(217, 70, 239, 0.06) 0%, transparent 60%);
+
+  .features-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 2rem;
+
+    @include tablet {
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    @include desktop {
+      grid-template-columns: repeat(3, 1fr);
+    }
+
+    .feature-card {
+      @include glass-panel;
+      border-radius: $radius-lg;
+      padding: 2rem;
+      transition: all $transition-normal;
+
+      .feature-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: $radius-md;
+        background: rgba(232, 121, 249, 0.12);
+        border: 1px solid rgba(232, 121, 249, 0.3);
+        @include flex-center;
+        color: $pink-magenta;
+        font-size: 1.4rem;
+        margin-bottom: 1.25rem;
+      }
+
+      .feature-title {
+        font-size: 1.2rem;
+        font-weight: 700;
+        color: $text-bright;
+        margin-bottom: 0.5rem;
+      }
+
+      .feature-desc {
+        font-size: 0.9rem;
+        color: #cbd5e1;
+        line-height: 1.6;
+      }
+    }
+  }
+}
+
+// Installation & Usage Section
+.install-section {
+  padding: 6rem 0;
+
+  .install-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 2.5rem;
+
+    @include desktop {
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .step-list {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+
+      .step-item {
+        display: flex;
+        gap: 1.25rem;
+        align-items: flex-start;
+
+        .step-number {
+          width: 38px;
+          height: 38px;
+          border-radius: 50%;
+          background: $gradient-primary;
+          color: #0c0a14;
+          font-weight: 800;
+          @include flex-center;
+          flex-shrink: 0;
+        }
+
+        .step-content {
+          h4 {
+            font-size: 1.05rem;
+            color: $text-bright;
+            margin-bottom: 0.3rem;
+          }
+          p {
+            font-size: 0.88rem;
+            color: #cbd5e1;
+          }
+        }
+      }
+    }
+  }
+}
+
+// Footer
+.footer {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 4rem 0 2rem;
+  background: rgba(7, 5, 12, 0.95);
+
+  .footer-inner {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+
+    @include desktop {
+      flex-direction: row;
+      justify-content: space-between;
+      align-items: center;
+    }
+  }
+
+  .footer-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+
+    img {
+      width: 28px;
+      height: 28px;
+    }
+
+    span {
+      font-weight: 700;
+      color: $text-bright;
+    }
+  }
+
+  .footer-text {
+    font-size: 0.85rem;
+    color: $text-muted;
+  }
+}

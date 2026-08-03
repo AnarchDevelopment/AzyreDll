@@ -1,0 +1,454 @@
+// ==========================================
+// Aegle Client SCSS Components
+// ==========================================
+
+@use 'variables' as *;
+@use 'mixins' as *;
+
+// Navigation Bar
+.navbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  padding: 1rem 0;
+  transition: background $transition-normal, padding $transition-normal, border-color $transition-normal;
+  border-bottom: 1px solid transparent;
+
+  &.scrolled {
+    @include glass-panel($bg: $bg-nav, $blur: 20px, $border: rgba(255, 255, 255, 0.08));
+    padding: 0.75rem 0;
+  }
+
+  .nav-inner {
+    @include flex-between;
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: $text-bright;
+
+    img {
+      width: 34px;
+      height: 34px;
+    }
+  }
+
+  .nav-links {
+    display: flex;
+    align-items: center;
+    gap: 2rem;
+    list-style: none;
+
+    a {
+      font-size: 0.95rem;
+      font-weight: 500;
+      color: $text-secondary;
+      position: relative;
+
+      &:hover, &.active {
+        color: $pink-magenta;
+      }
+
+      &::after {
+        content: '';
+        position: absolute;
+        bottom: -4px;
+        left: 0;
+        width: 0;
+        height: 2px;
+        background: $gradient-primary;
+        transition: width $transition-fast;
+        border-radius: $radius-full;
+      }
+
+      &:hover::after, &.active::after {
+        width: 100%;
+      }
+    }
+
+    @include tablet {
+      display: none;
+
+      &.open {
+        display: flex;
+        flex-direction: column;
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: rgba(12, 9, 20, 0.96);
+        backdrop-filter: blur(20px);
+        padding: 1.5rem;
+        border-bottom: 1px solid $border-subtle;
+        gap: 1.25rem;
+      }
+    }
+  }
+
+  .mobile-toggle {
+    display: none;
+    color: $text-primary;
+    font-size: 1.5rem;
+    padding: 0.25rem;
+
+    @include tablet {
+      display: block;
+    }
+  }
+}
+
+// Buttons
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  padding: 0.75rem 1.6rem;
+  border-radius: $radius-md;
+  font-size: 0.95rem;
+  font-weight: 600;
+  transition: all $transition-normal;
+  text-align: center;
+  user-select: none;
+
+  &--primary {
+    background: $gradient-primary;
+    color: #0c0a14;
+    font-weight: 700;
+    box-shadow: 0 4px 20px rgba(232, 121, 249, 0.35);
+
+    &:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 28px rgba(232, 121, 249, 0.55);
+    }
+  }
+
+  &--outline {
+    background: rgba(255, 255, 255, 0.03);
+    color: $text-primary;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+
+    &:hover {
+      background: rgba(232, 121, 249, 0.1);
+      border-color: $pink-magenta;
+      color: $pink-magenta;
+      transform: translateY(-2px);
+    }
+  }
+
+  &--sm {
+    padding: 0.45rem 0.95rem;
+    font-size: 0.85rem;
+    border-radius: $radius-sm;
+  }
+}
+
+// Cards
+.card {
+  @include glass-panel;
+  border-radius: $radius-lg;
+  padding: 1.75rem;
+  transition: transform $transition-normal, border-color $transition-normal, box-shadow $transition-normal;
+
+  &:hover {
+    border-color: rgba(232, 121, 249, 0.4);
+    box-shadow: $shadow-md;
+  }
+}
+
+// Search & Filter Component
+.filter-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  margin-bottom: 2.5rem;
+
+  @include desktop {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .tabs {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+
+    .tab-btn {
+      padding: 0.5rem 1.1rem;
+      border-radius: $radius-md;
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: $text-secondary;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      transition: all $transition-fast;
+
+      &:hover {
+        color: $text-bright;
+        border-color: rgba(255, 255, 255, 0.2);
+      }
+
+      &.active {
+        background: rgba(232, 121, 249, 0.16);
+        color: $pink-magenta;
+        border-color: rgba(232, 121, 249, 0.4);
+      }
+    }
+  }
+
+  .search-box {
+    position: relative;
+    width: 100%;
+    max-width: 320px;
+
+    input {
+      width: 100%;
+      padding: 0.6rem 1rem 0.6rem 2.6rem;
+      border-radius: $radius-md;
+      background: rgba(18, 14, 28, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: $text-bright;
+      font-size: 0.9rem;
+      outline: none;
+      transition: border-color $transition-fast, box-shadow $transition-fast;
+
+      &:focus {
+        border-color: $pink-magenta;
+        box-shadow: 0 0 12px rgba(232, 121, 249, 0.3);
+      }
+
+      &::placeholder {
+        color: $text-muted;
+      }
+    }
+
+    .search-icon {
+      position: absolute;
+      left: 0.9rem;
+      top: 50%;
+      transform: translateY(-50%);
+      color: $text-muted;
+      pointer-events: none;
+    }
+  }
+}
+
+// Module Card
+.module-card {
+  @include glass-panel;
+  border-radius: $radius-lg;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 1.25rem;
+  position: relative;
+  overflow: hidden;
+  transition: all $transition-normal;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 4px;
+    height: 100%;
+    background: $gradient-primary;
+    opacity: 0;
+    transition: opacity $transition-fast;
+  }
+
+  &:hover {
+    transform: translateY(-4px);
+    border-color: rgba(232, 121, 249, 0.4);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
+
+    &::before {
+      opacity: 1;
+    }
+  }
+
+  .card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+
+    .title-group {
+      .module-name {
+        font-size: 1.15rem;
+        font-weight: 700;
+        color: $text-bright;
+        margin-bottom: 0.2rem;
+      }
+
+      .module-category {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: $pink-magenta;
+        font-weight: 600;
+      }
+    }
+  }
+
+  .module-desc {
+    font-size: 0.88rem;
+    color: #e2d9f3;
+    line-height: 1.5;
+  }
+
+  .card-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 0.75rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+
+    .keybind-badge {
+      font-family: $font-mono;
+      font-size: 0.75rem;
+      background: rgba(255, 255, 255, 0.06);
+      padding: 0.2rem 0.5rem;
+      border-radius: $radius-sm;
+      color: $text-muted;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+  }
+}
+
+// Code Block / Terminal Box
+.code-box {
+  background: #090710;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: $radius-md;
+  overflow: hidden;
+  margin-top: 1rem;
+
+  .code-header {
+    background: rgba(255, 255, 255, 0.03);
+    padding: 0.5rem 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    font-size: 0.8rem;
+    color: $text-muted;
+
+    .copy-btn {
+      color: $text-secondary;
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+      font-size: 0.75rem;
+      &:hover {
+        color: $pink-magenta;
+      }
+    }
+  }
+
+  pre {
+    padding: 1rem;
+    font-size: 0.85rem;
+    color: #f472b6;
+    overflow-x: auto;
+  }
+}
+
+// GitHub Repo View Widget Container
+.github-widget-container {
+  @include glass-panel($bg: rgba(18, 14, 28, 0.8), $blur: 16px, $border: rgba(232, 121, 249, 0.3));
+  border-radius: $radius-lg;
+  overflow: hidden;
+  width: 100%;
+  max-width: 920px;
+  margin: 3rem auto 0;
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.5);
+
+  .widget-header {
+    background: rgba(255, 255, 255, 0.04);
+    padding: 0.85rem 1.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+
+    .widget-title {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: $text-bright;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+  }
+
+  .repo-site-viewer {
+    background: #090710;
+    padding: 1.25rem;
+
+    .repo-meta-bar {
+      display: flex;
+      gap: 1.5rem;
+      padding-bottom: 1rem;
+      margin-bottom: 1rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      font-size: 0.85rem;
+      color: $text-muted;
+
+      .repo-meta-item {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+
+        strong {
+          color: $text-bright;
+        }
+      }
+    }
+
+    .repo-files-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+
+      .file-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.55rem 0.85rem;
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        border-radius: $radius-sm;
+        font-family: $font-mono;
+        font-size: 0.82rem;
+        transition: background $transition-fast;
+
+        &:hover {
+          background: rgba(232, 121, 249, 0.08);
+          border-color: rgba(232, 121, 249, 0.25);
+        }
+
+        .file-name {
+          color: $text-bright;
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+        }
+
+        .file-desc {
+          color: $text-muted;
+          font-family: $font-sans;
+          font-size: 0.8rem;
+        }
+      }
+    }
+  }
+}

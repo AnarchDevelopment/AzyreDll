@@ -1,0 +1,59 @@
+// ==========================================
+// Aegleseeker Client SCSS Variables & Design Tokens
+// Medium Pink-Purple Gradient Aesthetic
+// ==========================================
+
+// Color Palette - Dark Obsidian with Pink-Purple Accents
+$bg-dark: #09070e;
+$bg-card: rgba(18, 14, 28, 0.72);
+$bg-card-hover: rgba(28, 20, 44, 0.85);
+$bg-glass: rgba(16, 12, 24, 0.65);
+$bg-nav: rgba(9, 7, 14, 0.88);
+
+$border-subtle: rgba(255, 255, 255, 0.08);
+$border-glow: rgba(232, 121, 249, 0.35);
+
+// Pink-Purple Gradient Theme Accents
+$pink-light: #f472b6;
+$pink-magenta: #e879f9;
+$purple-pink: #d946ef;
+$purple-medium: #c026d3;
+$purple-deep: #a855f7;
+
+$green: #10b981;
+$amber: #f59e0b;
+$red: #ef4444;
+
+$gradient-primary: linear-gradient(135deg, #f472b6 0%, #d946ef 50%, #a855f7 100%);
+$gradient-accent: linear-gradient(135deg, #e879f9 0%, #8b5cf6 100%);
+$gradient-card: linear-gradient(145deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.01) 100%);
+$gradient-glow: linear-gradient(135deg, rgba(232, 121, 249, 0.18) 0%, rgba(168, 85, 247, 0.18) 100%);
+
+// Typography
+$font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+$font-mono: 'JetBrains Mono', 'Fira Code', Consolas, Monaco, monospace;
+
+// Text Colors
+$text-bright: #ffffff;
+$text-primary: #f3e8ff;
+$text-secondary: #c084fc;
+$text-muted: #94a3b8;
+
+// Spacing & Sizes
+$container-max-width: 1240px;
+$radius-sm: 8px;
+$radius-md: 14px;
+$radius-lg: 20px;
+$radius-full: 9999px;
+
+// Shadows & Glows
+$shadow-sm: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+$shadow-md: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+$shadow-lg: 0 20px 40px -10px rgba(0, 0, 0, 0.7);
+$glow-primary: 0 0 25px rgba(217, 70, 239, 0.38);
+$glow-purple: 0 0 25px rgba(168, 85, 247, 0.38);
+
+// Transitions
+$transition-fast: 0.15s ease;
+$transition-normal: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+$transition-slow: 0.4s cubic-bezier(0.4, 0, 0.2, 1);

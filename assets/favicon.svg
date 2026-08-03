@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100%" height="100%">
+  <defs>
+    <linearGradient id="aegleGlow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f472b6"/>
+      <stop offset="50%" stop-color="#e879f9"/>
+      <stop offset="100%" stop-color="#a855f7"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#e879f9" flood-opacity="0.4"/>
+    </filter>
+  </defs>
+  <rect width="100" height="100" rx="22" fill="#0c0a14"/>
+  <rect width="98" height="98" x="1" y="1" rx="21" fill="none" stroke="url(#aegleGlow)" stroke-width="1.5" stroke-opacity="0.4"/>
+  <path d="M50 18 L76 72 L62 72 L50 46 L38 72 L24 72 Z" fill="url(#aegleGlow)" filter="url(#shadow)"/>
+  <polygon points="50,32 59,52 41,52" fill="#0c0a14"/>
+</svg>

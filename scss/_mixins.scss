@@ -1,0 +1,63 @@
+// ==========================================
+// Aegle Client SCSS Mixins
+// ==========================================
+
+@use 'variables' as *;
+
+// Glassmorphism mixin
+@mixin glass-panel($bg: $bg-card, $blur: 16px, $border: $border-subtle) {
+  background: $bg;
+  backdrop-filter: blur($blur);
+  -webkit-backdrop-filter: blur($blur);
+  border: 1px solid $border;
+}
+
+// Gradient text mixin
+@mixin gradient-text($gradient: $gradient-primary) {
+  background: $gradient;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+// Flex centering helpers
+@mixin flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@mixin flex-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+// Responsive Breakpoints
+@mixin mobile {
+  @media (max-width: 640px) {
+    @content;
+  }
+}
+
+@mixin tablet {
+  @media (max-width: 1024px) {
+    @content;
+  }
+}
+
+@mixin desktop {
+  @media (min-width: 1025px) {
+    @content;
+  }
+}
+
+// Hover glow effect
+@mixin hover-glow($glow: $glow-primary) {
+  transition: transform $transition-normal, box-shadow $transition-normal, border-color $transition-normal;
+  &:hover {
+    transform: translateY(-3px);
+    box-shadow: $glow;
+    border-color: rgba(232, 121, 249, 0.4);
+  }
+}
