@@ -1,7 +1,0 @@
-<Solution>
-  <Configurations>
-    <Platform Name="x64" />
-    <Platform Name="x86" />
-  </Configurations>
-  <Project Path="AegleDllMSVC/AegleDllMSVC.vcxproj" Id="5831cb99-d6a1-4c92-85d2-99514117ccac" />
-</Solution>
