@@ -1,0 +1,306 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003" DefaultTargets="Build">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="Animations\Animations.cpp" />
+    <ClCompile Include="ArrayList\ArrayList.cpp" />
+    <ClCompile Include="Assets\stb\stb_image_impl.cpp" />
+    <ClCompile Include="Assets\stb\stb_imgwrt_impl.cpp" />
+    <ClCompile Include="Config\ConfigManager.cpp" />
+    <ClCompile Include="Core\Present.cpp" />
+    <ClCompile Include="dllmain.cpp" />
+    <ClCompile Include="GUI\DX11\ImGuiRenderer.cpp" />
+    <ClCompile Include="GUI\GUI.cpp" />
+    <ClCompile Include="Hook\Hooking.cpp" />
+    <ClCompile Include="ImGui\backend\imgui_impl_dx11.cpp" />
+    <ClCompile Include="ImGui\backend\imgui_impl_win32.cpp" />
+    <ClCompile Include="ImGui\imgui.cpp" />
+    <ClCompile Include="ImGui\imgui_demo.cpp" />
+    <ClCompile Include="ImGui\imgui_draw.cpp" />
+    <ClCompile Include="ImGui\imgui_tables.cpp" />
+    <ClCompile Include="ImGui\imgui_widgets.cpp" />
+    <ClCompile Include="Input\Input.cpp" />
+    <ClCompile Include="MinHook\buffer.c" />
+    <ClCompile Include="MinHook\hde32.c" />
+    <ClCompile Include="MinHook\hde64.c" />
+    <ClCompile Include="MinHook\hook.c" />
+    <ClCompile Include="MinHook\trampoline.c" />
+    <ClCompile Include="Modules\Alloc\AllocateNear.cpp" />
+    <ClCompile Include="Modules\Combat\Hitbox\Hitbox.cpp" />
+    <ClCompile Include="Modules\Combat\Reach\Reach.cpp" />
+    <ClCompile Include="Modules\Info\Info.cpp" />
+    <ClCompile Include="Modules\Misc\AntiAFK\AntiAFK.cpp" />
+    <ClCompile Include="Modules\Misc\AutoClicker\AutoClicker.cpp" />
+    <ClCompile Include="Modules\Misc\Screenshot\Screenshot.cpp" />
+    <ClCompile Include="Modules\Misc\UnlockFPS\UnlockFPS.cpp" />
+    <ClCompile Include="Modules\Globals.cpp" />
+    <ClCompile Include="Modules\ModuleManager.cpp" />
+    <ClCompile Include="Modules\Movement\AutoSprint\AutoSprint.cpp" />
+    <ClCompile Include="Modules\Movement\Timer\Timer.cpp" />
+    <ClCompile Include="Modules\PatternScan\PatternScan.cpp" />
+    <ClCompile Include="Modules\Terminal\Terminal.cpp" />
+    <ClCompile Include="Modules\Visuals\ClickGUI\ClickGUI.cpp" />
+    <ClCompile Include="Modules\Visuals\CPSCounter\CPSCounter.cpp" />
+    <ClCompile Include="Modules\Visuals\FPSOverlay\FPSOverlay.cpp" />
+    <ClCompile Include="Modules\Visuals\FullBright\FullBright.cpp" />
+    <ClCompile Include="Modules\Visuals\Keystrokes\Keystrokes.cpp" />
+    <ClCompile Include="Modules\Visuals\MotionBlur\MotionBlur.cpp" />
+    <ClCompile Include="Modules\Visuals\PingCounter\PingCounter.cpp" />
+    <ClCompile Include="Modules\Visuals\PlayerInfo\PlayerInfo.cpp" />
+    <ClCompile Include="Modules\Visuals\RenderInfo\RenderInfo.cpp" />
+    <ClCompile Include="Modules\Visuals\Watermark\Watermark.cpp" />
+    <ClCompile Include="Networking\Client\IRCClient.cpp" />
+    <ClCompile Include="Networking\IRChat.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Animations\Animations.hpp" />
+    <ClInclude Include="ArrayList\ArrayList.hpp" />
+    <ClInclude Include="Assets\resource.h" />
+    <ClInclude Include="Assets\stb\stb_image.h" />
+    <ClInclude Include="Assets\stb\stb_image_write.h" />
+    <ClInclude Include="Config\ConfigManager.hpp" />
+    <ClInclude Include="Core\Present.hpp" />
+    <ClInclude Include="GUI\DX11\ImGuiRenderer.hpp" />
+    <ClInclude Include="GUI\GUI.hpp" />
+    <ClInclude Include="Hook\Hook.hpp" />
+    <ClInclude Include="ImGui\backend\imgui_impl_dx11.h" />
+    <ClInclude Include="ImGui\backend\imgui_impl_win32.h" />
+    <ClInclude Include="ImGui\imconfig.h" />
+    <ClInclude Include="ImGui\imgui-markdown\imgui-markdown.h" />
+    <ClInclude Include="ImGui\imgui.h" />
+    <ClInclude Include="ImGui\imgui_internal.h" />
+    <ClInclude Include="ImGui\imstb_rectpack.h" />
+    <ClInclude Include="ImGui\imstb_textedit.h" />
+    <ClInclude Include="ImGui\imstb_truetype.h" />
+    <ClInclude Include="Input\Input.hpp" />
+    <ClInclude Include="MinHook\buffer.h" />
+    <ClInclude Include="MinHook\hde32.h" />
+    <ClInclude Include="MinHook\hde64.h" />
+    <ClInclude Include="MinHook\MinHook.h" />
+    <ClInclude Include="MinHook\pstdint.h" />
+    <ClInclude Include="MinHook\table32.h" />
+    <ClInclude Include="MinHook\table64.h" />
+    <ClInclude Include="MinHook\trampoline.h" />
+    <ClInclude Include="miniaudio\miniaudio.h" />
+    <ClInclude Include="Modules\Alloc\AllocateNear.hpp" />
+    <ClInclude Include="Modules\Combat\Hitbox\Hitbox.hpp" />
+    <ClInclude Include="Modules\Combat\Reach\Reach.hpp" />
+    <ClInclude Include="Modules\Globals.hpp" />
+    <ClInclude Include="Modules\Info\Info.hpp" />
+    <ClInclude Include="Modules\Misc\AntiAFK\AntiAFK.hpp" />
+    <ClInclude Include="Modules\Misc\AutoClicker\AutoClicker.hpp" />
+    <ClInclude Include="Modules\Misc\Screenshot\Screenshot.hpp" />
+    <ClInclude Include="Modules\Misc\UnlockFPS\UnlockFPS.hpp" />
+    <ClInclude Include="Modules\ModuleHeader.hpp" />
+    <ClInclude Include="Modules\ModuleManager.hpp" />
+    <ClInclude Include="Modules\Movement\AutoSprint\AutoSprint.hpp" />
+    <ClInclude Include="Modules\Movement\Timer\Timer.hpp" />
+    <ClInclude Include="Modules\PatternScan\PatternScan.hpp" />
+    <ClInclude Include="Modules\Terminal\Terminal.hpp" />
+    <ClInclude Include="Modules\Visuals\ClickGUI\ClickGUI.hpp" />
+    <ClInclude Include="Modules\Visuals\CPSCounter\CPSCounter.hpp" />
+    <ClInclude Include="Modules\Visuals\FPSOverlay\FPSOverlay.hpp" />
+    <ClInclude Include="Modules\Visuals\FullBright\FullBright.hpp" />
+    <ClInclude Include="Modules\Visuals\Keystrokes\Helper\HelperFunctions.hpp" />
+    <ClInclude Include="Modules\Visuals\Keystrokes\Keystrokes.hpp" />
+    <ClInclude Include="Modules\Visuals\MotionBlur\MotionBlur.hpp" />
+    <ClInclude Include="Modules\Visuals\PingCounter\PingCounter.hpp" />
+    <ClInclude Include="Modules\Visuals\PlayerInfo\PlayerInfo.hpp" />
+    <ClInclude Include="Modules\Visuals\RenderInfo\RenderInfo.hpp" />
+    <ClInclude Include="Modules\Visuals\Watermark\Watermark.hpp" />
+    <ClInclude Include="Networking\Client\IRCClient.hpp" />
+    <ClInclude Include="Networking\IRChat.hpp" />
+    <ClInclude Include="nlohmann\json.hpp" />
+    <ClInclude Include="Utils\HudElement.hpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="Assets\resources.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Assets\github.ini" />
+    <None Include="MinHook\MinHook.def" />
+  </ItemGroup>
+  <ItemGroup>
+    <Font Include="Assets\Fonts\GoogleSans-Regular.ttf" />
+    <Font Include="Assets\Fonts\Inter-Regular.ttf" />
+    <Font Include="Assets\Fonts\JetBrainsMono-Regular.ttf" />
+    <Font Include="Assets\Fonts\Minecraft.ttf" />
+    <Font Include="Assets\Fonts\SF-Pro-Text-Regular.ttf" />
+    <Font Include="Assets\Fonts\Poppins-Regular.ttf" />
+    <Font Include="Assets\Fonts\PlayfairDisplay-Regular.ttf" />
+    <Font Include="Assets\ProductSans.ttf" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="Assets\aeglewatermark.png" />
+    <Image Include="Assets\CategoryImage\Combat.png" />
+    <Image Include="Assets\CategoryImage\ConfigMarket.png" />
+    <Image Include="Assets\CategoryImage\Info.png" />
+    <Image Include="Assets\CategoryImage\IRCChat.png" />
+    <Image Include="Assets\CategoryImage\Misc.png" />
+    <Image Include="Assets\CategoryImage\Movement.png" />
+    <Image Include="Assets\CategoryImage\Visuals.png" />
+    <Image Include="Assets\logo.png" />
+    <Image Include="Assets\MarketAssets\Download.png" />
+    <Image Include="Assets\MarketAssets\Like.png" />
+    <Image Include="Assets\Replace\titleOriginal.png" />
+    <Image Include="Assets\terminal.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Assets\blur_ps.hlsl" />
+    <None Include="Assets\blur_vs.hlsl" />
+  </ItemGroup>
+  <ItemGroup>
+    <Media Include="Assets\clicksound.mp3" />
+    <Media Include="Assets\clicksound_1.mp3" />
+    <Media Include="Assets\clicksound_2.mp3" />
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>18.0</VCProjectVersion>
+    <Keyword>Win32Proj</Keyword>
+    <ProjectGuid>{5831cb99-d6a1-4c92-85d2-99514117ccac}</ProjectGuid>
+    <RootNamespace>AegleDllMSVC</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v145</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v145</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v145</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v145</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+    <IncludePath>$(ProjectDir);$(ProjectDir)ImGui;$(ProjectDir)miniaudio;$(ProjectDir)nlohmann;$(ProjectDir)MinHook;$(ProjectDir)ImGui\backend;$(ProjectDir)Animations;$(IncludePath)</IncludePath>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <IncludePath>$(ProjectDir);$(ProjectDir)ImGui;$(ProjectDir)miniaudio;$(ProjectDir)nlohmann;$(ProjectDir)MinHook;$(ProjectDir)ImGui\backend;$(ProjectDir)Animations;$(IncludePath)</IncludePath>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <AdditionalDependencies>%(AdditionalDependencies)</AdditionalDependencies>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+    <Manifest>
+      <EnableSegmentHeap>true</EnableSegmentHeap>
+    </Manifest>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <AdditionalDependencies>%(AdditionalDependencies)</AdditionalDependencies>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+    <Manifest>
+      <EnableSegmentHeap>true</EnableSegmentHeap>
+    </Manifest>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>WIN32_LEAN_AND_MEAN;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <AdditionalDependencies>%(AdditionalDependencies)</AdditionalDependencies>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+    <Manifest>
+      <EnableSegmentHeap>true</EnableSegmentHeap>
+    </Manifest>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>WIN32_LEAN_AND_MEAN;NDEBUG;_CONSOLE;%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <AdditionalDependencies>%(AdditionalDependencies)</AdditionalDependencies>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+    <Manifest>
+      <EnableSegmentHeap>true</EnableSegmentHeap>
+    </Manifest>
+  </ItemDefinitionGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>
