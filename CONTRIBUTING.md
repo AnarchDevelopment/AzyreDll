@@ -1,6 +1,6 @@
 # Contributing to Azyre Client
 
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square)](https://github.com/AnarchDevelopment/aegledll/pulls)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square)](https://github.com/AnarchDevelopment/AzyreDll/pulls)
 [![C++20](https://img.shields.io/badge/C%2B%2B-20-00599C?style=flat-square&logo=c%2B%2B)](https://en.cppreference.com/w/cpp/20)
 [![Discord](https://img.shields.io/badge/Discord-nqtvyzer-5865F2?style=flat-square&logo=discord&logoColor=white)](https://discord.com/)
 
@@ -59,14 +59,14 @@ Feature requests are welcome! Please:
 ### 1. Fork & Clone
 
 ```bash
-git clone https://github.com/<your-username>/aegledll.git
-cd aegledll
+git clone https://github.com/<your-username>/AzyreDll.git
+cd AzyreDll
 ```
 
 ### 2. Set Up the Remote
 
 ```bash
-git remote add upstream https://github.com/AnarchDevelopment/aegledll.git
+git remote add upstream https://github.com/AnarchDevelopment/AzyreDll.git
 ```
 
 ### 3. Build the Project
