@@ -212,6 +212,10 @@ if(MSVC)
         /Zc:__cplusplus
         /utf-8
     )
+
+    set_property(TARGET ${PROJECT_NAME} PROPERTY
+        MSVC_RUNTIME_LIBRARY "MultiThreaded"
+    )
 endif()
 
 # Resource compiler include path so rc.exe finds Assets files
