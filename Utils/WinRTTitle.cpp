@@ -5,7 +5,6 @@ Under an4rch Development Public Source License 1.0
 #include "WinRTTitle.hpp"
 
 #include <chrono>
-#include <cwchar>
 #include <string>
 #include <thread>
 
@@ -17,14 +16,20 @@ Under an4rch Development Public Source License 1.0
 #include <winrt/Windows.UI.Core.h>
 
 namespace {
+    constexpr wchar_t kCustomWindowTitle[] = L"[git] Azyre Client - 1.0.9";
     std::wstring s_title;
     HWND s_hwnd = nullptr;
 
     struct WindowSearch {
         DWORD processId;
-        bool requireMinecraftTitle;
         HWND hwnd;
         long long area;
+    };
+
+    struct TitleUpdate {
+        DWORD processId;
+        const wchar_t* title;
+        bool updated;
     };
 
     BOOL CALLBACK FindMainWindow(HWND hwnd, LPARAM parameter) {
@@ -33,23 +38,6 @@ namespace {
         GetWindowThreadProcessId(hwnd, &processId);
 
         if (processId != search->processId || !IsWindowVisible(hwnd) || GetWindow(hwnd, GW_OWNER)) {
-            return TRUE;
-        }
-
-        const int titleLength = GetWindowTextLengthW(hwnd);
-        if (titleLength <= 0) {
-            return TRUE;
-        }
-
-        std::wstring windowTitle(static_cast<size_t>(titleLength) + 1, L'\0');
-        GetWindowTextW(hwnd, windowTitle.data(), titleLength + 1);
-        windowTitle.resize(std::wcslen(windowTitle.c_str()));
-
-        constexpr wchar_t minecraftPrefix[] = L"Minecraft:";
-        constexpr size_t minecraftPrefixLength = sizeof(minecraftPrefix) / sizeof(wchar_t) - 1;
-        if (search->requireMinecraftTitle &&
-            (windowTitle.size() < minecraftPrefixLength ||
-             _wcsnicmp(windowTitle.c_str(), minecraftPrefix, minecraftPrefixLength) != 0)) {
             return TRUE;
         }
 
@@ -69,22 +57,47 @@ namespace {
         return TRUE;
     }
 
-    HWND FindProcessWindow() {
-        WindowSearch search{ GetCurrentProcessId(), true, nullptr, 0 };
-        EnumWindows(FindMainWindow, reinterpret_cast<LPARAM>(&search));
+    BOOL CALLBACK UpdateProcessWindowTitle(HWND hwnd, LPARAM parameter) {
+        auto* update = reinterpret_cast<TitleUpdate*>(parameter);
+        DWORD processId = 0;
+        GetWindowThreadProcessId(hwnd, &processId);
 
-        if (!search.hwnd) {
-            search.requireMinecraftTitle = false;
-            EnumWindows(FindMainWindow, reinterpret_cast<LPARAM>(&search));
+        if (processId == update->processId && IsWindowVisible(hwnd) && !GetWindow(hwnd, GW_OWNER)) {
+            update->updated = SetWindowTextW(hwnd, update->title) != FALSE || update->updated;
         }
 
+        return TRUE;
+    }
+
+    bool ApplyToProcessWindows() {
+        TitleUpdate update{ GetCurrentProcessId(), s_title.c_str(), false };
+        EnumWindows(UpdateProcessWindowTitle, reinterpret_cast<LPARAM>(&update));
+        return update.updated;
+    }
+
+    HWND FindProcessWindow() {
+        WindowSearch search{ GetCurrentProcessId(), nullptr, 0 };
+        EnumWindows(FindMainWindow, reinterpret_cast<LPARAM>(&search));
         return search.hwnd;
+    }
+
+    HWND GetRootWindow(HWND hwnd) {
+        HWND root = hwnd ? GetAncestor(hwnd, GA_ROOT) : nullptr;
+        return root ? root : hwnd;
     }
 
     bool ApplyViaWinRT() {
         try {
             winrt::init_apartment(winrt::apartment_type::single_threaded);
+        } catch (const winrt::hresult_error& error) {
+            if (error.code() != RPC_E_CHANGED_MODE) {
+                return false;
+            }
+        } catch (...) {
+            return false;
+        }
 
+        try {
             auto coreView = winrt::Windows::ApplicationModel::Core::CoreApplication::GetCurrentView();
             auto appView  = coreView.as<winrt::Windows::UI::ViewManagement::ApplicationView>();
             appView.Title(winrt::hstring(s_title.c_str()));
@@ -106,19 +119,23 @@ namespace {
     }
 
     bool ApplyViaWin32() {
-        if (!s_hwnd || !IsWindow(s_hwnd)) {
-            s_hwnd = FindProcessWindow();
+        HWND discoveredWindow = FindProcessWindow();
+        if (discoveredWindow) {
+            s_hwnd = GetRootWindow(discoveredWindow);
+        } else if (!s_hwnd || !IsWindow(s_hwnd)) {
+            s_hwnd = nullptr;
         }
 
         if (!s_hwnd || !IsWindow(s_hwnd)) {
             return false;
         }
 
-        if (SetWindowTextW(s_hwnd, s_title.c_str()) != FALSE) {
-            return true;
-        }
+        s_hwnd = GetRootWindow(s_hwnd);
+        const bool updated = SetWindowTextW(s_hwnd, s_title.c_str()) != FALSE;
+        const bool updatedWindows = ApplyToProcessWindows();
+        if (updated || updatedWindows) return true;
 
-        s_hwnd = FindProcessWindow();
+        s_hwnd = GetRootWindow(FindProcessWindow());
         return s_hwnd && SetWindowTextW(s_hwnd, s_title.c_str()) != FALSE;
     }
 
@@ -146,6 +163,11 @@ namespace {
     }
 }
 
-void WinRTTitle::SetTitle(const wchar_t* title, HWND hwnd) {
-    std::thread(SetTitleThread, title ? std::wstring(title) : std::wstring(), hwnd).detach();
+void WinRTTitle::SetTitle(HWND hwnd) {
+    std::wstring titleCopy = kCustomWindowTitle;
+    s_title = titleCopy;
+    s_hwnd = hwnd;
+    ApplyViaWinRT();
+    ApplyViaWin32();
+    std::thread(SetTitleThread, std::move(titleCopy), hwnd).detach();
 }
