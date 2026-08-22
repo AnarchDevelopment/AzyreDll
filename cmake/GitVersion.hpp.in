@@ -1,0 +1,3 @@
+#pragma once
+
+#define AZYRE_GIT_COMMIT "@AZYRE_GIT_COMMIT@"

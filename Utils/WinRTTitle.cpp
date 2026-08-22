@@ -3,6 +3,7 @@ Under an4rch Development Public Source License 1.0
 */
 
 #include "WinRTTitle.hpp"
+#include "GitVersion.hpp"
 
 #include <chrono>
 #include <string>
@@ -16,7 +17,13 @@ Under an4rch Development Public Source License 1.0
 #include <winrt/Windows.UI.Core.h>
 
 namespace {
-    constexpr wchar_t kCustomWindowTitle[] = L"[git] Azyre Client - 1.0.9";
+    std::wstring BuildWindowTitle() {
+        std::wstring commit;
+        for (const char character : std::string(AZYRE_GIT_COMMIT)) {
+            commit += static_cast<wchar_t>(static_cast<unsigned char>(character));
+        }
+        return L"[git-" + commit + L"] Azyre Client - 1.0.9";
+    }
     std::wstring s_title;
     HWND s_hwnd = nullptr;
 
@@ -164,7 +171,7 @@ namespace {
 }
 
 void WinRTTitle::SetTitle(HWND hwnd) {
-    std::wstring titleCopy = kCustomWindowTitle;
+    std::wstring titleCopy = BuildWindowTitle();
     s_title = titleCopy;
     s_hwnd = hwnd;
     ApplyViaWinRT();

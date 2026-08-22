@@ -34,7 +34,7 @@ namespace ImGuiDX11 {
             g_window = sd.OutputWindow;
             if (!g_window) g_window = GetForegroundWindow();
 
-            WinRTTitle::SetTitle(L"Azyre Client - 1.0.9", g_window);
+            WinRTTitle::SetTitle(g_window);
 
             ImGui::CreateContext();
             ImGui_ImplWin32_Init(g_window);
