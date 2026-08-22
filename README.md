@@ -138,8 +138,8 @@ Each module lives in its own directory with a `.hpp`/`.cpp` pair and registers i
 
 ```bash
 # Clone
-git clone https://github.com/AnarchDevelopment/aegledll.git
-cd aegledll
+git clone https://github.com/AnarchDevelopment/AzyreDll.git
+cd AzyreDll
 
 # Configure (x64 Release)
 cmake -B build -A x64
