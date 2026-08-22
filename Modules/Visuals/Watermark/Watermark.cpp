@@ -147,7 +147,7 @@ void Watermark::Initialize(HudElement* hud) {
 bool Watermark::InitializeTextures() {
     if (g_watermarkTexture) return true;
     
-    HRSRC hRes = FindResource(g_hModule, MAKEINTRESOURCE(IDR_AEGLE_LOGO), RT_RCDATA);
+    HRSRC hRes = FindResource(g_hModule, MAKEINTRESOURCE(IDR_WATERMARK_IMAGE), RT_RCDATA);
     if (!hRes) return false;
     
     HGLOBAL hGlobal = LoadResource(g_hModule, hRes);
