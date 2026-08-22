@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="Assets/logo.png" alt="Azyre Logo" width="140" />
+<img src="Assets/_aeglewatermark.png" alt="Azyre Logo" width="140" />
 
 # Azyre Client
 
