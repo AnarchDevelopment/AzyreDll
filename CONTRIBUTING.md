@@ -1,63 +1,181 @@
-# Contributing to Aegleseeker
+# Contributing to Azyre Client
 
-First off, thank you for considering contributing to Aegleseeker! It's people like you that make Aegleseeker such a great project.
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square)](https://github.com/AnarchDevelopment/aegledll/pulls)
+[![C++20](https://img.shields.io/badge/C%2B%2B-20-00599C?style=flat-square&logo=c%2B%2B)](https://en.cppreference.com/w/cpp/20)
+[![Discord](https://img.shields.io/badge/Discord-nqtvyzer-5865F2?style=flat-square&logo=discord&logoColor=white)](https://discord.com/)
 
-## Where do I go from here?
+Thank you for your interest in contributing to **Azyre Client**!  
+This document outlines the guidelines for contributing code, reporting bugs, and requesting features.
 
-If you've noticed a bug or have a feature request, make sure to check the [Issues](../../issues) tab to see if someone else has already created a ticket. If not, go ahead and make one!
+---
 
-## Fork & create a branch
+## 📋 Table of Contents
 
-If this is something you think you can fix, then fork Aegleseeker and create a branch with a descriptive name.
+- [Code of Conduct](#code-of-conduct)
+- [Reporting Issues](#reporting-issues)
+- [Feature Requests](#feature-requests)
+- [Getting Started](#getting-started)
+- [Development Workflow](#development-workflow)
+- [Code Guidelines](#code-guidelines)
+- [Pull Request Process](#pull-request-process)
+- [Contact](#contact)
 
-A good branch name would be (where issue #325 is the ticket you're working on):
+---
 
-```sh
-git checkout -b 325-add-new-feature
+## 🤝 Code of Conduct
+
+Be respectful and constructive. This project follows a simple rule: treat others how you want to be treated.
+
+---
+
+## 🐛 Reporting Issues
+
+Before opening a new issue:
+
+1. Search [existing issues](../../issues) to avoid duplicates.
+2. Collect relevant information:
+   - OS version (Windows 10 / 11)
+   - Visual Studio / CMake version
+   - Build configuration (`Debug`/`Release`, `x64`)
+   - Steps to reproduce
+   - Crash logs or screenshots
+
+Then open a [new issue](../../issues/new) with a clear, descriptive title.
+
+---
+
+## 💡 Feature Requests
+
+Feature requests are welcome! Please:
+
+1. Check [existing issues](../../issues) and [PRs](../../pulls) first.
+2. Open an issue labeled `enhancement`.
+3. Describe the feature, its motivation, and how it fits Azyre's module architecture.
+
+---
+
+## 🚀 Getting Started
+
+### 1. Fork & Clone
+
+```bash
+git clone https://github.com/<your-username>/aegledll.git
+cd aegledll
 ```
 
-## Setup Environment
+### 2. Set Up the Remote
 
-Aegleseeker is built using Visual Studio. You will need:
-- Visual Studio (with C++ development workloads installed)
-- The project is configured via `AegleDllMSVC.slnx` and `AegleDllMSVC.vcxproj`. Open the solution file in Visual Studio to get started.
-
-## Implementation Guidelines
-
-- Ensure your code adheres to the existing style in the project.
-- Write clear, concise commit messages.
-- If you're adding a new feature, consider adding relevant tests or updating existing ones.
-
-## Make a Pull Request
-
-At this point, you should switch back to your master branch and make sure it's up to date with Aegleseeker's master branch:
-
-```sh
-git remote add upstream git@github.com:AnarchDevelopment/aegledll.git
-git checkout master
-git pull upstream master
+```bash
+git remote add upstream https://github.com/AnarchDevelopment/aegledll.git
 ```
 
-Then update your feature branch from your local copy of master, and push it!
+### 3. Build the Project
 
-```sh
-git checkout 325-add-new-feature
-git rebase master
-git push --set-upstream origin 325-add-new-feature
+**With CMake:**
+```bash
+cmake -B build -A x64
+cmake --build build --config Release
 ```
 
-Finally, go to GitHub and make a Pull Request!
+**With Visual Studio:**
+- Open `build/Azyre.slnx`
+- Select `Release | x64`
+- Build → Build Solution
 
-## Code Review
+---
 
-Once your pull request is opened, it will be reviewed by the maintainers. They may ask for changes or provide feedback. Please be open to constructive criticism and ready to make updates to your code.
+## 🔄 Development Workflow
 
-## Code Formatting
+### Branch Naming
 
-Please ensure your code follows standard C++ formatting guidelines and maintains consistency with the rest of the project's codebase. If the project uses a specific formatting tool (like `.clang-format`), make sure to format your code before committing.
+Use descriptive branch names:
 
-## Contact
+```
+<issue-number>-<short-description>
 
-If you have any questions, need help, or want to discuss ideas, you can reach out through the following channels:
-- **Discord**: nqtvyzer
-- **GitHub**: [iVyz3r](https://github.com/iVyz3r)
+# Examples:
+42-add-esp-module
+17-fix-motion-blur-crash
+```
+
+### Create Your Branch
+
+```bash
+git checkout -b 42-add-esp-module
+```
+
+### Keep Up to Date
+
+```bash
+git fetch upstream
+git rebase upstream/main
+```
+
+---
+
+## 📐 Code Guidelines
+
+### Architecture
+
+- Each module lives in its own directory under `Modules/<Category>/<ModuleName>/`
+- A module consists of a `.hpp` header and a `.cpp` implementation
+- Register the module in `Modules/ModuleManager.cpp`
+
+```
+Modules/
+└── Visuals/
+    └── MyNewModule/
+        ├── MyNewModule.hpp
+        └── MyNewModule.cpp
+```
+
+### Style
+
+| Rule | Detail |
+|---|---|
+| Standard | C++20 |
+| Naming | `PascalCase` for classes, `g_camelCase` for globals |
+| Includes | Relative paths preferred |
+| Comments | English only |
+| Line endings | LF (Unix) or CRLF (Windows) — consistent per file |
+
+### Do's and Don'ts
+
+✅ **Do:**
+- Keep modules self-contained
+- Use `ImGui` drawing calls only inside render callbacks
+- Guard platform-specific code with `#ifdef _WIN32`
+- Remove unused variables and includes
+
+❌ **Don't:**
+- Break existing module interfaces without discussion
+- Add external dependencies without prior approval
+- Commit generated files (`build/`, `.obj`, `.pdb`, etc.)
+- Include secrets, tokens, or credentials
+
+---
+
+## 📬 Pull Request Process
+
+1. Ensure your branch is rebased on `upstream/main`.
+2. Verify the project builds without errors:
+   ```bash
+   cmake --build build --config Release
+   ```
+3. Open a Pull Request with:
+   - **Clear title**: `[Module] Short description`
+   - **Description**: What the PR does and why
+   - **Related issue**: `Closes #<issue-number>` if applicable
+4. Respond to reviewer feedback promptly.
+
+PRs will be reviewed by maintainers. We may request changes before merging.
+
+---
+
+## 📞 Contact
+
+| Platform | Handle |
+|---|---|
+| GitHub | [@iVyz3r](https://github.com/iVyz3r) |
+| Discord | `nqtvyzer` |
+| Organization | [an4rch Development](https://anarchdevelopment.github.io/) |
