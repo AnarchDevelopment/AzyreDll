@@ -3,29 +3,124 @@ Under an4rch Development Public Source License 1.0
 */
 
 #include "WinRTTitle.hpp"
-#include "GitVersion.hpp"
+#include "../Assets/resource.h"
 
+#include <algorithm>
 #include <chrono>
 #include <string>
 #include <thread>
+#include <vector>
 
-// WinRT headers
+#include <winhttp.h>
+
 #include <winrt/base.h>
-#include <winrt/Windows.Foundation.h>
-#include <winrt/Windows.UI.ViewManagement.h>
 #include <winrt/Windows.ApplicationModel.Core.h>
 #include <winrt/Windows.UI.Core.h>
+#include <winrt/Windows.UI.ViewManagement.h>
+
+#pragma comment(lib, "winhttp.lib")
 
 namespace {
-    std::wstring BuildWindowTitle() {
-        std::wstring commit;
-        for (const char character : std::string(AZYRE_GIT_COMMIT)) {
-            commit += static_cast<wchar_t>(static_cast<unsigned char>(character));
-        }
-        return L"[git-" + commit + L"] Azyre Client - 1.0.9";
-    }
+    constexpr wchar_t kBaseWindowTitle[] = L"Azyre Client - 1.0.9";
     std::wstring s_title;
     HWND s_hwnd = nullptr;
+
+    std::wstring BuildWindowTitle(const std::string& commit) {
+        std::wstring wideCommit;
+        for (const char character : commit) {
+            wideCommit += static_cast<wchar_t>(static_cast<unsigned char>(character));
+        }
+        return L"[git-" + wideCommit + L"] " + kBaseWindowTitle;
+    }
+
+    std::string LoadGitHubToken() {
+        HMODULE module = nullptr;
+        if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
+                reinterpret_cast<LPCWSTR>(&LoadGitHubToken), &module)) {
+            return {};
+        }
+
+        HRSRC resource = FindResourceW(module, MAKEINTRESOURCEW(IDR_GITHUB_INI), RT_RCDATA);
+        HGLOBAL data = resource ? LoadResource(module, resource) : nullptr;
+        const DWORD size = resource ? SizeofResource(module, resource) : 0;
+        const char* content = data ? static_cast<const char*>(LockResource(data)) : nullptr;
+        if (!content || size == 0) return {};
+
+        const std::string ini(content, size);
+        const size_t key = ini.find("token=");
+        if (key == std::string::npos) return {};
+
+        const size_t start = key + 6;
+        const size_t end = ini.find_first_of("\r\n", start);
+        std::string token = ini.substr(start, end == std::string::npos ? std::string::npos : end - start);
+        const size_t first = token.find_first_not_of(" \t");
+        const size_t last = token.find_last_not_of(" \t");
+        if (first == std::string::npos) return {};
+        return token.substr(first, last - first + 1);
+    }
+
+    std::string FetchGitHubResponse(const std::string& token) {
+        HINTERNET session = WinHttpOpen(L"AzyreClient/1.0", WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
+            WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+        if (!session) return {};
+
+        DWORD timeout = 5000;
+        WinHttpSetOption(session, WINHTTP_OPTION_CONNECT_TIMEOUT, &timeout, sizeof(timeout));
+        WinHttpSetOption(session, WINHTTP_OPTION_SEND_TIMEOUT, &timeout, sizeof(timeout));
+        WinHttpSetOption(session, WINHTTP_OPTION_RECEIVE_TIMEOUT, &timeout, sizeof(timeout));
+
+        HINTERNET connection = WinHttpConnect(session, L"api.github.com", INTERNET_DEFAULT_HTTPS_PORT, 0);
+        HINTERNET request = connection ? WinHttpOpenRequest(connection, L"GET",
+            L"/repos/AnarchDevelopment/AzyreDll/commits?per_page=1", nullptr,
+            WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, WINHTTP_FLAG_SECURE) : nullptr;
+        std::string response;
+
+        if (request) {
+            std::wstring headers = L"Accept: application/vnd.github+json\r\nUser-Agent: AzyreClient\r\n";
+            if (!token.empty()) {
+                headers += L"Authorization: Bearer ";
+                for (const char character : token) {
+                    headers += static_cast<wchar_t>(static_cast<unsigned char>(character));
+                }
+                headers += L"\r\n";
+            }
+            WinHttpAddRequestHeaders(request, headers.c_str(),
+                static_cast<DWORD>(-1L), WINHTTP_ADDREQ_FLAG_ADD | WINHTTP_ADDREQ_FLAG_REPLACE);
+            if (WinHttpSendRequest(request, WINHTTP_NO_ADDITIONAL_HEADERS, 0,
+                    WINHTTP_NO_REQUEST_DATA, 0, 0, 0) && WinHttpReceiveResponse(request, nullptr)) {
+                DWORD available = 0;
+                while (WinHttpQueryDataAvailable(request, &available) && available > 0) {
+                    std::vector<char> chunk(available);
+                    DWORD downloaded = 0;
+                    if (!WinHttpReadData(request, chunk.data(), available, &downloaded) || downloaded == 0) break;
+                    response.append(chunk.data(), downloaded);
+                }
+            }
+            WinHttpCloseHandle(request);
+        }
+        if (connection) WinHttpCloseHandle(connection);
+        WinHttpCloseHandle(session);
+        return response;
+    }
+
+    std::string ExtractCommit(const std::string& response) {
+        const size_t key = response.find("\"sha\"");
+        if (key == std::string::npos) return {};
+        const size_t colon = response.find(':', key);
+        const size_t start = colon == std::string::npos ? std::string::npos : response.find('"', colon + 1);
+        const size_t end = start == std::string::npos ? std::string::npos : response.find('"', start + 1);
+        if (end == std::string::npos || end - start - 1 < 7) return {};
+        return response.substr(start + 1, 7);
+    }
+
+    std::string FetchLatestCommit() {
+        const std::string tokenCommit = ExtractCommit(FetchGitHubResponse(LoadGitHubToken()));
+        if (!tokenCommit.empty()) return tokenCommit;
+
+        // The commits endpoint is public; retry without a token if the embedded
+        // token is missing, expired, or rejected by GitHub.
+        return ExtractCommit(FetchGitHubResponse({}));
+    }
 
     struct WindowSearch {
         DWORD processId;
@@ -160,6 +255,11 @@ namespace {
         s_title = std::move(title);
         s_hwnd = hwnd;
 
+        const std::string latestCommit = FetchLatestCommit();
+        if (!latestCommit.empty()) {
+            s_title = BuildWindowTitle(latestCommit);
+        }
+
         ApplyTitle();
 
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
@@ -171,7 +271,7 @@ namespace {
 }
 
 void WinRTTitle::SetTitle(HWND hwnd) {
-    std::wstring titleCopy = BuildWindowTitle();
+    std::wstring titleCopy = BuildWindowTitle("unknown");
     s_title = titleCopy;
     s_hwnd = hwnd;
     ApplyViaWinRT();
