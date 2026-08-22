@@ -28,7 +28,11 @@
 #define IDR_FONT_POPPINS 127
 #define IDR_FONT_PLAYFAIR 128
 #define IDR_TITLE_ORIGINAL 129
-#define IDR_AEGLE_LOGO 130
 
 
-
+
+
+
+
+
+
