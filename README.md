@@ -25,7 +25,7 @@
 
 <div align="center">
   
-<img src="Assets/Preview.png" alt="Azyre Logo" width="140" />
+<img src="Assets/Preview.png" alt="Azyre Logo" width="600" />
 
 </div>
 
