@@ -23,6 +23,12 @@
 
 ## ✨ Overview
 
+<div align="center">
+  
+<img src="Assets/Preview.png" alt="Azyre Logo" width="140" />
+
+</div>
+
 **Azyre** is a high-performance C++20 DLL client that hooks into Minecraft's rendering pipeline via DirectX 11. It provides a comprehensive suite of modules — from combat assists to visual overlays — wrapped in a sleek, GPU-accelerated ImGui interface.
 
 | Layer | Technology |
