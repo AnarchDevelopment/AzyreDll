@@ -1105,14 +1105,16 @@ bool GUI::IsHudEditable() {
 }
 
 void GUI::UpdateAnimation(ULONGLONG now, float dt) {
-    // 📉 MENU ANIMATION - Enhanced Easing
+    dt = Animations::Clamp01(dt * 10.0f) * 0.1f;
     if (GUI::g_showMenu) {
-        GUI::g_menuAnim += 3.5f * dt;
+        GUI::g_menuAnim = Animations::Approach(GUI::g_menuAnim, 1.0f, dt, 3.0f);
     } else {
-        GUI::g_menuAnim -= 4.0f * dt;
+        GUI::g_menuAnim = Animations::Approach(GUI::g_menuAnim, 0.0f, dt, 18.0f);
     }
-    if (GUI::g_menuAnim > 1.0f) GUI::g_menuAnim = 1.0f;
-    if (GUI::g_menuAnim < 0.0f) GUI::g_menuAnim = 0.0f;
+    GUI::g_menuAnim = Animations::Clamp01(GUI::g_menuAnim);
+    if (!GUI::g_showMenu && GUI::g_menuAnim < 0.02f) {
+        GUI::g_menuAnim = 0.0f;
+    }
     
     // Tab change animation
     if (GUI::g_tabChangeTime > 0) {
@@ -1148,6 +1150,8 @@ void GUI::HandleMenuToggle() {
         Input::BlockGameInput();
         Hook::oClipCursor(NULL);
         g_wasInWorld = Input::IsInWorld();
+        g_tabChangeTime = GetTickCount64();
+        g_tabAnim = 0.0f;
         Input::DebugLogCursorState("toggle-open");
     } else {
         Input::UnblockGameInput();
@@ -1173,8 +1177,12 @@ void GUI::SyncMenuState() {
 }
 
 void GUI::RenderBackdrop(ID3D11Device* pDevice, ID3D11DeviceContext* pContext, IDXGISwapChain* pSwapChain, float screenWidth, float screenHeight) {
+    float menuOpacity = GUI::g_showMenu
+        ? Animations::EaseOutExpo(GUI::g_menuAnim)
+        : Animations::EaseInOutQuad(GUI::g_menuAnim);
+
     if (GUI::g_menuAnim > 0.001f && ClickGUI::g_bgStyle == 1) {
-        ClickGUI::RenderBlurBackground(pDevice, pContext, pSwapChain, screenWidth, screenHeight, GUI::g_menuAnim);
+        ClickGUI::RenderBlurBackground(pDevice, pContext, pSwapChain, screenWidth, screenHeight, menuOpacity);
     } else {
         // Region-scoped Mica blur behind the ArrayList HUD (skipped when the
         // full-screen menu blur already frosted the scene this frame).
@@ -1187,7 +1195,7 @@ void GUI::RenderBackdrop(ID3D11Device* pDevice, ID3D11DeviceContext* pContext, I
     if (GUI::g_menuAnim > 0.001f && g_menuWinSize.x > 1.0f && g_menuWinSize.y > 1.0f) {
         ClickGUI::RenderBlurShadow(pDevice, pContext, pSwapChain, screenWidth, screenHeight,
                                    g_menuWinPos.x, g_menuWinPos.y,
-                                   g_menuWinSize.x, g_menuWinSize.y, GUI::g_menuAnim);
+                                   g_menuWinSize.x, g_menuWinSize.y, menuOpacity);
     }
 }
 
@@ -1205,7 +1213,12 @@ void GUI::RenderMenu(float screenWidth, float screenHeight) {
         return;
     }
     
-    float e = Animations::EaseOutQuart(GUI::g_menuAnim);
+    float positionProgress = GUI::g_showMenu
+        ? Animations::EaseOutExpo(GUI::g_menuAnim)
+        : GUI::g_menuAnim;
+    float e = GUI::g_showMenu
+        ? positionProgress
+        : Animations::EaseInOutQuad(GUI::g_menuAnim);
     // Background: dark vignette behind the menu
     {
         ImDrawList* bd = ImGui::GetBackgroundDrawList();
@@ -1216,12 +1229,16 @@ void GUI::RenderMenu(float screenWidth, float screenHeight) {
     if (e > 0.01f) {
         ImGui::PushStyleVar(ImGuiStyleVar_Alpha, e);
 
-        // Scale animation
-        float sc = 0.94f + (0.06f * e);
+        // Slide the window vertically without changing its size.
+        float sc = 1.0f;
         ImVec2 baseSize = ImVec2(1060, 680);
         ImVec2 winSize = ImVec2(baseSize.x * sc, baseSize.y * sc);
         float shiftAmt = 110.0f * sc * GUI::g_ircShiftAnim;
-        ImVec2 winPos = ImVec2(screenWidth / 2 - winSize.x / 2 - shiftAmt, screenHeight / 2 - winSize.y / 2);
+        float verticalDirection = GUI::g_showMenu ? 1.0f : -1.0f;
+        float verticalDistance = GUI::g_showMenu ? 180.0f : 320.0f;
+        float verticalOffset = verticalDirection * verticalDistance * (1.0f - positionProgress);
+        ImVec2 winPos = ImVec2(screenWidth / 2 - winSize.x / 2 - shiftAmt,
+                       screenHeight / 2 - winSize.y / 2 + verticalOffset);
 
         // Publish the window rect so RenderBackdrop can regenerate the DX11 blur
         // shadow texture each frame (the old flat DrawShadow was replaced).

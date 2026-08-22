@@ -954,7 +954,12 @@ void ClickGUI::RenderMenu() {
 // Separated style rendering
 // ──────────────────────────────────────────────
 void ClickGUI::RenderSeparatedMenu(float screenWidth, float screenHeight) {
-    float e = Animations::EaseOutQuart(GUI::g_menuAnim);
+    float positionProgress = GUI::g_showMenu
+        ? Animations::EaseOutExpo(GUI::g_menuAnim)
+        : GUI::g_menuAnim;
+    float e = GUI::g_showMenu
+        ? positionProgress
+        : Animations::EaseInOutQuad(GUI::g_menuAnim);
 
     // Background (Normal or Blur handled via DX11 before ImGui frame, here just overlay)
     if (g_bgStyle == 0) {
@@ -976,7 +981,9 @@ void ClickGUI::RenderSeparatedMenu(float screenWidth, float screenHeight) {
     float spacing    = 20.0f;
     float totalWidth = 4.0f * colWidth + 3.0f * spacing;
     float startX     = (screenWidth - totalWidth) * 0.5f;
-    float slideY     = (1.0f - e) * 80.0f;
+    float slideDirection = GUI::g_showMenu ? 1.0f : -1.0f;
+    float slideDistance = GUI::g_showMenu ? 180.0f : 320.0f;
+    float slideY     = slideDirection * (1.0f - positionProgress) * slideDistance;
     float startY     = screenHeight * 0.15f + slideY;
 
     ImGui::PushStyleVar(ImGuiStyleVar_Alpha, e);
@@ -1685,7 +1692,12 @@ static void RenderRiseModulesList(const char* query, const char* categoryFilter,
 }
 
 void ClickGUI::RenderRiseMenu(float screenWidth, float screenHeight) {
-    float e = Animations::EaseOutQuart(GUI::g_menuAnim);
+    float positionProgress = GUI::g_showMenu
+        ? Animations::EaseOutExpo(GUI::g_menuAnim)
+        : GUI::g_menuAnim;
+    float e = GUI::g_showMenu
+        ? positionProgress
+        : Animations::EaseInOutQuad(GUI::g_menuAnim);
     ImGui::PushStyleVar(ImGuiStyleVar_Alpha, e);
     
     // Background blits
@@ -1701,11 +1713,15 @@ void ClickGUI::RenderRiseMenu(float screenWidth, float screenHeight) {
         GUI::RenderParticles(ImGui::GetBackgroundDrawList(), ImVec2(0, 0), ImVec2(screenWidth, screenHeight), e);
     }
     
-    // Scale animation
-    float sc = 0.94f + (0.06f * e);
+    // Slide animation without changing the window size.
+    float sc = 1.0f;
     ImVec2 baseSize = ImVec2(900, 600);
     ImVec2 winSize = ImVec2(baseSize.x * sc, baseSize.y * sc);
-    ImVec2 winPos = ImVec2(screenWidth / 2 - winSize.x / 2, screenHeight / 2 - winSize.y / 2);
+    float slideDirection = GUI::g_showMenu ? 1.0f : -1.0f;
+    float slideDistance = GUI::g_showMenu ? 180.0f : 320.0f;
+    ImVec2 winPos = ImVec2(screenWidth / 2 - winSize.x / 2,
+                           screenHeight / 2 - winSize.y / 2 +
+                           slideDirection * (1.0f - positionProgress) * slideDistance);
     
     ImGui::SetNextWindowSize(winSize, ImGuiCond_Always);
     ImGui::SetNextWindowPos(winPos, ImGuiCond_Always);
@@ -2289,7 +2305,12 @@ static void RenderLunarModulesList(const char* categoryFilter, const char* query
 }
 
 void ClickGUI::RenderLunarMenu(float screenWidth, float screenHeight) {
-    float e = Animations::EaseOutQuart(GUI::g_menuAnim);
+    float positionProgress = GUI::g_showMenu
+        ? Animations::EaseOutExpo(GUI::g_menuAnim)
+        : GUI::g_menuAnim;
+    float e = GUI::g_showMenu
+        ? positionProgress
+        : Animations::EaseInOutQuad(GUI::g_menuAnim);
     ImGui::PushStyleVar(ImGuiStyleVar_Alpha, e);
 
     // Background blits
@@ -2305,13 +2326,15 @@ void ClickGUI::RenderLunarMenu(float screenWidth, float screenHeight) {
         GUI::RenderParticles(ImGui::GetBackgroundDrawList(), ImVec2(0, 0), ImVec2(screenWidth, screenHeight), e);
     }
 
-    // Window entrance: back-overshoot scale + slide-up
-    float scBack = Animations::EaseOutBack(e);
-    float sc = 0.93f + (0.07f * scBack);
+    // Slide animation without changing the window size.
+    float sc = 1.0f;
     ImVec2 baseSize = ImVec2(900, 580);
     ImVec2 winSize = ImVec2(baseSize.x * sc, baseSize.y * sc);
+    float slideDirection = GUI::g_showMenu ? 1.0f : -1.0f;
+    float slideDistance = GUI::g_showMenu ? 180.0f : 320.0f;
     ImVec2 winPos = ImVec2(screenWidth / 2 - winSize.x / 2,
-                           screenHeight / 2 - winSize.y / 2 + (1.0f - e) * 26.0f * sc);
+                           screenHeight / 2 - winSize.y / 2 +
+                           slideDirection * (1.0f - positionProgress) * slideDistance);
 
     ImGui::SetNextWindowSize(winSize, ImGuiCond_Always);
     ImGui::SetNextWindowPos(winPos, ImGuiCond_Always);
