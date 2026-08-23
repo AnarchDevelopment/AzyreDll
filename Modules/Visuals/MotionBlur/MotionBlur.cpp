@@ -370,7 +370,8 @@ void MotionBlur::OnPresent(ID3D11Device* pDevice, ID3D11DeviceContext* pContext,
     } else if (g_blurType == "Real Motion Blur") {
         maxFrames = 8;
     } else {
-        // At least 6 frames so the trail is clearly visible even at low intensity
+        // Keep a short history: more samples increase cost and quickly wash out
+        // the image without a velocity buffer.
         maxFrames = max(6, (int)round(g_blurIntensity));
     }
 
@@ -415,18 +416,18 @@ void MotionBlur::RenderTrail(bool menuOpen) {
     // Per-type trail parameters. The newest history frame is the strongest and
     // older frames fade out smoothly, producing a continuous motion trail
     // instead of discrete backward ghosts.
-    float baseAlpha = 0.50f;
+    float baseAlpha = 0.52f;
     float decay     = 0.84f;
     bool  timeAware = false;
 
     if (g_blurType == "Average Pixel Blur") {
-        baseAlpha = 0.50f; decay = 0.84f;
+        baseAlpha = 0.52f; decay = 0.84f;
     } else if (g_blurType == "Ghost Frames") {
         baseAlpha = 0.40f; decay = 0.60f;
     } else if (g_blurType == "Time Aware Blur") {
-        timeAware = true; baseAlpha = 0.50f;
+        timeAware = true; baseAlpha = 0.52f;
     } else if (g_blurType == "Real Motion Blur") {
-        baseAlpha = 0.55f; decay = 0.78f;
+        baseAlpha = 0.58f; decay = 0.78f;
     } else { // V4
         baseAlpha = 0.50f; decay = 0.80f;
     }
@@ -444,7 +445,7 @@ void MotionBlur::RenderTrail(bool menuOpen) {
     }
 
     // Intensity scales the trail strength
-    float strength = fminf(1.15f, 0.65f + g_blurIntensity * 0.02f);
+    float strength = fminf(1.10f, 0.62f + g_blurIntensity * 0.018f);
 
     // Build normalized weights over the active range (sum == 1)
     std::vector<float> weights(n, 0.0f);

@@ -1211,6 +1211,12 @@ void GUI::RenderMenu(float screenWidth, float screenHeight) {
     } else if (ClickGUI::g_guiStyle == 3) {
         ClickGUI::RenderLunarMenu(screenWidth, screenHeight);
         return;
+    } else if (ClickGUI::g_guiStyle == 4) {
+        ClickGUI::RenderFigmaMenu(screenWidth, screenHeight);
+        return;
+    } else if (ClickGUI::g_guiStyle == 5) {
+        ClickGUI::RenderAuroraMenu(screenWidth, screenHeight);
+        return;
     }
     
     float positionProgress = GUI::g_showMenu

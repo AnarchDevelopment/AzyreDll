@@ -11,7 +11,7 @@ Under an4rch Development Public Source License 1.0
 class ClickGUI {
 public:
     static bool g_enabled;
-    static int g_guiStyle;        // 0 = Regular (Default), 1 = Separated, 2 = Rise, 3 = Lunar
+    static int g_guiStyle;        // 0 = Regular, 1 = Separated, 2 = Rise, 3 = Lunar, 4 = Figma, 5 = Aurora
     static bool g_showParticles;
     static float g_bgOpacity;
 
@@ -37,6 +37,12 @@ public:
 
     // Render Lunar Menu Layout
     static void RenderLunarMenu(float screenWidth, float screenHeight);
+
+    // Render Figma-inspired single-panel layout
+    static void RenderFigmaMenu(float screenWidth, float screenHeight);
+
+    // Render Aurora animated dashboard layout
+    static void RenderAuroraMenu(float screenWidth, float screenHeight);
 
     // Helper to render module buttons
     static void RenderModuleButton(const char* label, bool* enabledPtr, void (*toggleCallback)() = nullptr);

@@ -928,7 +928,7 @@ void ClickGUI::RenderMenu() {
     }
 
     if (GUI::BeginModuleSettings("ClickGUI", &g_enabled)) {
-        const char* styles[] = { "Regular", "Separated", "Rise", "Lunar" };
+        const char* styles[] = { "Regular", "Separated", "Rise", "Lunar", "Figma", "Aurora" };
         GUI::RenderCombo("GUI Style", &g_guiStyle, styles, IM_ARRAYSIZE(styles));
 
         const char* bgStyles[] = { "Normal Dark", "Mica Blur" };
@@ -948,6 +948,291 @@ void ClickGUI::RenderMenu() {
         }
         GUI::EndModuleSettings();
     }
+}
+
+// ──────────────────────────────────────────────
+// Aurora style rendering
+// ──────────────────────────────────────────────
+void ClickGUI::RenderAuroraMenu(float screenWidth, float screenHeight) {
+    static int selectedCategory = 0;
+    const float opacity = GUI::g_showMenu
+        ? Animations::EaseOutExpo(GUI::g_menuAnim)
+        : Animations::EaseInOutQuad(GUI::g_menuAnim);
+    const float progress = GUI::g_showMenu
+        ? Animations::EaseOutExpo(GUI::g_menuAnim)
+        : GUI::g_menuAnim;
+    const float width = screenWidth < 1080.0f ? screenWidth - 40.0f : 1040.0f;
+    const float height = screenHeight < 700.0f ? screenHeight - 40.0f : 650.0f;
+    const float direction = GUI::g_showMenu ? 1.0f : -1.0f;
+    const float offset = direction * (GUI::g_showMenu ? 170.0f : 300.0f) * (1.0f - progress);
+    const ImVec2 windowSize(width, height);
+    const ImVec2 windowPos((screenWidth - width) * 0.5f,
+                           (screenHeight - height) * 0.5f + offset);
+    const ImVec4 accent = GUI::g_colorAccent;
+    const float time = static_cast<float>(GetTickCount64()) * 0.001f;
+
+    ImGui::PushStyleVar(ImGuiStyleVar_Alpha, opacity);
+    ImGui::SetNextWindowSize(windowSize, ImGuiCond_Always);
+    ImGui::SetNextWindowPos(windowPos, ImGuiCond_Always);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 14.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.035f, 0.045f, 0.060f, 0.96f));
+    ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(accent.x, accent.y, accent.z, 0.22f));
+
+    if (ImGui::Begin("AuroraClickGUIWindow", nullptr,
+                     ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                     ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar)) {
+        ImDrawList* draw = ImGui::GetWindowDrawList();
+        const ImVec2 position = ImGui::GetWindowPos();
+        const ImVec2 size = ImGui::GetWindowSize();
+        const float sidebarWidth = 190.0f;
+
+        draw->AddRectFilled(position, ImVec2(position.x + sidebarWidth, position.y + size.y),
+            ImColor(0.025f, 0.033f, 0.045f, 0.98f), 14.0f, ImDrawFlags_RoundCornersLeft);
+        draw->AddLine(ImVec2(position.x + sidebarWidth, position.y + 18.0f),
+                      ImVec2(position.x + sidebarWidth, position.y + size.y - 18.0f),
+                      ImColor(accent.x, accent.y, accent.z, 0.20f), 1.0f);
+
+        ImGui::SetCursorPos(ImVec2(24.0f, 24.0f));
+        ImGui::PushFont(GUI::g_fontH2 ? GUI::g_fontH2 : ImGui::GetFont());
+        ImGui::TextColored(ImVec4(0.94f, 0.97f, 1.0f, 1.0f), "AURORA");
+        ImGui::PopFont();
+        ImGui::SetCursorPos(ImVec2(25.0f, 53.0f));
+        ImGui::TextColored(ImVec4(0.38f, 0.47f, 0.54f, 1.0f), "CONTROL CENTER");
+
+        const char* categories[] = { "Combat", "Movement", "Visuals", "Misc", "Terminal", "Info", "IRC Chat", "Config Market" };
+        for (int categoryIndex = 0; categoryIndex < 8; ++categoryIndex) {
+            const float itemY = 94.0f + categoryIndex * 42.0f;
+            ImGui::SetCursorPos(ImVec2(16.0f, itemY));
+            ImGui::PushID(categoryIndex);
+            if (ImGui::InvisibleButton("##aurora_category", ImVec2(158.0f, 34.0f))) {
+                selectedCategory = categoryIndex;
+            }
+            const bool active = selectedCategory == categoryIndex;
+            const ImVec2 itemMin = ImGui::GetItemRectMin();
+            const ImVec2 itemMax = ImGui::GetItemRectMax();
+            if (active) {
+                draw->AddRectFilled(itemMin, itemMax, ImColor(accent.x, accent.y, accent.z, 0.88f), 8.0f);
+                draw->AddCircleFilled(ImVec2(itemMin.x + 13.0f, itemMin.y + 17.0f), 3.0f,
+                    ImColor(0.04f, 0.06f, 0.08f, 1.0f));
+            } else {
+                draw->AddCircle(ImVec2(itemMin.x + 13.0f, itemMin.y + 17.0f), 4.0f,
+                    ImColor(0.35f, 0.43f, 0.49f, 0.9f), 16, 1.5f);
+            }
+            draw->AddText(ImVec2(itemMin.x + 29.0f, itemMin.y + 11.0f),
+                          active ? ImColor(0.04f, 0.06f, 0.08f, 1.0f) : ImColor(0.62f, 0.69f, 0.74f, 1.0f),
+                          categories[categoryIndex]);
+            ImGui::PopID();
+        }
+
+        draw->AddCircleFilled(ImVec2(position.x + 31.0f, position.y + size.y - 30.0f), 8.0f,
+            ImColor(accent.x, accent.y, accent.z, 0.85f));
+        ImGui::SetCursorPos(ImVec2(48.0f, size.y - 42.0f));
+        ImGui::TextColored(ImVec4(0.65f, 0.72f, 0.77f, 1.0f), "ONLINE");
+
+        ImGui::SetCursorPos(ImVec2(sidebarWidth + 30.0f, 25.0f));
+        ImGui::PushFont(GUI::g_fontH1 ? GUI::g_fontH1 : ImGui::GetFont());
+        ImGui::TextColored(ImVec4(0.91f, 0.95f, 0.98f, 1.0f), "%s", categories[selectedCategory]);
+        ImGui::PopFont();
+        ImGui::SetCursorPos(ImVec2(sidebarWidth + 32.0f, 58.0f));
+        ImGui::TextColored(ImVec4(0.42f, 0.51f, 0.57f, 1.0f), "Configure your active modules");
+
+        const float beamPosition = sidebarWidth + 30.0f +
+            (size.x - sidebarWidth - 60.0f) * (sinf(time * 0.7f) * 0.5f + 0.5f);
+        draw->AddLine(ImVec2(sidebarWidth + 30.0f + position.x, position.y + 82.0f),
+                      ImVec2(position.x + size.x - 30.0f, position.y + 82.0f),
+                      ImColor(accent.x, accent.y, accent.z, 0.15f), 1.0f);
+        draw->AddCircleFilled(ImVec2(position.x + beamPosition, position.y + 82.0f), 3.0f,
+            ImColor(accent.x, accent.y, accent.z, 0.9f));
+
+        ImGui::SetCursorPos(ImVec2(sidebarWidth + 30.0f, 102.0f));
+        ImGui::BeginChild("AuroraModuleList", ImVec2(size.x - sidebarWidth - 60.0f, size.y - 145.0f), false,
+                          ImGuiWindowFlags_NoScrollbar);
+        if (selectedCategory == 0) {
+            RenderModuleButton("Reach", &Reach::g_reachEnabled);
+            RenderModuleButton("Hitbox", &Hitbox::g_hitboxEnabled);
+        } else if (selectedCategory == 1) {
+            RenderModuleButton("Watermark", &Watermark::g_showWatermark);
+            RenderModuleButton("ArrayList", &ArrayList::g_enabled);
+            RenderModuleButton("Render Info", &RenderInfo::g_showRenderInfo);
+            RenderModuleButton("Keystrokes", &Keystrokes::g_showKeystrokes);
+            RenderModuleButton("CPS Counter", &CPSCounter::g_showCpsCounter);
+            RenderModuleButton("FPS Overlay", &FPSOverlay::g_showFpsOverlay);
+            RenderModuleButton("Ping Counter", &PingCounter::g_showPingCounter);
+            RenderModuleButton("Player Info", &PlayerInfo::g_showPlayerInfo);
+            RenderModuleButton("FullBright", &FullBright::g_fullBrightEnabled);
+            RenderModuleButton("MotionBlur", &MotionBlur::g_motionBlurEnabled);
+        } else if (selectedCategory == 2) {
+            RenderModuleButton("AutoSprint", &AutoSprint::g_autoSprintEnabled);
+            RenderModuleButton("Glide", &Glide::g_glideEnabled);
+            RenderModuleButton("Fly", &Fly::g_flyEnabled);
+            RenderModuleButton("Timer", &Timer::g_timerEnabled);
+        } else if (selectedCategory == 3) {
+            RenderModuleButton("UnlockFPS", &UnlockFPS::g_unlockFpsEnabled);
+            RenderModuleButton("AutoClicker", &AutoClicker::g_enabled);
+            RenderModuleButton("Anti-AFK", &AntiAFK::g_enabled);
+            RenderModuleButton("Screenshot", &Screenshot::g_enabled);
+        } else if (selectedCategory == 4) {
+            Terminal::RenderConsole();
+        } else if (selectedCategory == 5) {
+            Info::RenderMenu();
+        } else if (selectedCategory == 6) {
+            IRChat::RenderMenu();
+        } else {
+            GUI::RenderConfigMarket();
+        }
+        ImGui::EndChild();
+
+        ImGui::SetCursorPos(ImVec2(sidebarWidth + 30.0f, size.y - 31.0f));
+        ImGui::TextColored(ImVec4(0.34f, 0.43f, 0.49f, 1.0f), "Azyre / Aurora");
+        ImGui::SameLine(size.x - sidebarWidth - 120.0f);
+        ImGui::TextColored(ImVec4(accent.x, accent.y, accent.z, 0.75f), "SYSTEM READY");
+    }
+    ImGui::End();
+    ImGui::PopStyleColor(2);
+    ImGui::PopStyleVar(4);
+}
+
+// ──────────────────────────────────────────────
+// Figma style rendering
+// ──────────────────────────────────────────────
+void ClickGUI::RenderFigmaMenu(float screenWidth, float screenHeight) {
+    static int selectedCategory = 0;
+    const float opacity = GUI::g_showMenu
+        ? Animations::EaseOutExpo(GUI::g_menuAnim)
+        : Animations::EaseInOutQuad(GUI::g_menuAnim);
+    const float width = (screenWidth - 48.0f < 980.0f) ? screenWidth - 48.0f : 980.0f;
+    const float height = (screenHeight - 48.0f < 620.0f) ? screenHeight - 48.0f : 620.0f;
+    const float slideDirection = GUI::g_showMenu ? 1.0f : -1.0f;
+    const float slideDistance = GUI::g_showMenu ? 180.0f : 320.0f;
+    const float progress = GUI::g_showMenu
+        ? Animations::EaseOutExpo(GUI::g_menuAnim)
+        : GUI::g_menuAnim;
+    const ImVec2 windowSize(width, height);
+    const ImVec2 windowPos(
+        (screenWidth - width) * 0.5f,
+        (screenHeight - height) * 0.5f + slideDirection * (1.0f - progress) * slideDistance);
+
+    ImGui::PushStyleVar(ImGuiStyleVar_Alpha, opacity);
+    ImGui::SetNextWindowSize(windowSize, ImGuiCond_Always);
+    ImGui::SetNextWindowPos(windowPos, ImGuiCond_Always);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 4.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.08f, 0.11f, 0.13f, 0.86f));
+    ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.72f, 0.82f, 0.86f, 0.28f));
+
+    if (ImGui::Begin("FigmaClickGUIWindow", nullptr,
+                     ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                     ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar)) {
+        ImDrawList* draw = ImGui::GetWindowDrawList();
+        const ImVec2 pos = ImGui::GetWindowPos();
+        const ImVec2 size = ImGui::GetWindowSize();
+        const ImVec4 accent = GUI::g_colorAccent;
+
+        draw->AddRectFilled(pos, ImVec2(pos.x + size.x, pos.y + 58.0f),
+            ImColor(0.12f, 0.16f, 0.18f, 0.96f), 4.0f, ImDrawFlags_RoundCornersTop);
+        draw->AddLine(ImVec2(pos.x, pos.y + 58.0f), ImVec2(pos.x + size.x, pos.y + 58.0f),
+            ImColor(accent.x, accent.y, accent.z, 0.55f), 1.0f);
+
+        ImGui::SetCursorPos(ImVec2(18.0f, 13.0f));
+        ImGui::PushFont(GUI::g_fontH3 ? GUI::g_fontH3 : ImGui::GetFont());
+        ImGui::TextColored(ImVec4(0.95f, 0.97f, 0.98f, 1.0f), "AZYRE");
+        ImGui::PopFont();
+        ImGui::SameLine(0.0f, 10.0f);
+        ImGui::SetCursorPosY(22.0f);
+        ImGui::TextColored(ImVec4(0.56f, 0.64f, 0.67f, 1.0f), "FIGMA");
+
+        const char* categories[] = { "Combat", "Movement", "Visuals", "Misc", "Terminal", "Info", "IRC Chat", "Config Market" };
+        float tabX = 170.0f;
+        for (int i = 0; i < 8; ++i) {
+            ImGui::SameLine(tabX, 8.0f);
+            ImGui::SetCursorPosY(13.0f);
+            ImGui::PushID(i);
+            if (ImGui::InvisibleButton("##category", ImVec2(68.0f, 32.0f))) selectedCategory = i;
+            const bool active = selectedCategory == i;
+            const ImVec2 tabMin = ImGui::GetItemRectMin();
+            const ImVec2 tabMax = ImGui::GetItemRectMax();
+            if (active) {
+                draw->AddRectFilled(tabMin, tabMax, ImColor(accent.x, accent.y, accent.z, 0.88f), 3.0f);
+            }
+            const ImVec2 textSize = ImGui::CalcTextSize(categories[i]);
+            draw->AddText(ImVec2(tabMin.x + (68.0f - textSize.x) * 0.5f,
+                                 tabMin.y + (32.0f - textSize.y) * 0.5f),
+                          active ? ImColor(0.06f, 0.08f, 0.09f, 1.0f) : ImColor(0.62f, 0.69f, 0.72f, 1.0f),
+                          categories[i]);
+            ImGui::PopID();
+            tabX += 72.0f;
+        }
+
+        ImGui::SetCursorPos(ImVec2(18.0f, 76.0f));
+        ImGui::BeginChild("FigmaContent", ImVec2(size.x - 36.0f, size.y - 132.0f), false,
+                          ImGuiWindowFlags_NoScrollbar);
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8.0f, 5.0f));
+        ImGui::TextColored(ImVec4(0.92f, 0.95f, 0.96f, 1.0f), "%s", categories[selectedCategory]);
+        ImGui::SameLine();
+        ImGui::TextColored(ImVec4(0.45f, 0.54f, 0.57f, 1.0f), "modules");
+        ImGui::Separator();
+
+        if (selectedCategory == 0) {
+            RenderModuleButton("Reach", &Reach::g_reachEnabled);
+            RenderModuleButton("Hitbox", &Hitbox::g_hitboxEnabled);
+        } else if (selectedCategory == 1) {
+            RenderModuleButton("Watermark", &Watermark::g_showWatermark);
+            RenderModuleButton("ArrayList", &ArrayList::g_enabled);
+            RenderModuleButton("Render Info", &RenderInfo::g_showRenderInfo);
+            RenderModuleButton("Keystrokes", &Keystrokes::g_showKeystrokes);
+            RenderModuleButton("CPS Counter", &CPSCounter::g_showCpsCounter);
+            RenderModuleButton("FPS Overlay", &FPSOverlay::g_showFpsOverlay);
+            RenderModuleButton("Ping Counter", &PingCounter::g_showPingCounter);
+            RenderModuleButton("Player Info", &PlayerInfo::g_showPlayerInfo);
+            RenderModuleButton("FullBright", &FullBright::g_fullBrightEnabled);
+            RenderModuleButton("MotionBlur", &MotionBlur::g_motionBlurEnabled);
+        } else if (selectedCategory == 2) {
+            RenderModuleButton("AutoSprint", &AutoSprint::g_autoSprintEnabled);
+            RenderModuleButton("Glide", &Glide::g_glideEnabled);
+            RenderModuleButton("Fly", &Fly::g_flyEnabled);
+            RenderModuleButton("Timer", &Timer::g_timerEnabled);
+        } else if (selectedCategory == 3) {
+            RenderModuleButton("UnlockFPS", &UnlockFPS::g_unlockFpsEnabled);
+            RenderModuleButton("AutoClicker", &AutoClicker::g_enabled);
+            RenderModuleButton("Anti-AFK", &AntiAFK::g_enabled);
+            RenderModuleButton("Screenshot", &Screenshot::g_enabled);
+        } else if (selectedCategory == 4) {
+            Terminal::RenderConsole();
+        } else if (selectedCategory == 5) {
+            Info::RenderMenu();
+        } else if (selectedCategory == 6) {
+            IRChat::RenderMenu();
+        } else {
+            GUI::RenderConfigMarket();
+        }
+        ImGui::PopStyleVar();
+        ImGui::EndChild();
+
+        const float footerY = size.y - 42.0f;
+        draw->AddLine(ImVec2(pos.x + 18.0f, pos.y + footerY - 8.0f),
+                      ImVec2(pos.x + size.x - 18.0f, pos.y + footerY - 8.0f),
+                      ImColor(0.45f, 0.55f, 0.58f, 0.25f));
+        ImGui::SetCursorPos(ImVec2(20.0f, footerY));
+        ImGui::TextColored(ImVec4(0.48f, 0.57f, 0.60f, 1.0f), "THEME");
+        ImGui::SameLine(0.0f, 12.0f);
+        const ImVec4 swatches[] = {
+            ImVec4(0.92f, 0.92f, 0.90f, 1.0f), ImVec4(0.35f, 0.55f, 0.62f, 1.0f),
+            ImVec4(0.55f, 0.72f, 0.42f, 1.0f), ImVec4(0.72f, 0.45f, 0.62f, 1.0f)
+        };
+        for (int swatchIndex = 0; swatchIndex < 4; ++swatchIndex) {
+            ImGui::PushID(swatchIndex);
+            ImGui::ColorButton("##figma_swatch", swatches[swatchIndex], ImGuiColorEditFlags_NoTooltip, ImVec2(18.0f, 18.0f));
+            ImGui::PopID();
+            ImGui::SameLine(0.0f, 6.0f);
+        }
+        ImGui::TextColored(ImVec4(0.45f, 0.54f, 0.57f, 1.0f), "RMB: settings");
+    }
+    ImGui::End();
+    ImGui::PopStyleColor(2);
+    ImGui::PopStyleVar(4);
 }
 
 // ──────────────────────────────────────────────
