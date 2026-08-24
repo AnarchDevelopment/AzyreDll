@@ -120,7 +120,8 @@ void MotionBlur::RenderMenu() {
             "Ghost Frames",
             "Time Aware Blur",
             "Real Motion Blur",
-            "V4"
+            "V4",
+            "Adaptive Flow Blur"
         };
         if (GUI::RenderCombo("Blur Type##MB", &blurTypeIndex, blurTypes, IM_ARRAYSIZE(blurTypes))) {
             g_blurType = blurTypes[blurTypeIndex];
@@ -369,6 +370,8 @@ void MotionBlur::OnPresent(ID3D11Device* pDevice, ID3D11DeviceContext* pContext,
         maxFrames = (int)round(g_maxHistoryFrames);
     } else if (g_blurType == "Real Motion Blur") {
         maxFrames = 8;
+    } else if (g_blurType == "Adaptive Flow Blur") {
+        maxFrames = 10;
     } else {
         // Keep a short history: more samples increase cost and quickly wash out
         // the image without a velocity buffer.
@@ -419,6 +422,7 @@ void MotionBlur::RenderTrail(bool menuOpen) {
     float baseAlpha = 0.52f;
     float decay     = 0.84f;
     bool  timeAware = false;
+    bool  adaptiveFlow = false;
 
     if (g_blurType == "Average Pixel Blur") {
         baseAlpha = 0.52f; decay = 0.84f;
@@ -428,6 +432,8 @@ void MotionBlur::RenderTrail(bool menuOpen) {
         timeAware = true; baseAlpha = 0.52f;
     } else if (g_blurType == "Real Motion Blur") {
         baseAlpha = 0.58f; decay = 0.78f;
+    } else if (g_blurType == "Adaptive Flow Blur") {
+        adaptiveFlow = true; baseAlpha = 0.48f; decay = 0.86f;
     } else { // V4
         baseAlpha = 0.50f; decay = 0.80f;
     }
@@ -455,6 +461,11 @@ void MotionBlur::RenderTrail(bool menuOpen) {
         if (timeAware) {
             float age = currentTime - times[i];
             w = expf(-age / g_blurTimeConstant);
+        } else if (adaptiveFlow) {
+            const float age = static_cast<float>(n - 1 - i);
+            const float normalizedAge = n > 1 ? age / static_cast<float>(n - 1) : 0.0f;
+            const float recentWeight = 1.0f - normalizedAge;
+            w = 0.35f + recentWeight * recentWeight * 0.65f;
         } else {
             w = powf(decay, (float)(n - 1 - i));
         }

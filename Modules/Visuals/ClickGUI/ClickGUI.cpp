@@ -1545,9 +1545,9 @@ void ClickGUI::RenderModuleSettings(const char* name, float /*colWidth*/) {
             UnlockFPS::g_fpsLimit <= 0.0f ? "Unlimited" : "%.0f");
     } else if (strcmp(name, "MotionBlur") == 0) {
         static int blurIdx = 0;
-        static const char* types[] = {"Average Pixel Blur","Ghost Frames","Time Aware Blur","Real Motion Blur","V4"};
-        for (int k = 0; k < 5; ++k) if (MotionBlur::g_blurType == types[k]) blurIdx = k;
-        if (GUI::RenderCombo("Type##MB", &blurIdx, types, 5)) MotionBlur::g_blurType = types[blurIdx];
+        static const char* types[] = {"Average Pixel Blur","Ghost Frames","Time Aware Blur","Real Motion Blur","V4","Adaptive Flow Blur"};
+        for (int k = 0; k < 6; ++k) if (MotionBlur::g_blurType == types[k]) blurIdx = k;
+        if (GUI::RenderCombo("Type##MB", &blurIdx, types, 6)) MotionBlur::g_blurType = types[blurIdx];
         if (MotionBlur::g_blurType == "Time Aware Blur") {
             GUI::RenderSlider("Constant##MB", &MotionBlur::g_blurTimeConstant, 0.01f, 0.2f, "%.4f");
             GUI::RenderSlider("Max History##MB", &MotionBlur::g_maxHistoryFrames, 4.0f, 16.0f, "%.0f");

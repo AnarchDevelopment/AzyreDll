@@ -1133,6 +1133,19 @@ void GUI::UpdateAnimation(ULONGLONG now, float dt) {
     }
 }
 
+static void RestoreGameCursorLock(bool wasInWorld) {
+    if (!wasInWorld || !g_window || !IsWindow(g_window)) return;
+
+    RECT windowRect{};
+    if (GetWindowRect(g_window, &windowRect)) {
+        if (Hook::oClipCursor) {
+            Hook::oClipCursor(&windowRect);
+        } else {
+            ClipCursor(&windowRect);
+        }
+    }
+}
+
 void GUI::HandleMenuToggle() {
     if (!(GetAsyncKeyState(VK_INSERT) & 0x8000) || (GetTickCount64() - g_lastToggle) <= 400)
         return;
@@ -1155,8 +1168,10 @@ void GUI::HandleMenuToggle() {
         Input::DebugLogCursorState("toggle-open");
     } else {
         Input::UnblockGameInput();
-        if (g_wasInWorld)
+        if (g_wasInWorld) {
+            RestoreGameCursorLock(g_wasInWorld);
             Input::DebugLogCursorState("toggle-close");
+        }
     }
 }
 
@@ -1166,6 +1181,7 @@ void GUI::SyncMenuState() {
         ::g_showMenu = false;
         ClickGUI::g_enabled = false;
         Input::UnblockGameInput();
+        RestoreGameCursorLock(g_wasInWorld);
     }
 
     // Sync menu state if ClickGUI is disabled from settings
@@ -1173,6 +1189,7 @@ void GUI::SyncMenuState() {
         ::g_showMenu = false;
         GUI::g_showMenu = false;
         Input::UnblockGameInput();
+        RestoreGameCursorLock(g_wasInWorld);
     }
 }
 
