@@ -28,12 +28,30 @@ extern HMODULE g_hModule;
 bool  ClickGUI::g_enabled        = false;
 int   ClickGUI::g_guiStyle       = 0;
 bool  ClickGUI::g_showParticles  = true;
+bool  ClickGUI::g_showRiseBackground = true;
 float ClickGUI::g_bgOpacity      = 0.7f;
 int   ClickGUI::g_bgStyle        = 1;   // 0 = Normal dark, 1 = Mica Blur (default)
 float ClickGUI::g_blurRadius     = 2.5f;
 float ClickGUI::g_blurOpacity    = 0.25f;
 bool  ClickGUI::g_blurShadersReady = false;
+bool  ClickGUI::g_riseShaderReady = false;
 std::map<std::string, bool> ClickGUI::g_expandedModules;
+
+// DX11 Rise Background pipeline state
+ID3D11PixelShader*        ClickGUI::g_risePS          = nullptr;
+ID3D11VertexShader*       ClickGUI::g_riseVS          = nullptr;
+ID3D11InputLayout*        ClickGUI::g_riseIL          = nullptr;
+ID3D11Buffer*             ClickGUI::g_riseVB          = nullptr;
+ID3D11Buffer*             ClickGUI::g_riseCB          = nullptr;
+ID3D11SamplerState*       ClickGUI::g_riseSampler     = nullptr;
+ID3D11BlendState*         ClickGUI::g_riseBlendState  = nullptr;
+ID3D11DepthStencilState*  ClickGUI::g_riseDSS         = nullptr;
+ID3D11RasterizerState*    ClickGUI::g_riseRS          = nullptr;
+ID3D11Texture2D*          ClickGUI::g_riseTexture     = nullptr;
+ID3D11ShaderResourceView* ClickGUI::g_riseSRV         = nullptr;
+ID3D11RenderTargetView*   ClickGUI::g_riseRTV         = nullptr;
+UINT                      ClickGUI::g_riseTexW        = 0;
+UINT                      ClickGUI::g_riseTexH        = 0;
 
 // DX11 Mica blur pipeline
 ID3D11PixelShader*       ClickGUI::g_downscalePS   = nullptr;
@@ -81,6 +99,60 @@ UINT ClickGUI::g_shadowTexH = 0;
 // ──────────────────────────────────────────────
 // Inline HLSL sources (embedded, no .hlsl file at runtime)
 // ──────────────────────────────────────────────
+static const char* s_riseVsSrc = R"(
+struct VS_INPUT  { float3 Pos : POSITION; float2 Tex : TEXCOORD0; };
+struct VS_OUTPUT { float4 Pos : SV_POSITION; float2 Tex : TEXCOORD0; };
+VS_OUTPUT mainRiseVS(VS_INPUT input) {
+    VS_OUTPUT o;
+    o.Pos = float4(input.Pos, 1.0);
+    o.Tex = input.Tex;
+    return o;
+}
+)";
+
+static const char* s_risePsSrc = R"(
+cbuffer RiseParams : register(b0) {
+    float2 resolution;
+    float  time;
+    float  alpha;
+};
+
+struct VS_OUTPUT { float4 Pos : SV_POSITION; float2 Tex : TEXCOORD0; };
+
+float2 rot2D(float2 p, float a) {
+    float c = cos(a);
+    float s = sin(a);
+    return float2(p.x * c - p.y * s, p.x * s + p.y * c);
+}
+
+float map(float3 p, float t) {
+    p.xz = rot2D(p.xz, t * 0.4);
+    p.xy = rot2D(p.xy, t * 0.1);
+    float3 q = p * 2.0 + t;
+    float s = sin(t * 0.7);
+    return length(p + float3(s, s, s)) * log(length(p) + 1.0) + sin(q.x + sin(q.z + sin(q.y))) * 0.5 - 1.0;
+}
+
+float4 mainRisePS(VS_OUTPUT input) : SV_Target {
+    float2 fragCoord = float2(input.Tex.x * resolution.x, (1.0 - input.Tex.y) * resolution.y);
+    float2 a = fragCoord / resolution.y - float2(0.9, 0.5);
+    float3 cl = float3(0.0, 0.0, 0.0);
+    float d = 2.5;
+
+    [unroll]
+    for (int i = 0; i <= 5; i++) {
+        float3 p = float3(0.0, 0.0, 4.0) + normalize(float3(a, -1.0)) * d;
+        float rz = map(p, time);
+        float f = clamp((rz - map(p + float3(0.1, 0.1, 0.1), time)) * 0.5, -0.1, 1.0);
+        float3 l = float3(0.1, 0.3, 0.4) + float3(5.0, 2.5, 3.0) * f;
+        cl = cl * l + smoothstep(2.5, 0.0, rz) * 0.6 * l;
+        d += min(rz, 1.0);
+    }
+
+    return float4(cl, 1.0);
+}
+)";
+
 static const char* s_blurVsSrc = R"(
 struct VS_INPUT  { float3 Pos : POSITION; float2 Tex : TEXCOORD0; };
 struct VS_OUTPUT { float4 Pos : SV_POSITION; float2 Tex : TEXCOORD0; };
@@ -415,6 +487,205 @@ void ClickGUI::ShutdownBlurShaders() {
     g_workWidth = 0; g_workHeight = 0;
     g_shadowTexW = 0; g_shadowTexH = 0;
     g_blurShadersReady = false;
+    ShutdownRiseShader();
+}
+
+// ──────────────────────────────────────────────
+// Rise Background Shader (DirectX 11) for Regular ClickGUI
+// ──────────────────────────────────────────────
+void ClickGUI::InitializeRiseShader(ID3D11Device* pDevice) {
+    if (g_riseShaderReady || !pDevice) return;
+
+    ID3DBlob* vsBlob = nullptr;
+    if (!CompileBlurShader(s_riseVsSrc, "mainRiseVS", "vs_5_0", &vsBlob)) return;
+    pDevice->CreateVertexShader(vsBlob->GetBufferPointer(), vsBlob->GetBufferSize(), nullptr, &g_riseVS);
+
+    D3D11_INPUT_ELEMENT_DESC layout[] = {
+        { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0,                            D3D11_INPUT_PER_VERTEX_DATA, 0 },
+        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,    0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+    };
+    pDevice->CreateInputLayout(layout, 2, vsBlob->GetBufferPointer(), vsBlob->GetBufferSize(), &g_riseIL);
+    vsBlob->Release();
+
+    ID3DBlob* psBlob = nullptr;
+    if (CompileBlurShader(s_risePsSrc, "mainRisePS", "ps_5_0", &psBlob)) {
+        pDevice->CreatePixelShader(psBlob->GetBufferPointer(), psBlob->GetBufferSize(), nullptr, &g_risePS);
+        psBlob->Release();
+    }
+
+    if (!g_riseVS || !g_risePS || !g_riseIL) {
+        ShutdownRiseShader();
+        return;
+    }
+
+    struct Vtx { float x, y, z, u, v; };
+    Vtx verts[] = {
+        {-1, -1, 0,  0, 1},
+        {-1,  1, 0,  0, 0},
+        { 1, -1, 0,  1, 1},
+        { 1,  1, 0,  1, 0},
+    };
+    D3D11_BUFFER_DESC vbDesc = {};
+    vbDesc.ByteWidth      = sizeof(verts);
+    vbDesc.Usage          = D3D11_USAGE_IMMUTABLE;
+    vbDesc.BindFlags      = D3D11_BIND_VERTEX_BUFFER;
+    D3D11_SUBRESOURCE_DATA vbData = { verts };
+    pDevice->CreateBuffer(&vbDesc, &vbData, &g_riseVB);
+
+    D3D11_BUFFER_DESC cbDesc = {};
+    cbDesc.ByteWidth      = sizeof(float) * 4; // 16 bytes: float2 resolution, float time, float alpha
+    cbDesc.Usage          = D3D11_USAGE_DYNAMIC;
+    cbDesc.BindFlags      = D3D11_BIND_CONSTANT_BUFFER;
+    cbDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+    pDevice->CreateBuffer(&cbDesc, nullptr, &g_riseCB);
+
+    D3D11_SAMPLER_DESC sd = {};
+    sd.Filter         = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+    sd.AddressU = sd.AddressV = sd.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+    sd.MaxLOD = D3D11_FLOAT32_MAX;
+    pDevice->CreateSamplerState(&sd, &g_riseSampler);
+
+    D3D11_BLEND_DESC bd = {};
+    bd.RenderTarget[0].BlendEnable = FALSE;
+    bd.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+    pDevice->CreateBlendState(&bd, &g_riseBlendState);
+
+    D3D11_DEPTH_STENCIL_DESC dsd = {};
+    dsd.DepthEnable = FALSE;
+    pDevice->CreateDepthStencilState(&dsd, &g_riseDSS);
+
+    D3D11_RASTERIZER_DESC rd = {};
+    rd.FillMode = D3D11_FILL_SOLID;
+    rd.CullMode = D3D11_CULL_NONE;
+    pDevice->CreateRasterizerState(&rd, &g_riseRS);
+
+    if (!g_riseVB || !g_riseCB) {
+        ShutdownRiseShader();
+        return;
+    }
+
+    g_riseShaderReady = true;
+}
+
+void ClickGUI::ShutdownRiseShader() {
+    auto safe = [](auto*& p) { if (p) { p->Release(); p = nullptr; } };
+    safe(g_risePS); safe(g_riseVS); safe(g_riseIL); safe(g_riseVB); safe(g_riseCB);
+    safe(g_riseSampler); safe(g_riseBlendState); safe(g_riseDSS); safe(g_riseRS);
+    safe(g_riseTexture); safe(g_riseSRV); safe(g_riseRTV);
+    g_riseTexW = 0;
+    g_riseTexH = 0;
+    g_riseShaderReady = false;
+}
+
+void ClickGUI::RenderRiseBackground(ID3D11Device* pDevice, ID3D11DeviceContext* pContext,
+                                     float width, float height, float time, float alpha) {
+    if (!pDevice || !pContext) return;
+    if (width <= 1.0f || height <= 1.0f) return;
+
+    if (!g_riseShaderReady) {
+        InitializeRiseShader(pDevice);
+        if (!g_riseShaderReady) return;
+    }
+
+    UINT texW = (UINT)ceilf(width);
+    UINT texH = (UINT)ceilf(height);
+    if (texW < 1) texW = 1;
+    if (texH < 1) texH = 1;
+
+    if (!g_riseTexture || g_riseTexW != texW || g_riseTexH != texH) {
+        auto releaseTex = [&]() {
+            auto s = [](auto*& p) { if (p) { p->Release(); p = nullptr; } };
+            s(g_riseTexture); s(g_riseSRV); s(g_riseRTV);
+            g_riseTexW = 0; g_riseTexH = 0;
+        };
+        releaseTex();
+        if (!CreateWorkTexture(pDevice, texW, texH, DXGI_FORMAT_R8G8B8A8_UNORM, &g_riseTexture, &g_riseSRV, &g_riseRTV)) {
+            releaseTex();
+            return;
+        }
+        g_riseTexW = texW;
+        g_riseTexH = texH;
+    }
+
+    // Save current DX11 state
+    ID3D11RenderTargetView* oldRTV = nullptr;
+    ID3D11DepthStencilView* oldDSV = nullptr;
+    pContext->OMGetRenderTargets(1, &oldRTV, &oldDSV);
+
+    UINT oldStride, oldOffset;
+    ID3D11Buffer* oldVB = nullptr;
+    pContext->IAGetVertexBuffers(0, 1, &oldVB, &oldStride, &oldOffset);
+
+    ID3D11InputLayout* oldIL = nullptr; pContext->IAGetInputLayout(&oldIL);
+    D3D11_PRIMITIVE_TOPOLOGY oldTopo; pContext->IAGetPrimitiveTopology(&oldTopo);
+    ID3D11VertexShader* oldVS = nullptr; pContext->VSGetShader(&oldVS, nullptr, nullptr);
+    ID3D11PixelShader*  oldPS = nullptr; pContext->PSGetShader(&oldPS, nullptr, nullptr);
+    ID3D11Buffer* oldCB0 = nullptr;      pContext->PSGetConstantBuffers(0, 1, &oldCB0);
+    ID3D11SamplerState* oldSS = nullptr; pContext->PSGetSamplers(0, 1, &oldSS);
+    ID3D11ShaderResourceView* oldSRV = nullptr; pContext->PSGetShaderResources(0, 1, &oldSRV);
+    ID3D11BlendState* oldBS = nullptr; float oldBF[4]; UINT oldSM;
+    pContext->OMGetBlendState(&oldBS, oldBF, &oldSM);
+    ID3D11DepthStencilState* oldDSS = nullptr; UINT oldRef;
+    pContext->OMGetDepthStencilState(&oldDSS, &oldRef);
+    ID3D11RasterizerState* oldRS = nullptr; pContext->RSGetState(&oldRS);
+
+    UINT vpCount = 1; D3D11_VIEWPORT oldVP;
+    pContext->RSGetViewports(&vpCount, &oldVP);
+
+    // Update Rise CB
+    {
+        D3D11_MAPPED_SUBRESOURCE ms;
+        if (SUCCEEDED(pContext->Map(g_riseCB, 0, D3D11_MAP_WRITE_DISCARD, 0, &ms))) {
+            float* d = (float*)ms.pData;
+            d[0] = (float)texW;
+            d[1] = (float)texH;
+            d[2] = time;
+            d[3] = alpha;
+            pContext->Unmap(g_riseCB, 0);
+        }
+    }
+
+    // Set pipeline
+    UINT stride = sizeof(float) * 5, offset = 0;
+    pContext->IASetVertexBuffers(0, 1, &g_riseVB, &stride, &offset);
+    pContext->IASetInputLayout(g_riseIL);
+    pContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+    pContext->VSSetShader(g_riseVS, nullptr, 0);
+    pContext->PSSetShader(g_risePS, nullptr, 0);
+    pContext->PSSetConstantBuffers(0, 1, &g_riseCB);
+    pContext->PSSetSamplers(0, 1, &g_riseSampler);
+    pContext->OMSetBlendState(g_riseBlendState, nullptr, 0xFFFFFFFF);
+    pContext->OMSetDepthStencilState(g_riseDSS, 0);
+    pContext->RSSetState(g_riseRS);
+
+    D3D11_VIEWPORT vp = { 0.0f, 0.0f, (float)texW, (float)texH, 0.0f, 1.0f };
+    pContext->RSSetViewports(1, &vp);
+    pContext->OMSetRenderTargets(1, &g_riseRTV, nullptr);
+
+    ID3D11ShaderResourceView* nullSRV = nullptr;
+    pContext->PSSetShaderResources(0, 1, &nullSRV);
+
+    pContext->Draw(4, 0);
+
+    // Restore DX11 state
+    pContext->RSSetViewports(vpCount, &oldVP);
+    pContext->RSSetState(oldRS);
+    pContext->OMSetDepthStencilState(oldDSS, oldRef);
+    pContext->OMSetBlendState(oldBS, oldBF, oldSM);
+    pContext->PSSetShaderResources(0, 1, &oldSRV);
+    pContext->PSSetSamplers(0, 1, &oldSS);
+    pContext->PSSetConstantBuffers(0, 1, &oldCB0);
+    pContext->PSSetShader(oldPS, nullptr, 0);
+    pContext->VSSetShader(oldVS, nullptr, 0);
+    pContext->IASetPrimitiveTopology(oldTopo);
+    pContext->IASetInputLayout(oldIL);
+    pContext->IASetVertexBuffers(0, 1, &oldVB, &oldStride, &oldOffset);
+    pContext->OMSetRenderTargets(1, &oldRTV, oldDSV);
+
+    auto sr = [](auto* p) { if (p) p->Release(); };
+    sr(oldRTV); sr(oldDSV); sr(oldVB); sr(oldIL);
+    sr(oldVS); sr(oldPS); sr(oldCB0); sr(oldSS); sr(oldSRV);
+    sr(oldBS); sr(oldDSS); sr(oldRS);
 }
 
 // ──────────────────────────────────────────────
@@ -909,13 +1180,14 @@ void ClickGUI::RenderBlurShadow(ID3D11Device* pDevice, ID3D11DeviceContext* pCon
 // Module lifecycle
 // ──────────────────────────────────────────────
 void ClickGUI::Initialize() {
-    g_enabled       = false;
-    g_guiStyle      = 0;
-    g_showParticles = true;
-    g_bgOpacity     = 0.7f;
-    g_bgStyle       = 1;   // 1 = Mica Blur (default)
-    g_blurRadius    = 2.5f;
-    g_blurOpacity   = 0.25f;
+    g_enabled            = false;
+    g_guiStyle           = 0;
+    g_showParticles      = true;
+    g_showRiseBackground = true;
+    g_bgOpacity          = 0.7f;
+    g_bgStyle            = 1;   // 1 = Mica Blur (default)
+    g_blurRadius         = 2.5f;
+    g_blurOpacity        = 0.25f;
     g_expandedModules.clear();
 }
 
@@ -939,7 +1211,11 @@ void ClickGUI::RenderMenu() {
             GUI::RenderSlider("Blur Opacity##CG", &g_blurOpacity, 0.0f, 1.0f, "%.2f");
         }
 
-        GUI::RenderCustomSwitch("Plexus Background", &g_showParticles);
+        if (g_guiStyle == 0) {
+            GUI::RenderCustomSwitch("Rise Background", &g_showRiseBackground);
+        } else {
+            GUI::RenderCustomSwitch("Plexus Background", &g_showParticles);
+        }
 
         const char* themes[] = { "Aegle Classic", "Sakura Blossom", "Cyberpunk 2077", "Emerald Forest", "Deep Sea", "Legacy Pink" };
         int currentTheme = GUI::g_currentTheme;
@@ -1668,15 +1944,19 @@ void ClickGUI::RenderModuleSettings(const char* name, float /*colWidth*/) {
         ImGui::ColorEdit4("Name Color##PI", (float*)&PlayerInfo::g_nameColor, ImGuiColorEditFlags_NoInputs);
         ImGui::TextDisabled("Drag the HUD box in-game to reposition it.");
     } else if (strcmp(name, "ClickGUI") == 0) {
-        static const char* st[] = {"Regular","Separated","Rise","Lunar"};
-        GUI::RenderCombo("Style##CG", &ClickGUI::g_guiStyle, st, 4);
+        static const char* st[] = {"Regular","Separated","Rise","Lunar","Figma","Aurora"};
+        GUI::RenderCombo("Style##CG", &ClickGUI::g_guiStyle, st, 6);
         static const char* bg[] = {"Normal Dark","Mica Blur"};
         GUI::RenderCombo("Background##CG", &ClickGUI::g_bgStyle, bg, 2);
         if (ClickGUI::g_bgStyle == 1) {
             GUI::RenderSlider("Blur Radius##CG2",  &ClickGUI::g_blurRadius, 1.0f, 12.0f, "%.1f");
             GUI::RenderSlider("Blur Opacity##CG2", &ClickGUI::g_blurOpacity, 0.0f, 1.0f, "%.2f");
         }
-        GUI::RenderCustomSwitch("Particles##CG", &ClickGUI::g_showParticles);
+        if (ClickGUI::g_guiStyle == 0) {
+            GUI::RenderCustomSwitch("Rise Background##CG", &ClickGUI::g_showRiseBackground);
+        } else {
+            GUI::RenderCustomSwitch("Plexus Background##CG", &ClickGUI::g_showParticles);
+        }
         const char* th[] = {"Aegle Classic","Sakura Blossom","Cyberpunk 2077","Emerald Forest","Deep Sea","Legacy Pink"};
         int ct = GUI::g_currentTheme;
         if (GUI::RenderCombo("Theme##CG", &ct, th, 6)) GUI::ApplyThemePreset(ct);

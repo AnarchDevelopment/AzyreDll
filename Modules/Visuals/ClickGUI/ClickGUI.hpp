@@ -13,6 +13,7 @@ public:
     static bool g_enabled;
     static int g_guiStyle;        // 0 = Regular, 1 = Separated, 2 = Rise, 3 = Lunar, 4 = Figma, 5 = Aurora
     static bool g_showParticles;
+    static bool g_showRiseBackground;
     static float g_bgOpacity;
 
     // Background style: 0 = Normal (dark overlay), 1 = Mica Blur (default)
@@ -86,9 +87,37 @@ public:
     // image rect drawn in GUI::RenderMenu.
     static constexpr float kShadowMargin = 90.0f;
 
+    // --- Rise Background Shader (DirectX 11) for Regular ClickGUI ---
+    static void InitializeRiseShader(ID3D11Device* pDevice);
+    static void ShutdownRiseShader();
+    static void RenderRiseBackground(ID3D11Device* pDevice, ID3D11DeviceContext* pContext,
+                                     float width, float height, float time, float alpha);
+    static ID3D11ShaderResourceView* GetRiseSRV() { return g_riseSRV; }
+    static UINT GetRiseTexW() { return g_riseTexW; }
+    static UINT GetRiseTexH() { return g_riseTexH; }
+
     static bool g_blurShadersReady;
+    static bool g_riseShaderReady;
 
 private:
+    // DX11 Rise Background pipeline state
+    static ID3D11PixelShader*          g_risePS;
+    static ID3D11VertexShader*         g_riseVS;
+    static ID3D11InputLayout*          g_riseIL;
+    static ID3D11Buffer*               g_riseVB;
+    static ID3D11Buffer*               g_riseCB;
+    static ID3D11SamplerState*         g_riseSampler;
+    static ID3D11BlendState*           g_riseBlendState;
+    static ID3D11DepthStencilState*    g_riseDSS;
+    static ID3D11RasterizerState*      g_riseRS;
+
+    // Rise Background offscreen target
+    static ID3D11Texture2D*            g_riseTexture;
+    static ID3D11ShaderResourceView*   g_riseSRV;
+    static ID3D11RenderTargetView*     g_riseRTV;
+    static UINT                        g_riseTexW;
+    static UINT                        g_riseTexH;
+
     // DX11 Mica blur pipeline state
     static ID3D11PixelShader*          g_downscalePS;   // 4x1 box downsample pass
     static ID3D11PixelShader*          g_blurHPS;       // horizontal gaussian pass

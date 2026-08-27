@@ -1214,6 +1214,14 @@ void GUI::RenderBackdrop(ID3D11Device* pDevice, ID3D11DeviceContext* pContext, I
                                    g_menuWinPos.x, g_menuWinPos.y,
                                    g_menuWinSize.x, g_menuWinSize.y, menuOpacity);
     }
+
+    // Rise Background shader pass (DX11 offscreen texture for Regular mode)
+    if (GUI::g_menuAnim > 0.001f && ClickGUI::g_guiStyle == 0 && ClickGUI::g_showRiseBackground &&
+        g_menuWinSize.x > 1.0f && g_menuWinSize.y > 1.0f) {
+        static ULONGLONG s_riseStartTime = GetTickCount64();
+        float timeSec = (float)(GetTickCount64() - s_riseStartTime) / 1000.0f;
+        ClickGUI::RenderRiseBackground(pDevice, pContext, g_menuWinSize.x, g_menuWinSize.y, timeSec, menuOpacity);
+    }
 }
 
 void GUI::RenderMenu(float screenWidth, float screenHeight) {
@@ -1298,8 +1306,19 @@ void GUI::RenderMenu(float screenWidth, float screenHeight) {
             ImVec2 wPos = ImGui::GetWindowPos();
             ImVec2 wSize = ImGui::GetWindowSize();
             
-            // Render Plexus Background inside the window draw list
-            RenderParticles(ImGui::GetWindowDrawList(), wPos, wSize, e);
+            // Render Rise Background inside the window draw list
+            if (ClickGUI::g_showRiseBackground) {
+                if (ID3D11ShaderResourceView* riseSRV = ClickGUI::GetRiseSRV()) {
+                    ImGui::GetWindowDrawList()->AddImageRounded(
+                        (ImTextureID)riseSRV,
+                        wPos,
+                        ImVec2(wPos.x + wSize.x, wPos.y + wSize.y),
+                        ImVec2(0, 0), ImVec2(1, 1),
+                        IM_COL32(255, 255, 255, (int)(e * 255.0f)),
+                        16.0f * sc
+                    );
+                }
+            }
             
             // ── Header Bar ──
             ImGui::BeginChild("HeaderBar", ImVec2(0, 64.0f * sc), false, ImGuiWindowFlags_NoScrollbar);

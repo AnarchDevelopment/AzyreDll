@@ -489,6 +489,7 @@ nlohmann::json ConfigManager::CollectCurrentConfig() {
     config["Visuals"]["ClickGUI"]["enabled"] = ClickGUI::g_enabled;
     config["Visuals"]["ClickGUI"]["guiStyle"] = ClickGUI::g_guiStyle;
     config["Visuals"]["ClickGUI"]["showParticles"] = ClickGUI::g_showParticles;
+    config["Visuals"]["ClickGUI"]["showRiseBackground"] = ClickGUI::g_showRiseBackground;
     config["Visuals"]["ClickGUI"]["bgOpacity"] = ClickGUI::g_bgOpacity;
     config["Visuals"]["ClickGUI"]["bgStyle"] = ClickGUI::g_bgStyle;
     config["Visuals"]["ClickGUI"]["blurRadius"] = ClickGUI::g_blurRadius;
@@ -902,6 +903,7 @@ void ConfigManager::ApplyConfig(const nlohmann::json& config) {
             }
             if (cg.contains("guiStyle")) ClickGUI::g_guiStyle = cg["guiStyle"];
             if (cg.contains("showParticles")) ClickGUI::g_showParticles = cg["showParticles"];
+            if (cg.contains("showRiseBackground")) ClickGUI::g_showRiseBackground = cg["showRiseBackground"];
             if (cg.contains("bgOpacity")) ClickGUI::g_bgOpacity = cg["bgOpacity"];
             if (cg.contains("bgStyle")) ClickGUI::g_bgStyle = cg["bgStyle"];
             if (cg.contains("blurRadius")) ClickGUI::g_blurRadius = cg["blurRadius"];
