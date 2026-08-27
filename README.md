@@ -21,7 +21,7 @@
 
 ---
 
-## ✨ Overview
+## Overview
 
 <div align="center">
   
@@ -44,7 +44,7 @@
 
 ---
 
-## 🗂️ Project Structure
+## Project Structure
 
 ```
 Azyre/
@@ -83,7 +83,7 @@ Azyre/
 
 ---
 
-## 🧩 Module System
+## Module System
 
 Each module lives in its own directory with a `.hpp`/`.cpp` pair and registers itself through the `ModuleManager`.
 
@@ -93,7 +93,7 @@ Each module lives in its own directory with a `.hpp`/`.cpp` pair and registers i
 | **Hitbox** | Expands entity hitboxes for easier targeting |
 | **Reach** | Extends melee attack range |
 
-### 🏃 Movement
+### Movement
 | Module | Description |
 |---|---|
 | **AutoSprint** | Automatically maintains sprint state |
@@ -131,7 +131,7 @@ Each module lives in its own directory with a `.hpp`/`.cpp` pair and registers i
 
 ---
 
-## 🔨 Building
+## Building
 
 ### Prerequisites
 
@@ -164,7 +164,7 @@ Output: `build/Release/Azyre.dll`
 
 ---
 
-## ⚙️ Configuration
+## Configuration
 
 Configs are stored as JSON files and managed by `Config/ConfigManager`:
 
@@ -179,7 +179,7 @@ Configs are stored as JSON files and managed by `Config/ConfigManager`:
 
 ---
 
-## 📦 Dependencies
+## Dependencies
 
 All dependencies are **vendored** — no package manager needed.
 
@@ -194,14 +194,14 @@ All dependencies are **vendored** — no package manager needed.
 
 ---
 
-## 📄 License
+## License
 
 This project is licensed under the **an4rch Development Public Source License 1.0**.  
 See [LICENSE](LICENSE) for full terms.
 
 ---
 
-## 👤 Contact
+## Contact
 
 <div align="center">
 
