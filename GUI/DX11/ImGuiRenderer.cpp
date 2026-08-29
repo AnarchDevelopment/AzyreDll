@@ -1,4 +1,4 @@
-﻿/*
+/*
 Under an4rch Development Public Source License 1.0
 */
 
@@ -56,7 +56,7 @@ namespace ImGuiDX11 {
             HMODULE hModule = GetModuleHandleA(NULL);
             MODULEINFO mi;
             GetModuleInformation(GetCurrentProcess(), hModule, &mi, sizeof(mi));
-            Module::Initialize(g_gameBase, mi.SizeOfImage, &g_renderInfoHud, &g_watermarkHud, &g_keystrokesHud, &g_cpsHud, &g_fpsOverlayHud, &g_pingHud, &g_playerInfoHud);
+            Module::Initialize(g_gameBase, mi.SizeOfImage, &g_renderInfoHud, &g_watermarkHud, &g_keystrokesHud, &g_cpsHud, &g_fpsOverlayHud, &g_pingHud, &g_playerInfoHud, &g_mouseStrokesHud);
 
             Watermark::g_watermarkEnableTime = GetTickCount64();
             Watermark::g_watermarkAnim = 1.0f;

@@ -38,3 +38,4 @@ HudElement g_cpsHud = { ImVec2(500, 400), ImVec2(80, 30) };
 HudElement g_fpsOverlayHud = { ImVec2(10, 250), ImVec2(100, 35) };
 HudElement g_pingHud = { ImVec2(0, 0), ImVec2(130, 28) };
 HudElement g_playerInfoHud = { ImVec2(10, 330), ImVec2(260, 64) };
+HudElement g_mouseStrokesHud = { ImVec2(10, 420), ImVec2(75, 75) };

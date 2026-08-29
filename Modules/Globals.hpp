@@ -47,3 +47,4 @@ extern HudElement g_cpsHud;
 extern HudElement g_fpsOverlayHud;
 extern HudElement g_pingHud;
 extern HudElement g_playerInfoHud;
+extern HudElement g_mouseStrokesHud;

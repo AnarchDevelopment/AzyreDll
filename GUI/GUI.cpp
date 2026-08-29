@@ -1242,6 +1242,9 @@ void GUI::RenderMenu(float screenWidth, float screenHeight) {
     } else if (ClickGUI::g_guiStyle == 5) {
         ClickGUI::RenderAuroraMenu(screenWidth, screenHeight);
         return;
+    } else if (ClickGUI::g_guiStyle == 6) {
+        ClickGUI::RenderFlarialMenu(screenWidth, screenHeight);
+        return;
     }
     
     float positionProgress = GUI::g_showMenu
@@ -1368,7 +1371,7 @@ void GUI::RenderMenu(float screenWidth, float screenHeight) {
                 ImGui::SameLine(0, 10.0f * sc);
                 ImGui::SetCursorPosY(20.0f * sc);
                 ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.45f, 0.45f, 0.52f, 0.9f));
-                ImGui::Text("v1.0.9");
+                ImGui::Text("v1.1.0");
                 ImGui::PopStyleColor();
 
                 // ACTIVE status pill
@@ -1612,6 +1615,7 @@ void GUI::RenderMenu(float screenWidth, float screenHeight) {
                             RenderCard("v_fps", &FPSOverlay::RenderMenu, e);
                             RenderCard("v_ping", &PingCounter::RenderMenu, e);
                             RenderCard("v_pl", &PlayerInfo::RenderMenu, e);
+                            RenderCard("v_ms", &MouseStrokes::RenderMenu, e);
                             RenderCard("v_fb", &FullBright::RenderMenu, e);
                             RenderCard("v_mb", &MotionBlur::RenderMenu, e);
                             RenderCard("v_cg", &ClickGUI::RenderMenu, e);

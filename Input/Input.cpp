@@ -5,6 +5,7 @@ Under an4rch Development Public Source License 1.0
 #include "Input.hpp"
 #include "../Modules/Globals.hpp"
 #include "../Modules/Info/Info.hpp"
+#include "../Modules/Visuals/MouseStrokes/MouseStrokes.hpp"
 #include "../ImGui/backend/imgui_impl_win32.h"
 #include <vector>
 #include <cstdio>
@@ -580,6 +581,20 @@ LRESULT CALLBACK Input::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
     if (uMsg == WM_ACTIVATEAPP && wParam == TRUE) {
         // Force audio engine start when game regains focus
         Info::OnFocusGained();
+    }
+
+    if (uMsg == WM_INPUT) {
+        UINT dwSize = 0;
+        GetRawInputData((HRAWINPUT)lParam, RID_INPUT, NULL, &dwSize, sizeof(RAWINPUTHEADER));
+        if (dwSize > 0) {
+            std::vector<BYTE> lpb(dwSize);
+            if (GetRawInputData((HRAWINPUT)lParam, RID_INPUT, lpb.data(), &dwSize, sizeof(RAWINPUTHEADER)) == dwSize) {
+                RAWINPUT* raw = (RAWINPUT*)lpb.data();
+                if (raw->header.dwType == RIM_TYPEMOUSE) {
+                    MouseStrokes::OnRawMouseInput(raw->data.mouse.lLastX, raw->data.mouse.lLastY);
+                }
+            }
+        }
     }
 
     if (g_showMenu) {

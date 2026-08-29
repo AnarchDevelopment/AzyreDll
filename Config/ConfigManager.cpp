@@ -464,6 +464,45 @@ nlohmann::json ConfigManager::CollectCurrentConfig() {
         config["Visuals"]["PlayerInfo"]["position"]["y"] = PlayerInfo::g_playerInfoHud->pos.y;
     }
 
+    // MouseStrokes
+    config["Visuals"]["MouseStrokes"]["enabled"] = MouseStrokes::g_showMouseStrokes;
+    config["Visuals"]["MouseStrokes"]["uiScale"] = MouseStrokes::g_uiScale;
+    config["Visuals"]["MouseStrokes"]["boxSize"] = MouseStrokes::g_boxSize;
+    config["Visuals"]["MouseStrokes"]["rounding"] = MouseStrokes::g_rounding;
+    config["Visuals"]["MouseStrokes"]["dotRadius"] = MouseStrokes::g_dotRadius;
+    config["Visuals"]["MouseStrokes"]["sensitivity"] = MouseStrokes::g_sensitivity;
+    config["Visuals"]["MouseStrokes"]["decayRate"] = MouseStrokes::g_decayRate;
+    config["Visuals"]["MouseStrokes"]["smoothSpeed"] = MouseStrokes::g_smoothSpeed;
+    config["Visuals"]["MouseStrokes"]["showBackground"] = MouseStrokes::g_showBackground;
+    config["Visuals"]["MouseStrokes"]["showBorder"] = MouseStrokes::g_showBorder;
+    config["Visuals"]["MouseStrokes"]["borderWidth"] = MouseStrokes::g_borderWidth;
+    config["Visuals"]["MouseStrokes"]["showShadow"] = MouseStrokes::g_showShadow;
+    config["Visuals"]["MouseStrokes"]["showGlow"] = MouseStrokes::g_showGlow;
+    config["Visuals"]["MouseStrokes"]["showCrosshair"] = MouseStrokes::g_showCrosshair;
+    config["Visuals"]["MouseStrokes"]["clickEffect"] = MouseStrokes::g_clickEffect;
+    config["Visuals"]["MouseStrokes"]["colors"]["cursorColor"] =
+        nlohmann::json::array({MouseStrokes::g_cursorColor.x, MouseStrokes::g_cursorColor.y,
+                               MouseStrokes::g_cursorColor.z, MouseStrokes::g_cursorColor.w});
+    config["Visuals"]["MouseStrokes"]["colors"]["bgColor"] =
+        nlohmann::json::array({MouseStrokes::g_bgColor.x, MouseStrokes::g_bgColor.y,
+                               MouseStrokes::g_bgColor.z, MouseStrokes::g_bgColor.w});
+    config["Visuals"]["MouseStrokes"]["colors"]["borderColor"] =
+        nlohmann::json::array({MouseStrokes::g_borderColor.x, MouseStrokes::g_borderColor.y,
+                               MouseStrokes::g_borderColor.z, MouseStrokes::g_borderColor.w});
+    config["Visuals"]["MouseStrokes"]["colors"]["shadowColor"] =
+        nlohmann::json::array({MouseStrokes::g_shadowColor.x, MouseStrokes::g_shadowColor.y,
+                               MouseStrokes::g_shadowColor.z, MouseStrokes::g_shadowColor.w});
+    config["Visuals"]["MouseStrokes"]["colors"]["glowColor"] =
+        nlohmann::json::array({MouseStrokes::g_glowColor.x, MouseStrokes::g_glowColor.y,
+                               MouseStrokes::g_glowColor.z, MouseStrokes::g_glowColor.w});
+    config["Visuals"]["MouseStrokes"]["colors"]["clickColor"] =
+        nlohmann::json::array({MouseStrokes::g_clickColor.x, MouseStrokes::g_clickColor.y,
+                               MouseStrokes::g_clickColor.z, MouseStrokes::g_clickColor.w});
+    if (MouseStrokes::g_mouseStrokesHud) {
+        config["Visuals"]["MouseStrokes"]["position"]["x"] = MouseStrokes::g_mouseStrokesHud->pos.x;
+        config["Visuals"]["MouseStrokes"]["position"]["y"] = MouseStrokes::g_mouseStrokesHud->pos.y;
+    }
+
     config["Misc"]["UnlockFPS"]["enabled"] = UnlockFPS::g_unlockFpsEnabled;
     config["Misc"]["UnlockFPS"]["fpsLimit"] = UnlockFPS::g_fpsLimit;
     config["Misc"]["UnlockFPS"]["lowLatency"] = UnlockFPS::g_lowLatency;
@@ -892,6 +931,44 @@ void ConfigManager::ApplyConfig(const nlohmann::json& config) {
             if (pi.contains("position") && PlayerInfo::g_playerInfoHud) {
                 PlayerInfo::g_playerInfoHud->pos.x = pi["position"]["x"];
                 PlayerInfo::g_playerInfoHud->pos.y = pi["position"]["y"];
+            }
+        }
+        // MouseStrokes
+        if (visuals.contains("MouseStrokes")) {
+            auto& ms = visuals["MouseStrokes"];
+            if (ms.contains("enabled")) MouseStrokes::g_showMouseStrokes = ms["enabled"];
+            if (ms.contains("uiScale")) MouseStrokes::g_uiScale = ms["uiScale"];
+            if (ms.contains("boxSize")) MouseStrokes::g_boxSize = ms["boxSize"];
+            if (ms.contains("rounding")) MouseStrokes::g_rounding = ms["rounding"];
+            if (ms.contains("dotRadius")) MouseStrokes::g_dotRadius = ms["dotRadius"];
+            if (ms.contains("sensitivity")) MouseStrokes::g_sensitivity = ms["sensitivity"];
+            if (ms.contains("decayRate")) MouseStrokes::g_decayRate = ms["decayRate"];
+            if (ms.contains("smoothSpeed")) MouseStrokes::g_smoothSpeed = ms["smoothSpeed"];
+            if (ms.contains("showBackground")) MouseStrokes::g_showBackground = ms["showBackground"];
+            if (ms.contains("showBorder")) MouseStrokes::g_showBorder = ms["showBorder"];
+            if (ms.contains("borderWidth")) MouseStrokes::g_borderWidth = ms["borderWidth"];
+            if (ms.contains("showShadow")) MouseStrokes::g_showShadow = ms["showShadow"];
+            if (ms.contains("showGlow")) MouseStrokes::g_showGlow = ms["showGlow"];
+            if (ms.contains("showCrosshair")) MouseStrokes::g_showCrosshair = ms["showCrosshair"];
+            if (ms.contains("clickEffect")) MouseStrokes::g_clickEffect = ms["clickEffect"];
+            if (ms.contains("colors")) {
+                auto& c = ms["colors"];
+                if (c.contains("cursorColor") && c["cursorColor"].size() == 4)
+                    MouseStrokes::g_cursorColor = ImVec4(c["cursorColor"][0], c["cursorColor"][1], c["cursorColor"][2], c["cursorColor"][3]);
+                if (c.contains("bgColor") && c["bgColor"].size() == 4)
+                    MouseStrokes::g_bgColor = ImVec4(c["bgColor"][0], c["bgColor"][1], c["bgColor"][2], c["bgColor"][3]);
+                if (c.contains("borderColor") && c["borderColor"].size() == 4)
+                    MouseStrokes::g_borderColor = ImVec4(c["borderColor"][0], c["borderColor"][1], c["borderColor"][2], c["borderColor"][3]);
+                if (c.contains("shadowColor") && c["shadowColor"].size() == 4)
+                    MouseStrokes::g_shadowColor = ImVec4(c["shadowColor"][0], c["shadowColor"][1], c["shadowColor"][2], c["shadowColor"][3]);
+                if (c.contains("glowColor") && c["glowColor"].size() == 4)
+                    MouseStrokes::g_glowColor = ImVec4(c["glowColor"][0], c["glowColor"][1], c["glowColor"][2], c["glowColor"][3]);
+                if (c.contains("clickColor") && c["clickColor"].size() == 4)
+                    MouseStrokes::g_clickColor = ImVec4(c["clickColor"][0], c["clickColor"][1], c["clickColor"][2], c["clickColor"][3]);
+            }
+            if (ms.contains("position") && MouseStrokes::g_mouseStrokesHud) {
+                MouseStrokes::g_mouseStrokesHud->pos.x = ms["position"]["x"];
+                MouseStrokes::g_mouseStrokesHud->pos.y = ms["position"]["y"];
             }
         }
         if (visuals.contains("ClickGUI")) {

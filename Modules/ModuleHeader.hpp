@@ -19,6 +19,7 @@ Under an4rch Development Public Source License 1.0
 #include "Visuals/FPSOverlay/FPSOverlay.hpp"
 #include "Visuals/PingCounter/PingCounter.hpp"
 #include "Visuals/PlayerInfo/PlayerInfo.hpp"
+#include "Visuals/MouseStrokes/MouseStrokes.hpp"
 #include "Misc/UnlockFPS/UnlockFPS.hpp"
 #include "Misc/AutoClicker/AutoClicker.hpp"
 #include "Misc/AntiAFK/AntiAFK.hpp"

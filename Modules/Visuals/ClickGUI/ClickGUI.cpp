@@ -1200,7 +1200,7 @@ void ClickGUI::RenderMenu() {
     }
 
     if (GUI::BeginModuleSettings("ClickGUI", &g_enabled)) {
-        const char* styles[] = { "Regular", "Separated", "Rise", "Lunar", "Figma", "Aurora" };
+        const char* styles[] = { "Regular", "Separated", "Rise", "Lunar", "Figma", "Aurora", "Flarial" };
         GUI::RenderCombo("GUI Style", &g_guiStyle, styles, IM_ARRAYSIZE(styles));
 
         const char* bgStyles[] = { "Normal Dark", "Mica Blur" };
@@ -1337,6 +1337,7 @@ void ClickGUI::RenderAuroraMenu(float screenWidth, float screenHeight) {
             RenderModuleButton("FPS Overlay", &FPSOverlay::g_showFpsOverlay);
             RenderModuleButton("Ping Counter", &PingCounter::g_showPingCounter);
             RenderModuleButton("Player Info", &PlayerInfo::g_showPlayerInfo);
+            RenderModuleButton("MouseStrokes", &MouseStrokes::g_showMouseStrokes);
             RenderModuleButton("FullBright", &FullBright::g_fullBrightEnabled);
             RenderModuleButton("MotionBlur", &MotionBlur::g_motionBlurEnabled);
         } else if (selectedCategory == 2) {
@@ -1463,6 +1464,7 @@ void ClickGUI::RenderFigmaMenu(float screenWidth, float screenHeight) {
             RenderModuleButton("FPS Overlay", &FPSOverlay::g_showFpsOverlay);
             RenderModuleButton("Ping Counter", &PingCounter::g_showPingCounter);
             RenderModuleButton("Player Info", &PlayerInfo::g_showPlayerInfo);
+            RenderModuleButton("MouseStrokes", &MouseStrokes::g_showMouseStrokes);
             RenderModuleButton("FullBright", &FullBright::g_fullBrightEnabled);
             RenderModuleButton("MotionBlur", &MotionBlur::g_motionBlurEnabled);
         } else if (selectedCategory == 2) {
@@ -1567,6 +1569,15 @@ void ClickGUI::RenderSeparatedMenu(float screenWidth, float screenHeight) {
                 FPSOverlay::g_fpsOverlayEnableTime  = 0;
             }
         }
+        static void toggleMouseStrokes() {
+            if (MouseStrokes::g_showMouseStrokes) {
+                MouseStrokes::g_mouseStrokesEnableTime  = GetTickCount64();
+                MouseStrokes::g_mouseStrokesDisableTime = 0;
+            } else {
+                MouseStrokes::g_mouseStrokesDisableTime = GetTickCount64();
+                MouseStrokes::g_mouseStrokesEnableTime  = 0;
+            }
+        }
         static void toggleClickGUI() { g_showMenu = ClickGUI::g_enabled; GUI::g_showMenu = g_showMenu; }
     };
 
@@ -1631,6 +1642,7 @@ void ClickGUI::RenderSeparatedMenu(float screenWidth, float screenHeight) {
                 RenderModuleButton("FPS Overlay", &FPSOverlay::g_showFpsOverlay, Toggles::toggleFPSOverlay);
                 RenderModuleButton("Ping Counter",&PingCounter::g_showPingCounter);
                 RenderModuleButton("Player Info", &PlayerInfo::g_showPlayerInfo);
+                RenderModuleButton("MouseStrokes", &MouseStrokes::g_showMouseStrokes, Toggles::toggleMouseStrokes);
                 RenderModuleButton("FullBright",  &FullBright::g_fullBrightEnabled, Toggles::toggleFullBright);
                 RenderModuleButton("MotionBlur",  &MotionBlur::g_motionBlurEnabled);
                 RenderModuleButton("ClickGUI",    &ClickGUI::g_enabled, Toggles::toggleClickGUI);
@@ -1668,7 +1680,7 @@ static bool ModuleHasSettings(const char* name) {
            strcmp(name, "FPS Overlay") == 0 || strcmp(name, "Ping Counter") == 0 ||
            strcmp(name, "ClickGUI") == 0 || strcmp(name, "AutoClicker") == 0 ||
            strcmp(name, "Anti-AFK") == 0 || strcmp(name, "Screenshot") == 0 ||
-           strcmp(name, "Player Info") == 0;
+           strcmp(name, "Player Info") == 0 || strcmp(name, "MouseStrokes") == 0;
 }
 
 void ClickGUI::RenderModuleButton(const char* label, bool* enabledPtr, void (*toggleCallback)()) {
@@ -1943,9 +1955,26 @@ void ClickGUI::RenderModuleSettings(const char* name, float /*colWidth*/) {
         }
         ImGui::ColorEdit4("Name Color##PI", (float*)&PlayerInfo::g_nameColor, ImGuiColorEditFlags_NoInputs);
         ImGui::TextDisabled("Drag the HUD box in-game to reposition it.");
+    } else if (strcmp(name, "MouseStrokes") == 0) {
+        GUI::RenderSlider("Scale##MS2", &MouseStrokes::g_uiScale, 0.5f, 2.5f, "%.2f");
+        GUI::RenderSlider("Box Size##MS2", &MouseStrokes::g_boxSize, 40.0f, 160.0f, "%.0f px");
+        GUI::RenderSlider("Dot Radius##MS2", &MouseStrokes::g_dotRadius, 2.0f, 10.0f, "%.1f");
+        GUI::RenderSlider("Sensitivity##MS2", &MouseStrokes::g_sensitivity, 0.5f, 8.0f, "%.2f");
+        ImGui::ColorEdit4("Cursor Color##MS2", (float*)&MouseStrokes::g_cursorColor, ImGuiColorEditFlags_NoInputs);
+        GUI::RenderCustomSwitch("Show Bg##MS2", &MouseStrokes::g_showBackground);
+        if (MouseStrokes::g_showBackground) {
+            ImGui::ColorEdit4("Bg Color##MS2", (float*)&MouseStrokes::g_bgColor, ImGuiColorEditFlags_NoInputs);
+        }
+        GUI::RenderCustomSwitch("Border##MS2", &MouseStrokes::g_showBorder);
+        if (MouseStrokes::g_showBorder) {
+            ImGui::ColorEdit4("Border Color##MS2", (float*)&MouseStrokes::g_borderColor, ImGuiColorEditFlags_NoInputs);
+        }
+        GUI::RenderCustomSwitch("Shadow##MS2", &MouseStrokes::g_showShadow);
+        GUI::RenderCustomSwitch("Crosshair##MS2", &MouseStrokes::g_showCrosshair);
+        GUI::RenderCustomSwitch("Click Effect##MS2", &MouseStrokes::g_clickEffect);
     } else if (strcmp(name, "ClickGUI") == 0) {
-        static const char* st[] = {"Regular","Separated","Rise","Lunar","Figma","Aurora"};
-        GUI::RenderCombo("Style##CG", &ClickGUI::g_guiStyle, st, 6);
+        static const char* st[] = {"Regular","Separated","Rise","Lunar","Figma","Aurora","Flarial"};
+        GUI::RenderCombo("Style##CG", &ClickGUI::g_guiStyle, st, 7);
         static const char* bg[] = {"Normal Dark","Mica Blur"};
         GUI::RenderCombo("Background##CG", &ClickGUI::g_bgStyle, bg, 2);
         if (ClickGUI::g_bgStyle == 1) {
@@ -2066,6 +2095,15 @@ static void RenderRiseModulesList(const char* query, const char* categoryFilter,
                 FPSOverlay::g_fpsOverlayEnableTime  = 0;
             }
         }
+        static void toggleMouseStrokes() {
+            if (MouseStrokes::g_showMouseStrokes) {
+                MouseStrokes::g_mouseStrokesEnableTime  = GetTickCount64();
+                MouseStrokes::g_mouseStrokesDisableTime = 0;
+            } else {
+                MouseStrokes::g_mouseStrokesDisableTime = GetTickCount64();
+                MouseStrokes::g_mouseStrokesEnableTime  = 0;
+            }
+        }
         static void toggleClickGUI() { g_showMenu = ClickGUI::g_enabled; GUI::g_showMenu = g_showMenu; }
     };
 
@@ -2090,6 +2128,7 @@ static void RenderRiseModulesList(const char* query, const char* categoryFilter,
         { "FPS Overlay", "Render", "Shows frames-per-second count with optional graphs.", &FPSOverlay::g_showFpsOverlay, LocalToggles::toggleFPSOverlay },
         { "Ping Counter", "Render", "Shows network latency/ping on HUD.", &PingCounter::g_showPingCounter, nullptr },
         { "Player Info", "Render", "Displays your skin head and nickname on HUD.", &PlayerInfo::g_showPlayerInfo, nullptr },
+        { "MouseStrokes", "Render", "Visualizes your camera and mouse movement with live trail.", &MouseStrokes::g_showMouseStrokes, LocalToggles::toggleMouseStrokes },
         { "FullBright", "Render", "Forces light levels to maximum brightness.", &FullBright::g_fullBrightEnabled, LocalToggles::toggleFullBright },
         { "MotionBlur", "Render", "Adds a realistic screen motion blur effect.", &MotionBlur::g_motionBlurEnabled, nullptr },
         { "ClickGUI", "Render", "Toggles and configures this ClickGUI overlay.", &ClickGUI::g_enabled, LocalToggles::toggleClickGUI },
@@ -2159,6 +2198,7 @@ static void RenderRiseModulesList(const char* query, const char* categoryFilter,
             else if (strcmp(module.name.c_str(), "Ping Counter") == 0) capH = 110.0f * sc;
             else if (strcmp(module.name.c_str(), "AutoClicker") == 0)  capH = 135.0f * sc;
             else if (strcmp(module.name.c_str(), "Anti-AFK") == 0)     capH = 135.0f * sc;
+            else if (strcmp(module.name.c_str(), "MouseStrokes") == 0) capH = 180.0f * sc;
             else if (strcmp(module.name.c_str(), "Screenshot") == 0)   capH = 110.0f * sc;
             float natH = measuredH[module.name];
             if (natH <= 0.0f) natH = capH;
@@ -2323,7 +2363,7 @@ void ClickGUI::RenderRiseMenu(float screenWidth, float screenHeight) {
         ImGui::PopFont();
         
         ImGui::PushFont(GUI::g_fontDefault);
-        draw->AddText(wPos + ImVec2(30.0f * sc + riseSize.x + 4.0f * sc, 25.0f * sc + 4.0f * sc), accentCol, "1.0.9");
+        draw->AddText(wPos + ImVec2(30.0f * sc + riseSize.x + 4.0f * sc, 25.0f * sc + 4.0f * sc), accentCol, "1.1.0");
         ImGui::PopFont();
         
         // Sidebar Navigation (10 tabs)
@@ -2551,7 +2591,7 @@ void ClickGUI::RenderRiseMenu(float screenWidth, float screenHeight) {
                                                     (GUI::g_currentTheme == 2) ? "Cyberpunk 2077" :
                                                     (GUI::g_currentTheme == 3) ? "Emerald Forest" :
                                                     (GUI::g_currentTheme == 4) ? "Deep Sea" : "Legacy Pink");
-                    ImGui::Text("Client Version: Azyre v1.0.9");
+                    ImGui::Text("Client Version: Azyre v1.1.0");
                 }
                 ImGui::EndChild();
             }
@@ -2666,6 +2706,15 @@ static void RenderLunarModulesList(const char* categoryFilter, const char* query
                 FPSOverlay::g_fpsOverlayEnableTime  = 0;
             }
         }
+        static void toggleMouseStrokes() {
+            if (MouseStrokes::g_showMouseStrokes) {
+                MouseStrokes::g_mouseStrokesEnableTime  = GetTickCount64();
+                MouseStrokes::g_mouseStrokesDisableTime = 0;
+            } else {
+                MouseStrokes::g_mouseStrokesDisableTime = GetTickCount64();
+                MouseStrokes::g_mouseStrokesEnableTime  = 0;
+            }
+        }
         static void toggleClickGUI()   { g_showMenu = ClickGUI::g_enabled; GUI::g_showMenu = g_showMenu; }
     };
 
@@ -2687,6 +2736,7 @@ static void RenderLunarModulesList(const char* categoryFilter, const char* query
         { "FPS Overlay", "F", "Render", "Shows frames-per-second count with optional graphs.", &FPSOverlay::g_showFpsOverlay, LLocal::toggleFPSOverlay },
         { "Ping Counter", "P", "Render", "Shows network latency/ping on HUD.", &PingCounter::g_showPingCounter, nullptr },
         { "Player Info", "N", "Render", "Displays your skin head and nickname on HUD.", &PlayerInfo::g_showPlayerInfo, nullptr },
+        { "MouseStrokes", "M", "Render", "Visualizes your camera and mouse movement with live trail.", &MouseStrokes::g_showMouseStrokes, LLocal::toggleMouseStrokes },
         { "FullBright", "B", "Render", "Forces light levels to maximum brightness.", &FullBright::g_fullBrightEnabled, LLocal::toggleFullBright },
         { "MotionBlur", "M", "Render", "Adds a realistic screen motion blur effect.", &MotionBlur::g_motionBlurEnabled, nullptr },
         { "ClickGUI", "G", "Render", "Toggles and configures this ClickGUI overlay.", &ClickGUI::g_enabled, LLocal::toggleClickGUI },
@@ -3064,6 +3114,713 @@ void ClickGUI::RenderLunarMenu(float screenWidth, float screenHeight) {
             ImGui::EndChild();
         }
         ImGui::EndChild();
+    }
+    ImGui::End();
+
+    ImGui::PopStyleColor(2);
+    ImGui::PopStyleVar(3);
+    ImGui::PopStyleVar(); // alpha
+}
+
+// ──────────────────────────────────────────────
+// Flarial style rendering
+// ──────────────────────────────────────────────
+namespace FlarialDesign {
+    // Exact Flarial color constants
+    inline ImVec4 HexToImVec4(const char* hex, float alpha = 1.0f) {
+        if (!hex || hex[0] == '\0') return ImVec4(1, 1, 1, alpha);
+        if (hex[0] == '#') hex++;
+        unsigned int rgb = 0;
+        sscanf_s(hex, "%x", &rgb);
+        float r = ((rgb >> 16) & 0xFF) / 255.0f;
+        float g = ((rgb >> 8) & 0xFF) / 255.0f;
+        float b = (rgb & 0xFF) / 255.0f;
+        return ImVec4(r, g, b, alpha);
+    }
+
+    // Flarial animated text frames
+    static const char* s_flarialFrames[7][7] = {
+        { "§p", "§p", "§p", "§s", "§s", "§s", "§s" }, // FLA | RIAL
+        { "§s", "§p", "§p", "§p", "§s", "§s", "§s" }, // F | LAR | IAL
+        { "§s", "§s", "§p", "§p", "§p", "§s", "§s" }, // FL | ARI | AL
+        { "§s", "§s", "§s", "§p", "§p", "§p", "§s" }, // FLA | RIA | L
+        { "§s", "§s", "§s", "§s", "§p", "§p", "§p" }, // FLAR | IAL
+        { "§p", "§s", "§s", "§s", "§s", "§p", "§p" }, // F | LARI | AL
+        { "§p", "§p", "§s", "§s", "§s", "§s", "§p" }  // FL | ARIA | L
+    };
+}
+
+void ClickGUI::RenderFlarialMenu(float screenWidth, float screenHeight) {
+    float positionProgress = GUI::g_showMenu
+        ? Animations::EaseOutExpo(GUI::g_menuAnim)
+        : GUI::g_menuAnim;
+    float e = GUI::g_showMenu
+        ? positionProgress
+        : Animations::EaseInOutQuad(GUI::g_menuAnim);
+    ImGui::PushStyleVar(ImGuiStyleVar_Alpha, e);
+
+    // Background overlays (Mica blur or dark overlay + plexus particles)
+    if (g_bgStyle == 0) {
+        ImU32 bgCol = IM_COL32(5, 5, 10, (int)(e * 180.0f));
+        ImGui::GetBackgroundDrawList()->AddRectFilled(ImVec2(0, 0), ImVec2(screenWidth, screenHeight), bgCol);
+    } else {
+        ImU32 tint = IM_COL32(5, 5, 10, (int)(e * 60.0f));
+        ImGui::GetBackgroundDrawList()->AddRectFilled(ImVec2(0, 0), ImVec2(screenWidth, screenHeight), tint);
+    }
+
+    if (g_showParticles) {
+        GUI::RenderParticles(ImGui::GetBackgroundDrawList(), ImVec2(0, 0), ImVec2(screenWidth, screenHeight), e);
+    }
+
+    float sc = 1.0f;
+    float baseWidth  = (screenWidth < 1080.0f) ? (screenWidth - 36.0f) : 1000.0f;
+    float baseHeight = (screenHeight < 720.0f) ? (screenHeight - 36.0f) : 640.0f;
+    ImVec2 winSize = ImVec2(baseWidth * sc, baseHeight * sc);
+
+    float slideDirection = GUI::g_showMenu ? 1.0f : -1.0f;
+    float slideDistance = GUI::g_showMenu ? 160.0f : 300.0f;
+    ImVec2 winPos = ImVec2((screenWidth - winSize.x) * 0.5f,
+                           (screenHeight - winSize.y) * 0.5f +
+                           slideDirection * (1.0f - positionProgress) * slideDistance);
+
+    ImGui::SetNextWindowSize(winSize, ImGuiCond_Always);
+    ImGui::SetNextWindowPos(winPos, ImGuiCond_Always);
+
+    // Soft drop shadow around the base container
+    GUI::DrawShadow(ImGui::GetBackgroundDrawList(), winPos, winSize, 28.0f * sc, 34.0f * e, 0.58f * e);
+
+    // Flarial Palette Tokens
+    ImVec4 colSecondary1 = FlarialDesign::HexToImVec4("3f2a2d"); // #3f2a2d (Settings bg)
+    ImVec4 colSecondary2 = FlarialDesign::HexToImVec4("201a1b"); // #201a1b (Navbar / Container bg)
+    ImVec4 colSecondary3 = FlarialDesign::HexToImVec4("120e0f"); // #120e0f (Base GUI rect)
+    ImVec4 colSecondary4 = FlarialDesign::HexToImVec4("1c1616"); // #1c1616 (Search bar)
+    ImVec4 colSecondary6 = FlarialDesign::HexToImVec4("ff2438"); // #ff2438 (Active tab/accent)
+    ImVec4 colSecondary8 = FlarialDesign::HexToImVec4("302728"); // #302728 (Inactive tab bg)
+    ImVec4 colPrimary1    = FlarialDesign::HexToImVec4("ff233a"); // #ff233a (Primary active)
+    ImVec4 colModcard1   = FlarialDesign::HexToImVec4("201a1b"); // #201a1b (Card top)
+    ImVec4 colModcard2   = FlarialDesign::HexToImVec4("2f2022"); // #2f2022 (Card bottom)
+    ImVec4 colModcard3   = FlarialDesign::HexToImVec4("3f2a2d"); // #3f2a2d (Icon square)
+    ImVec4 colModcard4   = FlarialDesign::HexToImVec4("705d60"); // #705d60 (Card subtle border)
+    ImVec4 colLogo       = FlarialDesign::HexToImVec4("FE4443"); // #FE4443 (Logo)
+    ImVec4 colLogoSec    = FlarialDesign::HexToImVec4("D0A0A8"); // #D0A0A8 (Logo secondary)
+    ImVec4 colEnabled    = FlarialDesign::HexToImVec4("188830"); // #188830 (Enabled green)
+    ImVec4 colDisabled   = FlarialDesign::HexToImVec4("7d1820"); // #7d1820 (Disabled red)
+    ImVec4 colTextMuted  = FlarialDesign::HexToImVec4("8b767a"); // #8b767a (Module name/subtext)
+
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 24.0f * sc);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, colSecondary3);
+    ImGui::PushStyleColor(ImGuiCol_Border, colModcard3);
+
+    if (ImGui::Begin("FlarialClickGUIWindow", nullptr,
+                     ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize |
+                     ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoMove)) {
+        ImVec2 wPos = ImGui::GetWindowPos();
+        ImVec2 wSize = ImGui::GetWindowSize();
+        ImDrawList* draw = ImGui::GetWindowDrawList();
+        float dt = ImGui::GetIO().DeltaTime;
+        float curTime = static_cast<float>(GetTickCount64()) * 0.001f;
+
+        // Navigation and page state
+        static std::string flarialCurr = "modules"; // "modules", "settings", "scripts"
+        static std::string flarialPageType = "normal"; // "normal" or "settings"
+        static std::string flarialSelectedMod = "";
+        static char flarialSearch[128] = "";
+
+        // Animation states
+        static float widthModules  = 120.0f * sc;
+        static float widthSettings = 44.0f * sc;
+        static float widthScripts  = 44.0f * sc;
+        static float modcardOpacity = 1.0f;
+        static float modcardOffset  = 0.0f;
+        static float settingsOpacity = 0.0f;
+        static float settingsOffset = 180.0f * sc;
+        static float scriptingOpacity = 0.0f;
+        static float scriptingOffset = 180.0f * sc;
+
+        // Animate tabs width
+        float targetW1 = (flarialCurr == "modules")  ? (124.0f * sc) : (44.0f * sc);
+        float targetW2 = (flarialCurr == "settings") ? (124.0f * sc) : (44.0f * sc);
+        float targetW3 = (flarialCurr == "scripts")  ? (124.0f * sc) : (44.0f * sc);
+
+        widthModules  = Animations::Approach(widthModules,  targetW1, dt, 14.0f);
+        widthSettings = Animations::Approach(widthSettings, targetW2, dt, 14.0f);
+        widthScripts  = Animations::Approach(widthScripts,  targetW3, dt, 14.0f);
+
+        // Animate page transitions (exact Flarial lerp approach)
+        if (flarialPageType == "normal" && flarialCurr == "modules") {
+            modcardOpacity = Animations::Approach(modcardOpacity, 1.0f, dt, 12.0f);
+            modcardOffset  = Animations::Approach(modcardOffset,  0.0f, dt, 14.0f);
+        } else {
+            modcardOpacity = Animations::Approach(modcardOpacity, 0.0f, dt, 12.0f);
+            modcardOffset  = Animations::Approach(modcardOffset, -180.0f * sc, dt, 12.0f);
+        }
+
+        if (flarialCurr == "settings" || flarialPageType == "settings") {
+            settingsOpacity = Animations::Approach(settingsOpacity, 1.0f, dt, 12.0f);
+            settingsOffset  = Animations::Approach(settingsOffset,  0.0f, dt, 14.0f);
+        } else {
+            settingsOpacity = Animations::Approach(settingsOpacity, 0.0f, dt, 12.0f);
+            settingsOffset  = Animations::Approach(settingsOffset,  180.0f * sc, dt, 12.0f);
+        }
+
+        if (flarialPageType == "normal" && flarialCurr == "scripts") {
+            scriptingOpacity = Animations::Approach(scriptingOpacity, 1.0f, dt, 12.0f);
+            scriptingOffset  = Animations::Approach(scriptingOffset,  0.0f, dt, 14.0f);
+        } else {
+            scriptingOpacity = Animations::Approach(scriptingOpacity, 0.0f, dt, 12.0f);
+            scriptingOffset  = Animations::Approach(scriptingOffset,  180.0f * sc, dt, 12.0f);
+        }
+
+        // ──────────────────────────────────────────
+        // Navigation Bar (Exact Flarial Dimensions & Margins)
+        // ──────────────────────────────────────────
+        float navMarginX = 14.0f * sc;
+        float navMarginY = 12.0f * sc;
+        float navHeight  = 56.0f * sc;
+        ImVec2 navMin = ImVec2(wPos.x + navMarginX, wPos.y + navMarginY);
+        ImVec2 navMax = ImVec2(wPos.x + wSize.x - navMarginX, wPos.y + navMarginY + navHeight);
+
+        // Draw nav bar container with rounded corners (20px)
+        draw->AddRectFilled(navMin, navMax, ImColor(colSecondary2), 18.0f * sc);
+        draw->AddRect(navMin, navMax, ImColor(colModcard3), 18.0f * sc, 0, 1.0f);
+
+        // ── Logo (Animated Flarial Text) ──
+        float logoX = navMin.x + 18.0f * sc;
+        float logoY = navMin.y + (navHeight - 24.0f * sc) * 0.5f;
+
+        // Compute 7-frame animation cycle
+        static size_t animFrameIdx = 0;
+        static ULONGLONG lastAnimTime = GetTickCount64();
+        if (GetTickCount64() - lastAnimTime > 150) {
+            animFrameIdx = (animFrameIdx + 1) % 7;
+            lastAnimTime = GetTickCount64();
+        }
+
+        ImGui::SetCursorScreenPos(ImVec2(logoX, logoY - 2.0f * sc));
+        ImGui::PushFont(GUI::g_fontH2 ? GUI::g_fontH2 : ImGui::GetFont());
+        
+        // Draw individual letters with animated primary/secondary color mapping
+        const char flarialChars[] = { 'F', 'L', 'A', 'R', 'I', 'A', 'L' };
+        float charCurX = logoX;
+        for (int ch = 0; ch < 7; ++ch) {
+            bool isPrimary = (strcmp(FlarialDesign::s_flarialFrames[animFrameIdx][ch], "§p") == 0);
+            ImVec4 chColor = isPrimary ? colLogo : colLogoSec;
+            char buf[2] = { flarialChars[ch], '\0' };
+            draw->AddText(ImVec2(charCurX, logoY - 2.0f * sc), ImColor(chColor), buf);
+            ImVec2 chSz = ImGui::CalcTextSize(buf);
+            charCurX += chSz.x;
+        }
+
+        ImGui::SetCursorScreenPos(ImVec2(logoX, logoY - 4.0f * sc));
+        ImGui::InvisibleButton("##FlarialLogoBtn", ImVec2(charCurX - logoX, 28.0f * sc));
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Never gonna give you up");
+        }
+        ImGui::PopFont();
+
+        // ── Tab Radio Buttons (Modules, Settings, Scripts) ──
+        float tabBaseX = logoX + 118.0f * sc;
+        float tabBtnH  = 36.0f * sc;
+        float tabBtnY  = navMin.y + (navHeight - tabBtnH) * 0.5f;
+
+        struct FlarialTabDef {
+            const char* id;
+            const char* label;
+            const char* icon;
+            float* widthPtr;
+        };
+
+        FlarialTabDef tabs[] = {
+            { "modules",  "Modules",  "[M]", &widthModules },
+            { "settings", "Settings", "[S]", &widthSettings },
+            { "scripts",  "Scripts",  "[C]", &widthScripts }
+        };
+
+        float currentTabX = tabBaseX;
+        for (int t = 0; t < 3; ++t) {
+            float curW = *tabs[t].widthPtr;
+            ImVec2 tabMin = ImVec2(currentTabX, tabBtnY);
+            ImVec2 tabMax = ImVec2(currentTabX + curW, tabBtnY + tabBtnH);
+
+            ImGui::SetCursorScreenPos(tabMin);
+            ImGui::PushID(tabs[t].id);
+            if (ImGui::InvisibleButton("##TabBtn", ImVec2(curW, tabBtnH))) {
+                flarialCurr = tabs[t].id;
+                flarialPageType = "normal";
+            }
+            bool isTabActive = (flarialCurr == tabs[t].id && flarialPageType == "normal");
+            bool isHovered = ImGui::IsItemHovered();
+
+            // Tab background (lerp between secondary6 red and secondary8 dark)
+            ImVec4 tabBg = isTabActive
+                ? colSecondary6
+                : (isHovered ? ImVec4(0.24f, 0.19f, 0.20f, 0.95f) : colSecondary8);
+
+            // Tab shadow & rect
+            draw->AddRectFilled(tabMin, tabMax, ImColor(tabBg), 10.0f * sc);
+            if (isTabActive) {
+                draw->AddRect(tabMin, tabMax, ImColor(colPrimary1.x, colPrimary1.y, colPrimary1.z, 0.5f), 10.0f * sc, 0, 1.0f);
+            }
+
+            // Tab Label / Icon
+            ImGui::PushFont(GUI::g_fontDefault);
+            if (curW > 70.0f * sc) {
+                ImVec2 tSz = ImGui::CalcTextSize(tabs[t].label);
+                ImVec2 tPos = ImVec2(tabMin.x + (curW - tSz.x) * 0.5f, tabMin.y + (tabBtnH - tSz.y) * 0.5f);
+                draw->AddText(tPos, isTabActive ? IM_COL32(255, 255, 255, 255) : IM_COL32(200, 185, 190, 220), tabs[t].label);
+            } else {
+                ImVec2 tSz = ImGui::CalcTextSize(tabs[t].icon);
+                ImVec2 tPos = ImVec2(tabMin.x + (curW - tSz.x) * 0.5f, tabMin.y + (tabBtnH - tSz.y) * 0.5f);
+                draw->AddText(tPos, isTabActive ? IM_COL32(255, 255, 255, 255) : IM_COL32(180, 165, 170, 200), tabs[t].icon);
+            }
+            ImGui::PopFont();
+
+            ImGui::PopID();
+            currentTabX += curW + 8.0f * sc;
+        }
+
+        // ── Search Bar (Right Side of Navigation Bar) ──
+        float searchW = 210.0f * sc;
+        float searchH = 34.0f * sc;
+        float searchX = navMax.x - searchW - 12.0f * sc;
+        float searchY = navMin.y + (navHeight - searchH) * 0.5f;
+
+        ImGui::SetCursorScreenPos(ImVec2(searchX, searchY));
+        ImGui::PushStyleColor(ImGuiCol_FrameBg, colSecondary4);
+        ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(0.14f, 0.11f, 0.12f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(0.16f, 0.12f, 0.13f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.95f, 0.92f, 0.93f, 1.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 10.0f * sc);
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10.0f * sc, 7.0f * sc));
+        ImGui::SetNextItemWidth(searchW);
+        ImGui::InputTextWithHint("##FlarialSearchBar", "Search modules...", flarialSearch, IM_ARRAYSIZE(flarialSearch));
+        ImGui::PopStyleVar(2);
+        ImGui::PopStyleColor(4);
+
+        // ──────────────────────────────────────────
+        // Content Area Container & Clipping
+        // ──────────────────────────────────────────
+        float contentX = wPos.x + navMarginX;
+        float contentY = navMax.y + 12.0f * sc;
+        float contentW = wSize.x - navMarginX * 2.0f;
+        float contentH = wSize.y - (navMarginY * 2.0f + navHeight + 12.0f * sc);
+
+        ImGui::SetCursorScreenPos(ImVec2(contentX, contentY));
+
+        struct FlarialToggles {
+            static void toggleReach()      { Reach::SetEnabled(Reach::g_reachEnabled); }
+            static void toggleHitbox()     { if (Hitbox::g_hitboxEnabled) Hitbox::Enable(); else Hitbox::Disable(); }
+            static void toggleTimer()      { if (Timer::g_timerEnabled)   Timer::Enable(); else   Timer::Disable(); }
+            static void toggleGlide()      { if (Glide::g_glideEnabled)   Glide::Enable(); else   Glide::Disable(); }
+            static void toggleFly()        { if (Fly::g_flyEnabled)       Fly::Enable(); else     Fly::Disable(); }
+            static void toggleFullBright() { if (FullBright::g_fullBrightEnabled) FullBright::Enable(); else FullBright::Disable(); }
+            static void toggleFPSOverlay() {
+                if (FPSOverlay::g_showFpsOverlay) {
+                    FPSOverlay::g_fpsOverlayEnableTime  = GetTickCount64();
+                    FPSOverlay::g_fpsOverlayDisableTime = 0;
+                } else {
+                    FPSOverlay::g_fpsOverlayDisableTime = GetTickCount64();
+                    FPSOverlay::g_fpsOverlayEnableTime  = 0;
+                }
+            }
+            static void toggleMouseStrokes() {
+                if (MouseStrokes::g_showMouseStrokes) {
+                    MouseStrokes::g_mouseStrokesEnableTime  = GetTickCount64();
+                    MouseStrokes::g_mouseStrokesDisableTime = 0;
+                } else {
+                    MouseStrokes::g_mouseStrokesDisableTime = GetTickCount64();
+                    MouseStrokes::g_mouseStrokesEnableTime  = 0;
+                }
+            }
+            static void toggleClickGUI()   { g_showMenu = ClickGUI::g_enabled; GUI::g_showMenu = g_showMenu; }
+        };
+
+        struct FlarialModuleDef {
+            const char* name;
+            const char* category;
+            const char* desc;
+            bool* enabledPtr;
+            void (*toggleCallback)();
+        };
+
+        static const FlarialModuleDef allModules[] = {
+            // Combat
+            { "Reach",        "Combat",   "Extend player attack distance",           &Reach::g_reachEnabled,          FlarialToggles::toggleReach },
+            { "Hitbox",       "Combat",   "Expand entity hit collision size",        &Hitbox::g_hitboxEnabled,         FlarialToggles::toggleHitbox },
+
+            // Movement
+            { "AutoSprint",   "Movement", "Always sprint automatically",             &AutoSprint::g_autoSprintEnabled, nullptr },
+            { "Glide",        "Movement", "Slow and controlled falling",             &Glide::g_glideEnabled,           FlarialToggles::toggleGlide },
+            { "Fly",          "Movement", "Free movement flight mode",               &Fly::g_flyEnabled,               FlarialToggles::toggleFly },
+            { "Timer",        "Movement", "Speed up or slow game tick speed",        &Timer::g_timerEnabled,           FlarialToggles::toggleTimer },
+
+            // Visuals
+            { "Watermark",    "Visuals",  "Display modern client watermark HUD",     &Watermark::g_showWatermark,      nullptr },
+            { "ArrayList",    "Visuals",  "HUD list of currently enabled modules",   &ArrayList::g_enabled,            nullptr },
+            { "Render Info",  "Visuals",  "Display coordinates, angle, and speed",   &RenderInfo::g_showRenderInfo,    nullptr },
+            { "Keystrokes",   "Visuals",  "Screen overlay for keyboard movement",    &Keystrokes::g_showKeystrokes,    nullptr },
+            { "CPS Counter",  "Visuals",  "Display real-time clicks per second",     &CPSCounter::g_showCpsCounter,    nullptr },
+            { "FPS Overlay",  "Visuals",  "Sleek frames per second counter",         &FPSOverlay::g_showFpsOverlay,    FlarialToggles::toggleFPSOverlay },
+            { "Ping Counter", "Visuals",  "Show server connection latency",          &PingCounter::g_showPingCounter,  nullptr },
+            { "Player Info",  "Visuals",  "Target health, equipment and status",     &PlayerInfo::g_showPlayerInfo,    nullptr },
+            { "MouseStrokes", "Visuals",  "Visualize mouse buttons and movement",    &MouseStrokes::g_showMouseStrokes,FlarialToggles::toggleMouseStrokes },
+            { "FullBright",   "Visuals",  "Permanent maximum ambient light",         &FullBright::g_fullBrightEnabled, FlarialToggles::toggleFullBright },
+            { "MotionBlur",   "Visuals",  "High performance camera motion blur",     &MotionBlur::g_motionBlurEnabled, nullptr },
+            { "ClickGUI",     "Visuals",  "In-game menu configuration settings",     &ClickGUI::g_enabled,             FlarialToggles::toggleClickGUI },
+
+            // Misc
+            { "UnlockFPS",    "Misc",     "Bypass Minecraft framerate limiter",      &UnlockFPS::g_unlockFpsEnabled,   nullptr },
+            { "AutoClicker",  "Misc",     "Simulate ultra-fast mouse clicking",      &AutoClicker::g_enabled,          nullptr },
+            { "Anti-AFK",     "Misc",     "Prevent automated idle disconnects",      &AntiAFK::g_enabled,              nullptr },
+            { "Screenshot",   "Misc",     "Take clean in-game screenshots",          &Screenshot::g_enabled,           nullptr }
+        };
+
+        // ── 1. MODULES GRID VIEW (Normal Mode) ──
+        if (modcardOpacity > 0.02f) {
+            ImGui::PushStyleVar(ImGuiStyleVar_Alpha, e * modcardOpacity);
+            ImGui::SetCursorScreenPos(ImVec2(contentX, contentY + modcardOffset));
+            ImGui::BeginChild("FlarialModGridScroll", ImVec2(contentW, contentH), false, ImGuiWindowFlags_None);
+
+            // Filter modules
+            std::string searchLower = flarialSearch;
+            for (auto& c : searchLower) c = (char)tolower(c);
+
+            std::vector<const FlarialModuleDef*> filtered;
+            for (const auto& mod : allModules) {
+                if (searchLower.empty()) {
+                    filtered.push_back(&mod);
+                } else {
+                    std::string nameLower = mod.name;
+                    for (auto& c : nameLower) c = (char)tolower(c);
+                    std::string catLower = mod.category;
+                    for (auto& c : catLower) c = (char)tolower(c);
+                    if (nameLower.find(searchLower) != std::string::npos ||
+                        catLower.find(searchLower) != std::string::npos) {
+                        filtered.push_back(&mod);
+                    }
+                }
+            }
+
+            // 3 Columns Grid
+            int numCols = 3;
+            float cardSpacingX = 14.0f * sc;
+            float cardSpacingY = 14.0f * sc;
+            float cardW = (contentW - (numCols - 1) * cardSpacingX - 16.0f * sc) / numCols;
+            float cardH = 94.0f * sc;
+
+            for (size_t i = 0; i < filtered.size(); ++i) {
+                const auto* mod = filtered[i];
+                int col = (int)(i % numCols);
+                if (col > 0) ImGui::SameLine(0.0f, cardSpacingX);
+
+                ImGui::PushID(mod->name);
+                ImVec2 cardMin = ImGui::GetCursorScreenPos();
+                ImVec2 cardMax = ImVec2(cardMin.x + cardW, cardMin.y + cardH);
+
+                // Invisible button covering the card for clicks
+                ImGui::InvisibleButton("##FlarialModCardBtn", ImVec2(cardW, cardH));
+                bool cardHovered = ImGui::IsItemHovered();
+                bool cardLeftClicked = ImGui::IsItemClicked(ImGuiMouseButton_Left);
+                bool cardRightClicked = ImGui::IsItemClicked(ImGuiMouseButton_Right);
+
+                if (cardLeftClicked) {
+                    *mod->enabledPtr = !*mod->enabledPtr;
+                    if (mod->toggleCallback) mod->toggleCallback();
+                }
+                if (cardRightClicked) {
+                    flarialSelectedMod = mod->name;
+                    flarialPageType = "settings";
+                }
+
+                ImDrawList* cDraw = ImGui::GetWindowDrawList();
+
+                // Flarial Two-Tone ModCard Background (Top + Bottom rects)
+                float topRectH = 46.0f * sc;
+                ImVec2 topMin = cardMin;
+                ImVec2 topMax = ImVec2(cardMax.x, cardMin.y + topRectH);
+                ImVec2 btmMin = ImVec2(cardMin.x, cardMin.y + topRectH);
+                ImVec2 btmMax = cardMax;
+
+                // Card background & subtle hover
+                ImU32 topBgCol = cardHovered ? IM_COL32(40, 30, 32, 255) : IM_COL32(32, 26, 27, 250);
+                ImU32 btmBgCol = cardHovered ? IM_COL32(52, 38, 41, 255) : IM_COL32(47, 32, 34, 250);
+
+                cDraw->AddRectFilled(topMin, topMax, topBgCol, 14.0f * sc, ImDrawFlags_RoundCornersTop);
+                cDraw->AddRectFilled(btmMin, btmMax, btmBgCol, 14.0f * sc, ImDrawFlags_RoundCornersBottom);
+
+                // Card border
+                ImU32 borderCol = cardHovered
+                    ? IM_COL32(254, 68, 67, 160)
+                    : (*mod->enabledPtr ? IM_COL32(254, 68, 67, 75) : IM_COL32(63, 42, 45, 140));
+                cDraw->AddRect(cardMin, cardMax, borderCol, 14.0f * sc, 0, 1.2f * sc);
+
+                // Icon Box (Left side: modcard3 #3f2a2d)
+                float iconBoxW = 32.0f * sc;
+                float iconBoxH = 32.0f * sc;
+                ImVec2 iconMin = ImVec2(cardMin.x + 10.0f * sc, cardMin.y + 7.0f * sc);
+                ImVec2 iconMax = ImVec2(iconMin.x + iconBoxW, iconMin.y + iconBoxH);
+
+                ImU32 catColor = IM_COL32(254, 68, 67, 255); // Combat
+                if (strcmp(mod->category, "Movement") == 0) catColor = IM_COL32(56, 189, 248, 255);
+                else if (strcmp(mod->category, "Visuals") == 0) catColor = IM_COL32(192, 132, 252, 255);
+                else if (strcmp(mod->category, "Misc") == 0) catColor = IM_COL32(52, 211, 153, 255);
+
+                cDraw->AddRectFilled(iconMin, iconMax, ImColor(colModcard3), 8.0f * sc);
+                cDraw->AddRect(iconMin, iconMax, catColor, 8.0f * sc, 0, 1.0f);
+
+                // Module category abbreviation in icon box
+                char catInitial[2] = { mod->category[0], '\0' };
+                ImVec2 inSz = ImGui::CalcTextSize(catInitial);
+                cDraw->AddText(ImVec2(iconMin.x + (iconBoxW - inSz.x) * 0.5f, iconMin.y + (iconBoxH - inSz.y) * 0.5f),
+                               catColor, catInitial);
+
+                // Module Name
+                ImGui::PushFont(GUI::g_fontH3 ? GUI::g_fontH3 : ImGui::GetFont());
+                ImU32 nameCol = *mod->enabledPtr ? IM_COL32(255, 255, 255, 255) : IM_COL32(210, 195, 200, 240);
+                cDraw->AddText(ImVec2(iconMax.x + 10.0f * sc, cardMin.y + 11.0f * sc), nameCol, mod->name);
+                ImGui::PopFont();
+
+                // Settings Gear Button (Top right of card)
+                float gearBtnW = 24.0f * sc;
+                float gearBtnH = 24.0f * sc;
+                ImVec2 gearMin = ImVec2(cardMax.x - gearBtnW - 10.0f * sc, cardMin.y + 11.0f * sc);
+                ImVec2 gearMax = ImVec2(gearMin.x + gearBtnW, gearMin.y + gearBtnH);
+
+                bool gearHovered = ImGui::IsMouseHoveringRect(gearMin, gearMax);
+                cDraw->AddRectFilled(gearMin, gearMax,
+                                     gearHovered ? IM_COL32(80, 50, 58, 255) : IM_COL32(63, 42, 45, 220),
+                                     6.0f * sc);
+                ImVec2 gearTxtSz = ImGui::CalcTextSize("...");
+                cDraw->AddText(ImVec2(gearMin.x + (gearBtnW - gearTxtSz.x) * 0.5f, gearMin.y + (gearBtnH - gearTxtSz.y) * 0.5f - 2.0f * sc),
+                               IM_COL32(230, 210, 215, 255), "...");
+
+                if (gearHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+                    flarialSelectedMod = mod->name;
+                    flarialPageType = "settings";
+                }
+
+                // Module Description (Bottom section)
+                ImGui::PushFont(GUI::g_fontDefault);
+                cDraw->AddText(ImVec2(cardMin.x + 12.0f * sc, cardMin.y + 54.0f * sc),
+                               IM_COL32(145, 125, 130, 220), mod->desc);
+                ImGui::PopFont();
+
+                // Status Pill (Bottom right)
+                float pillW = 68.0f * sc;
+                float pillH = 22.0f * sc;
+                ImVec2 pillMin = ImVec2(cardMax.x - pillW - 10.0f * sc, cardMax.y - pillH - 8.0f * sc);
+                ImVec2 pillMax = ImVec2(pillMin.x + pillW, pillMin.y + pillH);
+
+                ImU32 pillBg = *mod->enabledPtr
+                    ? IM_COL32(24, 136, 48, 230) // #188830
+                    : IM_COL32(125, 24, 32, 220); // #7d1820
+
+                cDraw->AddRectFilled(pillMin, pillMax, pillBg, 6.0f * sc);
+                const char* statusTxt = *mod->enabledPtr ? "ENABLED" : "DISABLED";
+                ImVec2 sSz = ImGui::CalcTextSize(statusTxt);
+                cDraw->AddText(ImVec2(pillMin.x + (pillW - sSz.x) * 0.5f, pillMin.y + (pillH - sSz.y) * 0.5f),
+                               IM_COL32(255, 255, 255, 255), statusTxt);
+
+                ImGui::PopID();
+            }
+
+            ImGui::EndChild();
+            ImGui::PopStyleVar();
+        }
+
+        // ── 2. MODULE SETTINGS SUBPAGE VIEW (page.type == "settings" & flarialSelectedMod != "") ──
+        if (settingsOpacity > 0.02f && !flarialSelectedMod.empty()) {
+            ImGui::PushStyleVar(ImGuiStyleVar_Alpha, e * settingsOpacity);
+            ImGui::SetCursorScreenPos(ImVec2(contentX, contentY + settingsOffset));
+
+            // Outer settings container: anotherRectWidth, anotherRectHeight, rounding 24px, color secondary2
+            draw->AddRectFilled(ImVec2(contentX, contentY), ImVec2(contentX + contentW, contentY + contentH),
+                                ImColor(colSecondary2), 20.0f * sc);
+            draw->AddRect(ImVec2(contentX, contentY), ImVec2(contentX + contentW, contentY + contentH),
+                          ImColor(colModcard3), 20.0f * sc, 0, 1.0f);
+
+            ImGui::BeginChild("FlarialModuleSettingsSubpage", ImVec2(contentW, contentH), false, ImGuiWindowFlags_None);
+
+            // Subpage Top Navigation Bar
+            float subNavH = 50.0f * sc;
+            ImVec2 subNavMin = ImVec2(contentX, contentY);
+            ImVec2 subNavMax = ImVec2(contentX + contentW, contentY + subNavH);
+
+            draw->AddRectFilled(subNavMin, subNavMax, ImColor(colSecondary1), 20.0f * sc, ImDrawFlags_RoundCornersTop);
+            draw->AddLine(ImVec2(contentX, contentY + subNavH), ImVec2(contentX + contentW, contentY + subNavH),
+                          ImColor(colModcard3), 1.0f);
+
+            // "< Back" Button
+            float backBtnW = 100.0f * sc;
+            float backBtnH = 32.0f * sc;
+            ImGui::SetCursorScreenPos(ImVec2(contentX + 16.0f * sc, contentY + (subNavH - backBtnH) * 0.5f));
+            ImGui::PushStyleColor(ImGuiCol_Button, colSecondary2);
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.35f, 0.22f, 0.24f, 1.00f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, colPrimary1);
+            ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8.0f * sc);
+
+            if (ImGui::Button("< Back", ImVec2(backBtnW, backBtnH))) {
+                flarialPageType = "normal";
+                flarialSelectedMod = "";
+            }
+            ImGui::PopStyleVar();
+            ImGui::PopStyleColor(3);
+
+            // Module Title in Subnav
+            ImGui::SetCursorScreenPos(ImVec2(contentX + 130.0f * sc, contentY + 11.0f * sc));
+            ImGui::PushFont(GUI::g_fontH2 ? GUI::g_fontH2 : ImGui::GetFont());
+            ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, 1.0f), "%s", flarialSelectedMod.c_str());
+            ImGui::PopFont();
+            ImGui::SameLine(0.0f, 12.0f * sc);
+            ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 4.0f * sc);
+            ImGui::TextColored(colTextMuted, "Settings & Parameters");
+
+            // Settings Controls Scroll View
+            float scrollH = contentH - subNavH - 60.0f * sc;
+            ImGui::SetCursorScreenPos(ImVec2(contentX + 16.0f * sc, contentY + subNavH + 12.0f * sc));
+            ImGui::BeginChild("FlarialSubSettingsControls", ImVec2(contentW - 32.0f * sc, scrollH), false, ImGuiWindowFlags_None);
+
+            // Render specific module settings using ClickGUI::RenderModuleSettings
+            ClickGUI::RenderModuleSettings(flarialSelectedMod.c_str(), contentW - 64.0f * sc);
+
+            ImGui::EndChild();
+
+            // Bottom Action Bar ("RESET ALL" and "RESET POS")
+            float footerY = contentY + contentH - 46.0f * sc;
+            draw->AddLine(ImVec2(contentX + 16.0f * sc, footerY - 4.0f * sc),
+                          ImVec2(contentX + contentW - 16.0f * sc, footerY - 4.0f * sc),
+                          ImColor(colModcard3), 1.0f);
+
+            float actionBtnW = 125.0f * sc;
+            float actionBtnH = 32.0f * sc;
+
+            ImGui::SetCursorScreenPos(ImVec2(contentX + 20.0f * sc, footerY + 2.0f * sc));
+            ImGui::PushStyleColor(ImGuiCol_Button, colSecondary1);
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, colSecondary6);
+            ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 12.0f * sc);
+
+            if (ImGui::Button("RESET ALL", ImVec2(actionBtnW, actionBtnH))) {
+                GUI::g_elementAnims.clear();
+                GUI::g_elementHeights.clear();
+            }
+            ImGui::SameLine(0.0f, 12.0f * sc);
+            if (ImGui::Button("RESET POS", ImVec2(actionBtnW, actionBtnH))) {
+                // Reset HUD module screen coordinates
+            }
+            ImGui::PopStyleVar();
+            ImGui::PopStyleColor(2);
+
+            ImGui::EndChild();
+            ImGui::PopStyleVar();
+        }
+
+        // ── 3. GLOBAL SETTINGS TAB (curr == "settings") ──
+        if (settingsOpacity > 0.02f && flarialSelectedMod.empty()) {
+            ImGui::PushStyleVar(ImGuiStyleVar_Alpha, e * settingsOpacity);
+            ImGui::SetCursorScreenPos(ImVec2(contentX, contentY + settingsOffset));
+
+            draw->AddRectFilled(ImVec2(contentX, contentY), ImVec2(contentX + contentW, contentY + contentH),
+                                ImColor(colSecondary2), 20.0f * sc);
+            draw->AddRect(ImVec2(contentX, contentY), ImVec2(contentX + contentW, contentY + contentH),
+                          ImColor(colModcard3), 20.0f * sc, 0, 1.0f);
+
+            ImGui::BeginChild("FlarialGlobalSettingsChild", ImVec2(contentW, contentH), false, ImGuiWindowFlags_None);
+            ImGui::SetCursorPos(ImVec2(24.0f * sc, 20.0f * sc));
+            ImGui::BeginChild("FlarialGlobalScroll", ImVec2(contentW - 48.0f * sc, contentH - 40.0f * sc), false, ImGuiWindowFlags_None);
+
+            // Config Manager
+            ImGui::PushFont(GUI::g_fontH3 ? GUI::g_fontH3 : ImGui::GetFont());
+            ImGui::TextColored(colSecondary6, "Config Manager");
+            ImGui::PopFont();
+            ImGui::Spacing();
+
+            static char configNameInput[64] = "default";
+            ImGui::SetNextItemWidth(260.0f * sc);
+            ImGui::InputTextWithHint("##ConfigNameFlarialGlobal", "Config name", configNameInput, IM_ARRAYSIZE(configNameInput));
+            ImGui::SameLine();
+            if (ImGui::Button("SAVE##Flarial", ImVec2(100.0f * sc, 0))) {
+                ConfigManager::SaveConfig(configNameInput);
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("LOAD##Flarial", ImVec2(100.0f * sc, 0))) {
+                ConfigManager::LoadConfig(configNameInput);
+            }
+
+            ImGui::Spacing();
+            ImGui::Separator();
+            ImGui::Spacing();
+
+            // Keybinds
+            ImGui::PushFont(GUI::g_fontH3 ? GUI::g_fontH3 : ImGui::GetFont());
+            ImGui::TextColored(colSecondary6, "Keybinds");
+            ImGui::PopFont();
+            ImGui::Spacing();
+            ImGui::TextColored(colTextMuted, "Open Menu Bind: Press 'K' or use '.bind <key>' in chat");
+
+            ImGui::Spacing();
+            ImGui::Separator();
+            ImGui::Spacing();
+
+            // Rendering
+            ImGui::PushFont(GUI::g_fontH3 ? GUI::g_fontH3 : ImGui::GetFont());
+            ImGui::TextColored(colSecondary6, "Rendering");
+            ImGui::PopFont();
+            ImGui::Spacing();
+
+            const char* bgStyles[] = { "Normal Dark", "Mica Blur" };
+            GUI::RenderCombo("Background Style##FlarialGlobal", &g_bgStyle, bgStyles, 2);
+            if (g_bgStyle == 1) {
+                GUI::RenderSlider("UI Blur Intensity##FlarialGlobal", &g_blurRadius, 1.0f, 12.0f, "%.1f");
+                GUI::RenderSlider("UI Blur Opacity##FlarialGlobal", &g_blurOpacity, 0.0f, 1.0f, "%.2f");
+            }
+            GUI::RenderCustomSwitch("Plexus Background Particles##Flarial", &g_showParticles);
+            GUI::RenderCustomSwitch("Rise Shader Background##Flarial", &g_showRiseBackground);
+
+            const char* themes[] = { "Aegle Classic", "Sakura Blossom", "Cyberpunk 2077", "Emerald Forest", "Deep Sea", "Legacy Pink" };
+            int curThm = GUI::g_currentTheme;
+            if (GUI::RenderCombo("Theme Preset##FlarialGlobal", &curThm, themes, 6)) {
+                GUI::ApplyThemePreset(curThm);
+            }
+
+            ImGui::Spacing();
+            ImGui::Separator();
+            ImGui::Spacing();
+
+            // Miscellaneous
+            ImGui::PushFont(GUI::g_fontH3 ? GUI::g_fontH3 : ImGui::GetFont());
+            ImGui::TextColored(colSecondary6, "Miscellaneous");
+            ImGui::PopFont();
+            ImGui::Spacing();
+
+            static bool autoSearch = true;
+            GUI::RenderCustomSwitch("Auto Search ClickGUI", &autoSearch);
+            static bool snappingLines = true;
+            GUI::RenderCustomSwitch("Snapping Lines in Edit Mode", &snappingLines);
+            static bool centerCursor = true;
+            GUI::RenderCustomSwitch("Center Cursor on UI Open", &centerCursor);
+
+            ImGui::EndChild();
+            ImGui::EndChild();
+            ImGui::PopStyleVar();
+        }
+
+        // ── 4. SCRIPTS / TERMINAL TAB (curr == "scripts") ──
+        if (scriptingOpacity > 0.02f) {
+            ImGui::PushStyleVar(ImGuiStyleVar_Alpha, e * scriptingOpacity);
+            ImGui::SetCursorScreenPos(ImVec2(contentX, contentY + scriptingOffset));
+
+            draw->AddRectFilled(ImVec2(contentX, contentY), ImVec2(contentX + contentW, contentY + contentH),
+                                ImColor(colSecondary2), 20.0f * sc);
+            draw->AddRect(ImVec2(contentX, contentY), ImVec2(contentX + contentW, contentY + contentH),
+                          ImColor(colModcard3), 20.0f * sc, 0, 1.0f);
+
+            ImGui::BeginChild("FlarialScriptsChild", ImVec2(contentW, contentH), false, ImGuiWindowFlags_None);
+            Terminal::RenderConsole();
+            ImGui::EndChild();
+            ImGui::PopStyleVar();
+        }
     }
     ImGui::End();
 

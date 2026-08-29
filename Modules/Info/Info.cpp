@@ -566,7 +566,8 @@ struct UpdateEntry {
 };
 
 static const UpdateEntry kUpdateHistory[] = {
-    { "v1.0.8", "Stable Release | Added new module configs", true },
+    { "v1.0.9", "Stable Release | Better UI", false },
+    { "v1.0.8", "Stable Release | Added new module configs", false },
     { "v1.0.7", "Stable Release | Migration to MSVC", false },
     { "v1.0.6", "Stable Release | Config Market Added", false },
     { "v1.0.5", "Stable Release | IRC Chat added", false },

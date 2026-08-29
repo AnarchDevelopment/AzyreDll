@@ -49,12 +49,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName",      "an4rch Development\0"
             VALUE "FileDescription",  "Azyre Client\0"
-            VALUE "FileVersion",      "1.0.9\0"
+            VALUE "FileVersion",      "1.1.0\0"
             VALUE "InternalName",     "Azyre Client\0"
             VALUE "LegalCopyright",   "an4rch Development | https://anarchdevelopment.github.io/\0"
             VALUE "OriginalFilename", "aegledll.dll\0"
             VALUE "ProductName",      "Azyre Client\0"
-            VALUE "ProductVersion",   "1.0.9\0"
+            VALUE "ProductVersion",   "1.1.0\0"
         END
     END
     BLOCK "VarFileInfo"

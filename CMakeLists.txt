@@ -83,6 +83,7 @@ set(SOURCES
     Modules/Visuals/MotionBlur/MotionBlur.cpp
     Modules/Visuals/PingCounter/PingCounter.cpp
     Modules/Visuals/PlayerInfo/PlayerInfo.cpp
+    Modules/Visuals/MouseStrokes/MouseStrokes.cpp
     Modules/Visuals/RenderInfo/RenderInfo.cpp
     Modules/Visuals/Watermark/Watermark.cpp
 
@@ -152,6 +153,7 @@ set(HEADERS
     Modules/Visuals/MotionBlur/MotionBlur.hpp
     Modules/Visuals/PingCounter/PingCounter.hpp
     Modules/Visuals/PlayerInfo/PlayerInfo.hpp
+    Modules/Visuals/MouseStrokes/MouseStrokes.hpp
     Modules/Visuals/RenderInfo/RenderInfo.hpp
     Modules/Visuals/Watermark/Watermark.hpp
     Networking/Client/IRCClient.hpp
