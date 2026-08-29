@@ -149,6 +149,8 @@ cd AzyreDll
 
 # Configure (x64 Release)
 cmake -B build -A x64
+# Or use
+cmake -B build -G "Visual Studio 18 2026" -A x64
 
 # Build
 cmake --build build --config Release
