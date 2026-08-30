@@ -255,9 +255,19 @@ namespace {
         s_title = std::move(title);
         s_hwnd = hwnd;
 
-        const std::string latestCommit = FetchLatestCommit();
-        if (!latestCommit.empty()) {
-            s_title = BuildWindowTitle(latestCommit);
+        // Use compile-time git hash (from CMake)
+#ifndef GIT_COMMIT_HASH
+#define GIT_COMMIT_HASH "unknown"
+#endif
+        const std::string commitHash = GIT_COMMIT_HASH;
+        if (commitHash != "unknown" && !commitHash.empty()) {
+            s_title = BuildWindowTitle(commitHash);
+        } else {
+            // Fallback: try GitHub API
+            const std::string latestCommit = FetchLatestCommit();
+            if (!latestCommit.empty()) {
+                s_title = BuildWindowTitle(latestCommit);
+            }
         }
 
         ApplyTitle();
