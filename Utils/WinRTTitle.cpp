@@ -281,7 +281,10 @@ namespace {
 }
 
 void WinRTTitle::SetTitle(HWND hwnd) {
-    std::wstring titleCopy = BuildWindowTitle("unknown");
+#ifndef GIT_COMMIT_HASH
+#define GIT_COMMIT_HASH "unknown"
+#endif
+    std::wstring titleCopy = BuildWindowTitle(GIT_COMMIT_HASH);
     s_title = titleCopy;
     s_hwnd = hwnd;
     ApplyViaWinRT();
