@@ -115,6 +115,8 @@ cbuffer RiseParams : register(b0) {
     float2 resolution;
     float  time;
     float  alpha;
+    float3 accentColor;
+    float  _pad;
 };
 
 struct VS_OUTPUT { float4 Pos : SV_POSITION; float2 Tex : TEXCOORD0; };
@@ -139,12 +141,16 @@ float4 mainRisePS(VS_OUTPUT input) : SV_Target {
     float3 cl = float3(0.0, 0.0, 0.0);
     float d = 2.5;
 
+    // Build theme-aware colors from accent
+    float3 baseTint = accentColor * 0.15 + float3(0.02, 0.04, 0.08);
+    float3 glowTint = accentColor * 1.2 + float3(0.3, 0.1, 0.1);
+
     [unroll]
     for (int i = 0; i <= 5; i++) {
         float3 p = float3(0.0, 0.0, 4.0) + normalize(float3(a, -1.0)) * d;
         float rz = map(p, time);
         float f = clamp((rz - map(p + float3(0.1, 0.1, 0.1), time)) * 0.5, -0.1, 1.0);
-        float3 l = float3(0.1, 0.3, 0.4) + float3(5.0, 2.5, 3.0) * f;
+        float3 l = baseTint + glowTint * f;
         cl = cl * l + smoothstep(2.5, 0.0, rz) * 0.6 * l;
         d += min(rz, 1.0);
     }
@@ -533,7 +539,7 @@ void ClickGUI::InitializeRiseShader(ID3D11Device* pDevice) {
     pDevice->CreateBuffer(&vbDesc, &vbData, &g_riseVB);
 
     D3D11_BUFFER_DESC cbDesc = {};
-    cbDesc.ByteWidth      = sizeof(float) * 4; // 16 bytes: float2 resolution, float time, float alpha
+    cbDesc.ByteWidth      = sizeof(float) * 8; // 32 bytes: float2 resolution, float time, float alpha, float3 accentColor, float pad
     cbDesc.Usage          = D3D11_USAGE_DYNAMIC;
     cbDesc.BindFlags      = D3D11_BIND_CONSTANT_BUFFER;
     cbDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
@@ -641,6 +647,10 @@ void ClickGUI::RenderRiseBackground(ID3D11Device* pDevice, ID3D11DeviceContext* 
             d[1] = (float)texH;
             d[2] = time;
             d[3] = alpha;
+            d[4] = GUI::g_colorAccent.x;
+            d[5] = GUI::g_colorAccent.y;
+            d[6] = GUI::g_colorAccent.z;
+            d[7] = 0.0f; // padding
             pContext->Unmap(g_riseCB, 0);
         }
     }
