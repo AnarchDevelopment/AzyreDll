@@ -26,3 +26,4 @@ Under an4rch Development Public Source License 1.0
 #include "Misc/Screenshot/Screenshot.hpp"
 #include "Info/Info.hpp"
 #include "Visuals/ClickGUI/ClickGUI.hpp"
+#include "Visuals/NoHurtCam/NoHurtCam.hpp"

@@ -77,6 +77,9 @@ public:
     static void* g_tabTextures[8];
     static void* g_likeTexture;
     static void* g_downloadTexture;
+    static void* g_configIconTexture;
+    static std::map<std::string, void*> g_moduleTextures;
+    static void* GetModuleTexture(const char* name);
     static bool InitializeTextures();
     static void ShutdownTextures();
     static void* LoadTextureFromResource(int resourceId);

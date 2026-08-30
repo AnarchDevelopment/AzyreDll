@@ -27,12 +27,14 @@ void Module::Initialize(uintptr_t gameBase, size_t imageSize, HudElement* render
     AutoClicker::Initialize();
     AntiAFK::Initialize();
     Screenshot::Initialize();
+    NoHurtCam::Initialize(gameBase);
 
     // Resolve the patch targets once (game module memory)
     AutoSprint::ScanPattern(gameBase, imageSize);
     FullBright::ScanPattern(gameBase, imageSize);
     Glide::ScanPattern(gameBase, imageSize);
     Fly::ScanPattern(gameBase, imageSize);
+    NoHurtCam::ScanPattern(gameBase, imageSize);
 }
 
 void Module::UpdateAnimation(unsigned long long now) {

@@ -1200,7 +1200,7 @@ void ClickGUI::RenderMenu() {
     }
 
     if (GUI::BeginModuleSettings("ClickGUI", &g_enabled)) {
-        const char* styles[] = { "Regular", "Separated", "Rise", "Lunar", "Figma", "Aurora", "Flarial" };
+        const char* styles[] = { "Regular", "Separated", "Rise", "Lunar", "Figma", "Aurora", "Flarial", "Nixon" };
         GUI::RenderCombo("GUI Style", &g_guiStyle, styles, IM_ARRAYSIZE(styles));
 
         const char* bgStyles[] = { "Normal Dark", "Mica Blur" };
@@ -1973,7 +1973,7 @@ void ClickGUI::RenderModuleSettings(const char* name, float /*colWidth*/) {
         GUI::RenderCustomSwitch("Crosshair##MS2", &MouseStrokes::g_showCrosshair);
         GUI::RenderCustomSwitch("Click Effect##MS2", &MouseStrokes::g_clickEffect);
     } else if (strcmp(name, "ClickGUI") == 0) {
-        static const char* st[] = {"Regular","Separated","Rise","Lunar","Figma","Aurora","Flarial"};
+        static const char* st[] = {"Regular","Separated","Rise","Lunar","Figma","Aurora","Flarial","Nixon"};
         GUI::RenderCombo("Style##CG", &ClickGUI::g_guiStyle, st, 7);
         static const char* bg[] = {"Normal Dark","Mica Blur"};
         GUI::RenderCombo("Background##CG", &ClickGUI::g_bgStyle, bg, 2);
@@ -3826,5 +3826,304 @@ void ClickGUI::RenderFlarialMenu(float screenWidth, float screenHeight) {
 
     ImGui::PopStyleColor(2);
     ImGui::PopStyleVar(3);
+    ImGui::PopStyleVar(); // alpha
+}
+
+// ──────────────────────────────────────────────
+// Nixon style rendering
+// ──────────────────────────────────────────────
+void ClickGUI::RenderNixonMenu(float screenWidth, float screenHeight) {
+    float positionProgress = GUI::g_showMenu
+        ? Animations::EaseOutExpo(GUI::g_menuAnim)
+        : GUI::g_menuAnim;
+    float e = GUI::g_showMenu
+        ? positionProgress
+        : Animations::EaseInOutQuad(GUI::g_menuAnim);
+    ImGui::PushStyleVar(ImGuiStyleVar_Alpha, e);
+
+    if (g_bgStyle == 0) {
+        ImU32 bgCol = IM_COL32(5, 5, 10, (int)(e * 180.0f));
+        ImGui::GetBackgroundDrawList()->AddRectFilled(ImVec2(0, 0), ImVec2(screenWidth, screenHeight), bgCol);
+    } else {
+        ImU32 tint = IM_COL32(5, 5, 10, (int)(e * 60.0f));
+        ImGui::GetBackgroundDrawList()->AddRectFilled(ImVec2(0, 0), ImVec2(screenWidth, screenHeight), tint);
+    }
+
+    if (g_showParticles) {
+        GUI::RenderParticles(ImGui::GetBackgroundDrawList(), ImVec2(0, 0), ImVec2(screenWidth, screenHeight), e);
+    }
+
+    float sc = 1.0f;
+    float baseWidth  = (screenWidth < 1080.0f) ? (screenWidth - 40.0f) : 1040.0f;
+    float baseHeight = (screenHeight < 700.0f) ? (screenHeight - 40.0f) : 650.0f;
+    ImVec2 winSize(baseWidth * sc, baseHeight * sc);
+
+    float slideDirection = GUI::g_showMenu ? 1.0f : -1.0f;
+    float slideDistance = GUI::g_showMenu ? 180.0f : 320.0f;
+    ImVec2 winPos((screenWidth - winSize.x) * 0.5f,
+                   (screenHeight - winSize.y) * 0.5f +
+                   slideDirection * (1.0f - positionProgress) * slideDistance);
+
+    ImGui::SetNextWindowSize(winSize, ImGuiCond_Always);
+    ImGui::SetNextWindowPos(winPos, ImGuiCond_Always);
+
+    GUI::DrawShadow(ImGui::GetBackgroundDrawList(), winPos, winSize, 24.0f * sc, 30.0f * e, 0.45f * e);
+
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 16.0f * sc);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.06f, 0.06f, 0.08f, 0.97f));
+    ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.14f, 0.14f, 0.18f, 0.8f));
+
+    if (ImGui::Begin("NixonClickGUIWindow", nullptr,
+                     ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse |
+                     ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoMove)) {
+        ImVec2 wPos = ImGui::GetWindowPos();
+        ImVec2 wSize = ImGui::GetWindowSize();
+        ImDrawList* draw = ImGui::GetWindowDrawList();
+        ImVec4 accentV = GUI::g_colorAccent;
+        ImU32 accentCol = ImGui::ColorConvertFloat4ToU32(accentV);
+        float dt = ImGui::GetIO().DeltaTime;
+
+        static int nixonTab = 0;
+        const char* cats[] = { "Combat", "Movement", "Visuals", "Misc", "Terminal", "Info", "IRC Chat", "Config Market" };
+
+        const float headerH = 52.0f * sc;
+        draw->AddRectFilled(wPos, ImVec2(wPos.x + wSize.x, wPos.y + headerH),
+            ImColor(0.04f, 0.04f, 0.06f, 0.98f), 16.0f * sc, ImDrawFlags_RoundCornersTop);
+        draw->AddLine(ImVec2(wPos.x, wPos.y + headerH),
+                      ImVec2(wPos.x + wSize.x, wPos.y + headerH),
+                      ImColor(accentV.x, accentV.y, accentV.z, 0.35f), 1.0f);
+
+        ImGui::PushFont(GUI::g_fontH2 ? GUI::g_fontH2 : ImGui::GetFont());
+        draw->AddText(wPos + ImVec2(22.0f * sc, 14.0f * sc), ImColor(240, 240, 246), "NIXON");
+        ImGui::PopFont();
+        ImGui::PushFont(GUI::g_fontDefault);
+        draw->AddText(wPos + ImVec2(22.0f * sc, 34.0f * sc), ImColor(accentV.x, accentV.y, accentV.z, 0.7f), "CONTROL");
+        ImGui::PopFont();
+
+        float tabStartX = 160.0f * sc;
+        for (int i = 0; i < 8; i++) {
+            float tabW = ImGui::CalcTextSize(cats[i]).x + 24.0f * sc;
+            ImVec2 tabMin(wPos.x + tabStartX, wPos.y + (headerH - 30.0f * sc) * 0.5f);
+            ImVec2 tabMax(tabMin.x + tabW, tabMin.y + 30.0f * sc);
+
+            ImGui::SetCursorScreenPos(tabMin);
+            std::string btnId = "##nixon_tab_" + std::to_string(i);
+            ImGui::InvisibleButton(btnId.c_str(), ImVec2(tabW, 30.0f * sc));
+            bool hovered = ImGui::IsItemHovered();
+
+            if (ImGui::IsItemClicked()) nixonTab = i;
+
+            ImU32 tabBg = (nixonTab == i)
+                ? accentCol
+                : (hovered ? IM_COL32(40, 40, 50, 200) : IM_COL32(20, 20, 28, 120));
+            draw->AddRectFilled(tabMin, tabMax, tabBg, 6.0f * sc);
+
+            ImU32 txtCol = (nixonTab == i) ? IM_COL32(255, 255, 255, 255) : IM_COL32(160, 160, 172, 200);
+            ImVec2 txtSz = ImGui::CalcTextSize(cats[i]);
+            draw->AddText(ImVec2(tabMin.x + (tabW - txtSz.x) * 0.5f, tabMin.y + (30.0f * sc - txtSz.y) * 0.5f),
+                          txtCol, cats[i]);
+
+            tabStartX += tabW + 6.0f * sc;
+        }
+
+        float contentY = wPos.y + headerH + 14.0f * sc;
+        float contentH = wSize.y - headerH - 28.0f * sc;
+        float contentW = wSize.x - 36.0f * sc;
+        float contentX = wPos.x + 18.0f * sc;
+
+        ImGui::SetCursorScreenPos(ImVec2(contentX, contentY));
+        ImGui::BeginChild("NixonContent", ImVec2(contentW, contentH), false, ImGuiWindowFlags_None);
+        {
+            struct NixonLocalToggles {
+                static void toggleReach()     { Reach::SetEnabled(Reach::g_reachEnabled); }
+                static void toggleHitbox()    { if (Hitbox::g_hitboxEnabled) Hitbox::Enable(); else Hitbox::Disable(); }
+                static void toggleTimer()     { if (Timer::g_timerEnabled)   Timer::Enable(); else   Timer::Disable(); }
+                static void toggleGlide()     { if (Glide::g_glideEnabled)   Glide::Enable(); else   Glide::Disable(); }
+                static void toggleFly()       { if (Fly::g_flyEnabled)       Fly::Enable(); else     Fly::Disable(); }
+                static void toggleFullBright(){ if (FullBright::g_fullBrightEnabled) FullBright::Enable(); else FullBright::Disable(); }
+                static void toggleFPSOverlay() {
+                    if (FPSOverlay::g_showFpsOverlay) {
+                        FPSOverlay::g_fpsOverlayEnableTime  = GetTickCount64();
+                        FPSOverlay::g_fpsOverlayDisableTime = 0;
+                    } else {
+                        FPSOverlay::g_fpsOverlayDisableTime = GetTickCount64();
+                        FPSOverlay::g_fpsOverlayEnableTime  = 0;
+                    }
+                }
+                static void toggleMouseStrokes() {
+                    if (MouseStrokes::g_showMouseStrokes) {
+                        MouseStrokes::g_mouseStrokesEnableTime  = GetTickCount64();
+                        MouseStrokes::g_mouseStrokesDisableTime = 0;
+                    } else {
+                        MouseStrokes::g_mouseStrokesDisableTime = GetTickCount64();
+                        MouseStrokes::g_mouseStrokesEnableTime  = 0;
+                    }
+                }
+                static void toggleClickGUI() { g_showMenu = ClickGUI::g_enabled; GUI::g_showMenu = g_showMenu; }
+            };
+
+            static std::map<std::string, bool> nixonExpanded;
+            static std::map<std::string, float> nixonExpandAnim;
+            static std::map<std::string, float> nixonMeasuredH;
+
+            float availW = ImGui::GetContentRegionAvail().x;
+            float colW = (availW - 24.0f * sc) / 3.0f;
+            float cardSpacing = 12.0f * sc;
+
+            struct NixonMod {
+                const char* name;
+                const char* category;
+                const char* desc;
+                bool* enabled;
+                void (*callback)();
+            };
+
+            static const NixonMod nixonModules[] = {
+                { "Reach",        "Combat",   "Extend player attack distance",           &Reach::g_reachEnabled,          NixonLocalToggles::toggleReach },
+                { "Hitbox",       "Combat",   "Expand entity hit collision size",        &Hitbox::g_hitboxEnabled,        NixonLocalToggles::toggleHitbox },
+                { "AutoSprint",   "Movement", "Always sprint automatically",             &AutoSprint::g_autoSprintEnabled, nullptr },
+                { "Glide",        "Movement", "Slow and controlled falling",             &Glide::g_glideEnabled,          NixonLocalToggles::toggleGlide },
+                { "Fly",          "Movement", "Free movement flight mode",               &Fly::g_flyEnabled,              NixonLocalToggles::toggleFly },
+                { "Timer",        "Movement", "Speed up or slow game tick speed",        &Timer::g_timerEnabled,          NixonLocalToggles::toggleTimer },
+                { "Watermark",    "Visuals",  "Display modern client watermark HUD",     &Watermark::g_showWatermark,     nullptr },
+                { "ArrayList",    "Visuals",  "HUD list of currently enabled modules",   &ArrayList::g_enabled,           nullptr },
+                { "Render Info",  "Visuals",  "Display coordinates, angle, and speed",   &RenderInfo::g_showRenderInfo,   nullptr },
+                { "Keystrokes",   "Visuals",  "Screen overlay for keyboard movement",    &Keystrokes::g_showKeystrokes,   nullptr },
+                { "CPS Counter",  "Visuals",  "Display real-time clicks per second",     &CPSCounter::g_showCpsCounter,   nullptr },
+                { "FPS Overlay",  "Visuals",  "Sleek frames per second counter",         &FPSOverlay::g_showFpsOverlay,   NixonLocalToggles::toggleFPSOverlay },
+                { "Ping Counter", "Visuals",  "Show server connection latency",          &PingCounter::g_showPingCounter, nullptr },
+                { "Player Info",  "Visuals",  "Target health, equipment and status",     &PlayerInfo::g_showPlayerInfo,   nullptr },
+                { "MouseStrokes", "Visuals",  "Visualize mouse buttons and movement",    &MouseStrokes::g_showMouseStrokes,NixonLocalToggles::toggleMouseStrokes },
+                { "FullBright",   "Visuals",  "Permanent maximum ambient light",         &FullBright::g_fullBrightEnabled,NixonLocalToggles::toggleFullBright },
+                { "MotionBlur",   "Visuals",  "High performance camera motion blur",     &MotionBlur::g_motionBlurEnabled, nullptr },
+                { "ClickGUI",     "Visuals",  "In-game menu configuration settings",     &ClickGUI::g_enabled,            NixonLocalToggles::toggleClickGUI },
+                { "NoHurtCam",    "Visuals",  "Removes hurt camera shake effect",         &NoHurtCam::g_noHurtCamEnabled,  nullptr },
+                { "UnlockFPS",    "Misc",     "Bypass Minecraft framerate limiter",      &UnlockFPS::g_unlockFpsEnabled,  nullptr },
+                { "AutoClicker",  "Misc",     "Simulate ultra-fast mouse clicking",      &AutoClicker::g_enabled,         nullptr },
+                { "Anti-AFK",     "Misc",     "Prevent automated idle disconnects",      &AntiAFK::g_enabled,             nullptr },
+                { "Screenshot",   "Misc",     "Take clean in-game screenshots",          &Screenshot::g_enabled,          nullptr },
+            };
+
+            const char* catFilter = nullptr;
+            if (nixonTab == 0) catFilter = "Combat";
+            else if (nixonTab == 1) catFilter = "Movement";
+            else if (nixonTab == 2) catFilter = "Visuals";
+            else if (nixonTab == 3) catFilter = "Misc";
+
+            if (nixonTab == 4) {
+                Terminal::RenderConsole();
+            } else if (nixonTab == 5) {
+                Info::RenderMenu();
+            } else if (nixonTab == 6) {
+                IRChat::RenderMenu();
+            } else if (nixonTab == 7) {
+                GUI::RenderConfigMarket();
+            } else {
+                int col = 0;
+                int visibleIdx = 0;
+                for (const auto& mod : nixonModules) {
+                    if (catFilter && strcmp(mod.category, catFilter) != 0) continue;
+
+                    float delay = visibleIdx * 0.04f;
+                    visibleIdx++;
+                    float cardProg = Animations::EaseOutBack(Animations::Clamp01((e - delay) / (1.0f - delay)));
+                    float slideY = (1.0f - cardProg) * 20.0f * sc;
+                    int cardAlpha = (int)(255.0f * cardProg);
+
+                    if (col > 0) ImGui::SameLine(0.0f, cardSpacing);
+                    ImGui::PushID(mod.name);
+
+                    ImVec2 startPos = ImGui::GetCursorScreenPos();
+                    float cardH = 70.0f * sc;
+
+                    bool hasSettings = ModuleHasSettings(mod.name);
+                    bool isExpanded = hasSettings && nixonExpanded[mod.name];
+
+                    float ea = Animations::Approach(nixonExpandAnim[mod.name], isExpanded ? 1.0f : 0.0f, dt, 9.0f);
+                    nixonExpandAnim[mod.name] = ea;
+                    float ease = Animations::EaseOutQuart(Animations::Clamp01(ea));
+
+                    float settingsH = 0.0f;
+                    if (ea > 0.01f) {
+                        float capH = 120.0f * sc;
+                        float natH = nixonMeasuredH[mod.name];
+                        if (natH <= 0.0f) natH = capH;
+                        if (natH < capH) capH = natH;
+                        settingsH = capH * ease;
+                    }
+
+                    float totalH = cardH + settingsH + (settingsH > 0.0f ? 8.0f * sc : 0.0f);
+                    ImGui::InvisibleButton("##nixon_card", ImVec2(colW, totalH));
+                    bool hovered = ImGui::IsItemHovered();
+                    bool clicked = ImGui::IsItemClicked(ImGuiMouseButton_Left);
+                    bool rightClicked = ImGui::IsItemClicked(ImGuiMouseButton_Right);
+
+                    if (clicked) {
+                        *mod.enabled = !*mod.enabled;
+                        if (mod.callback) mod.callback();
+                    }
+                    if (rightClicked && hasSettings) {
+                        nixonExpanded[mod.name] = !nixonExpanded[mod.name];
+                    }
+
+                    ImDrawList* cardDraw = ImGui::GetWindowDrawList();
+
+                    ImU32 bgC = hovered ? IM_COL32(28, 28, 36, cardAlpha) : IM_COL32(18, 18, 24, cardAlpha);
+                    cardDraw->AddRectFilled(startPos, startPos + ImVec2(colW, totalH), bgC, 8.0f * sc);
+
+                    ImU32 borderC = *mod.enabled
+                        ? IM_COL32((int)(accentV.x * 255), (int)(accentV.y * 255), (int)(accentV.z * 255), 128)
+                        : IM_COL32(45, 45, 55, hovered ? 120 : 60);
+                    cardDraw->AddRect(startPos, startPos + ImVec2(colW, totalH), borderC, 8.0f * sc, 0, 1.0f);
+
+                    if (*mod.enabled) {
+                        cardDraw->AddRectFilled(startPos, ImVec2(startPos.x + 3.0f * sc, startPos.y + totalH),
+                            accentCol, 8.0f * sc, ImDrawFlags_RoundCornersLeft);
+                    }
+
+                    ImGui::PushFont(GUI::g_fontH3 ? GUI::g_fontH3 : ImGui::GetFont());
+                    cardDraw->AddText(startPos + ImVec2(12.0f * sc, 10.0f * sc + slideY),
+                        *mod.enabled ? accentCol : IM_COL32(230, 230, 236, cardAlpha), mod.name);
+                    ImGui::PopFont();
+
+                    ImGui::PushFont(GUI::g_fontDefault);
+                    cardDraw->AddText(ImVec2(startPos.x + 12.0f * sc, startPos.y + 34.0f * sc + slideY),
+                        IM_COL32(130, 130, 142, cardAlpha), mod.desc);
+                    ImGui::PopFont();
+
+                    if (ea > 0.01f) {
+                        ImGui::PushStyleVar(ImGuiStyleVar_Alpha, ease);
+                        ImGui::SetCursorScreenPos(startPos + ImVec2(4.0f * sc, cardH + 4.0f * sc));
+                        std::string childId = std::string("##nixon_cfg_") + mod.name;
+                        ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.08f, 0.08f, 0.10f, 1.0f));
+                        ImGui::BeginChild(childId.c_str(), ImVec2(colW - 8.0f * sc, settingsH), false, ImGuiWindowFlags_None);
+                        {
+                            ImGui::PushItemWidth(colW - 40.0f * sc);
+                            ClickGUI::RenderModuleSettings(mod.name, colW - 40.0f * sc);
+                            ImGui::PopItemWidth();
+                            nixonMeasuredH[mod.name] = ImGui::GetCursorPosY() + 8.0f;
+                        }
+                        ImGui::EndChild();
+                        ImGui::PopStyleColor();
+                        ImGui::PopStyleVar();
+
+                        col = 0;
+                        ImGui::NewLine();
+                    }
+
+                    ImGui::PopID();
+                    col++;
+                    if (col == 3) { col = 0; ImGui::NewLine(); }
+                }
+            }
+        }
+        ImGui::EndChild();
+    }
+    ImGui::End();
+
+    ImGui::PopStyleColor(2);
+    ImGui::PopStyleVar(4);
     ImGui::PopStyleVar(); // alpha
 }

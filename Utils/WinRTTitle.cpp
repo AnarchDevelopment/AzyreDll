@@ -21,7 +21,7 @@ Under an4rch Development Public Source License 1.0
 #pragma comment(lib, "winhttp.lib")
 
 namespace {
-    constexpr wchar_t kBaseWindowTitle[] = L"Azyre Client - 1.0.9";
+    constexpr wchar_t kBaseWindowTitle[] = L"Azyre Client - 1.1.0";
     std::wstring s_title;
     HWND s_hwnd = nullptr;
 

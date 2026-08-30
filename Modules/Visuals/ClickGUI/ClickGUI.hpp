@@ -11,7 +11,7 @@ Under an4rch Development Public Source License 1.0
 class ClickGUI {
 public:
     static bool g_enabled;
-    static int g_guiStyle;        // 0 = Regular, 1 = Separated, 2 = Rise, 3 = Lunar, 4 = Figma, 5 = Aurora, 6 = Flarial
+    static int g_guiStyle;        // 0 = Regular, 1 = Separated, 2 = Rise, 3 = Lunar, 4 = Figma, 5 = Aurora, 6 = Flarial, 7 = Nixon
     static bool g_showParticles;
     static bool g_showRiseBackground;
     static float g_bgOpacity;
@@ -47,6 +47,9 @@ public:
 
     // Render Flarial card grid dashboard layout
     static void RenderFlarialMenu(float screenWidth, float screenHeight);
+
+    // Render Nixon column-based layout
+    static void RenderNixonMenu(float screenWidth, float screenHeight);
 
     // Helper to render module buttons
     static void RenderModuleButton(const char* label, bool* enabledPtr, void (*toggleCallback)() = nullptr);

@@ -334,6 +334,8 @@ nlohmann::json ConfigManager::CollectCurrentConfig() {
     }
 
     config["Visuals"]["MotionBlur"]["enabled"] = MotionBlur::g_motionBlurEnabled;
+
+    config["Visuals"]["NoHurtCam"]["enabled"] = NoHurtCam::g_noHurtCamEnabled;
     
     config["Visuals"]["Keystrokes"]["enabled"] = Keystrokes::g_showKeystrokes;
     config["Visuals"]["Keystrokes"]["scale"] = Keystrokes::g_keystrokesUIScale;
@@ -757,6 +759,11 @@ void ConfigManager::ApplyConfig(const nlohmann::json& config) {
                 MotionBlur::g_motionBlurEnabled = visuals["MotionBlur"]["enabled"];
             }
         }
+        if (visuals.contains("NoHurtCam")) {
+            if (visuals["NoHurtCam"].contains("enabled")) {
+                NoHurtCam::g_noHurtCamEnabled = visuals["NoHurtCam"]["enabled"];
+            }
+        }
         if (visuals.contains("Keystrokes")) {
             if (visuals["Keystrokes"].contains("enabled")) {
                 Keystrokes::g_showKeystrokes = visuals["Keystrokes"]["enabled"];
@@ -1061,6 +1068,12 @@ void ConfigManager::ReloadModulesAfterConfig() {
         FullBright::Enable();
     } else {
         FullBright::Disable();
+    }
+
+    if (NoHurtCam::g_noHurtCamEnabled) {
+        NoHurtCam::Enable();
+    } else {
+        NoHurtCam::Disable();
     }
 
     if (Reach::IsEnabled()) {

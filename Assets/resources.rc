@@ -34,6 +34,32 @@ IDR_FONT_PLAYFAIR       RCDATA "Fonts/PlayfairDisplay-Regular.ttf"
 // Replace assets
 IDR_TITLE_ORIGINAL      RCDATA "Replace/titleOriginal.png"
 
+IDR_CONFIG_ICON         RCDATA "Config.png"
+
+// Module icons
+IDR_MOD_REACH           RCDATA "Module/Combat/Reach.png"
+IDR_MOD_HITBOX          RCDATA "Assets/Module/Combat/Hitbox.png"
+IDR_MOD_AUTOSPRINT      RCDATA "Assets/Module/Movement/AutoSprint.png"
+IDR_MOD_FLY             RCDATA "Assets/Module/Movement/Fly.png"
+IDR_MOD_GLIDE           RCDATA "Assets/Module/Movement/Glide.png"
+IDR_MOD_TIMER           RCDATA "Assets/Module/Movement/Timer.png"
+IDR_MOD_WATERMARK       RCDATA "Assets/Module/Visuals/Watermark.png"
+IDR_MOD_ARRAYLIST       RCDATA "Assets/Module/Visuals/ArrayList.png"
+IDR_MOD_RENDERINFO      RCDATA "Assets/Module/Visuals/RenderInfo.png"
+IDR_MOD_KEYSTROKES      RCDATA "Assets/Module/Visuals/Keystrokes.png"
+IDR_MOD_CPSCOUNTER      RCDATA "Assets/Module/Visuals/CPSCounter.png"
+IDR_MOD_FPSOVERLAY      RCDATA "Assets/Module/Visuals/FPSOverlay.png"
+IDR_MOD_PINGCOUNTER     RCDATA "Assets/Module/Visuals/PingCounter.png"
+IDR_MOD_PLAYERINFO      RCDATA "Assets/Module/Visuals/PlayerInfo.png"
+IDR_MOD_MOUSESTROKES    RCDATA "Assets/Module/Visuals/MouseStrokes.png"
+IDR_MOD_FULLBRIGHT      RCDATA "Assets/Module/Visuals/FullBright.png"
+IDR_MOD_MOTIONBLUR      RCDATA "Assets/Module/Visuals/MotionBlur.png"
+IDR_MOD_CLICKGUI        RCDATA "Assets/Module/Visuals/ClickGUI.png"
+IDR_MOD_UNLOCKFPS       RCDATA "Assets/Module/Misc/UnlockFPS.png"
+IDR_MOD_AUTOCLICKER     RCDATA "Assets/Module/Misc/Autoclicker.png"
+IDR_MOD_ANTIAFK         RCDATA "Assets/Module/Misc/AntiAFK.png"
+IDR_MOD_SCREENSHOT      RCDATA "Assets/Module/Misc/Screenshot.png"
+
 VS_VERSION_INFO VERSIONINFO
 FILEVERSION     1,0,0,0
 PRODUCTVERSION  1,0,0,0

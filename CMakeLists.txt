@@ -86,6 +86,7 @@ set(SOURCES
     Modules/Visuals/MouseStrokes/MouseStrokes.cpp
     Modules/Visuals/RenderInfo/RenderInfo.cpp
     Modules/Visuals/Watermark/Watermark.cpp
+    Modules/Visuals/NoHurtCam/NoHurtCam.cpp
 
     # Networking
     Networking/IRChat.cpp
@@ -156,6 +157,7 @@ set(HEADERS
     Modules/Visuals/MouseStrokes/MouseStrokes.hpp
     Modules/Visuals/RenderInfo/RenderInfo.hpp
     Modules/Visuals/Watermark/Watermark.hpp
+    Modules/Visuals/NoHurtCam/NoHurtCam.hpp
     Networking/Client/IRCClient.hpp
     Networking/IRChat.hpp
     nlohmann/json.hpp

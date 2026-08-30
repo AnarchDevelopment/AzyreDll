@@ -91,6 +91,7 @@ namespace ArrayList {
         currentStates.push_back({"Glide", "", Glide::g_glideEnabled});
         currentStates.push_back({"Fly", "", Fly::g_flyEnabled});
         currentStates.push_back({"FullBright", "", FullBright::g_fullBrightEnabled});
+        currentStates.push_back({"NoHurtCam", "", NoHurtCam::g_noHurtCamEnabled});
         currentStates.push_back({"Timer", std::to_string((int)Timer::g_timerValue) + "x", Timer::g_timerEnabled});
         currentStates.push_back({"UnlockFPS", std::to_string((int)UnlockFPS::g_fpsLimit) + "fps", UnlockFPS::g_unlockFpsEnabled});
         currentStates.push_back({"AutoClicker", std::to_string((int)AutoClicker::g_cps) + "cps", AutoClicker::g_enabled});
