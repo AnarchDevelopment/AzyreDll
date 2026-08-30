@@ -15,6 +15,7 @@ Under an4rch Development Public Source License 1.0
 #include <cmath>
 
 extern ID3D11Device* pDevice;
+extern ID3D11DeviceContext* pContext;
 extern HMODULE g_hModule;
 
 namespace {
@@ -83,20 +84,24 @@ void Splash::Initialize() {
     D3D11_TEXTURE2D_DESC desc = {};
     desc.Width = w;
     desc.Height = h;
-    desc.MipLevels = 1;
+    desc.MipLevels = 0;
     desc.ArraySize = 1;
     desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
     desc.SampleDesc.Count = 1;
     desc.Usage = D3D11_USAGE_DEFAULT;
-    desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-
-    D3D11_SUBRESOURCE_DATA sub = {};
-    sub.pSysMem = px;
-    sub.SysMemPitch = w * 4;
+    desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
+    desc.MiscFlags = D3D11_RESOURCE_MISC_GENERATE_MIPS;
 
     ID3D11Texture2D* pTex = nullptr;
-    if (SUCCEEDED(pDevice->CreateTexture2D(&desc, &sub, &pTex))) {
-        if (SUCCEEDED(pDevice->CreateShaderResourceView(pTex, nullptr, &s_srv))) {
+    if (SUCCEEDED(pDevice->CreateTexture2D(&desc, nullptr, &pTex)) && pTex) {
+        pContext->UpdateSubresource(pTex, 0, nullptr, px, w * 4, 0);
+        D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+        srvDesc.Format = desc.Format;
+        srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+        srvDesc.Texture2D.MostDetailedMip = 0;
+        srvDesc.Texture2D.MipLevels = UINT(-1);
+        if (SUCCEEDED(pDevice->CreateShaderResourceView(pTex, &srvDesc, &s_srv))) {
+            pContext->GenerateMips(s_srv);
             s_texW = w;
             s_texH = h;
         }

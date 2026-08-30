@@ -166,29 +166,35 @@ bool Watermark::InitializeTextures() {
     D3D11_TEXTURE2D_DESC desc = {};
     desc.Width = width;
     desc.Height = height;
-    desc.MipLevels = 1;
+    desc.MipLevels = 0;
     desc.ArraySize = 1;
     desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
     desc.SampleDesc.Count = 1;
     desc.Usage = D3D11_USAGE_DEFAULT;
-    desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-    
-    D3D11_SUBRESOURCE_DATA subResource = {};
-    subResource.pSysMem = pixels;
-    subResource.SysMemPitch = width * 4;
+    desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
+    desc.MiscFlags = D3D11_RESOURCE_MISC_GENERATE_MIPS;
     
     ID3D11Texture2D* pTexture = nullptr;
-    HRESULT hr = pDevice->CreateTexture2D(&desc, &subResource, &pTexture);
-    stbi_image_free(pixels);
+    HRESULT hr = pDevice->CreateTexture2D(&desc, nullptr, &pTexture);
     
-    if (SUCCEEDED(hr)) {
+    if (SUCCEEDED(hr) && pTexture) {
+        pContext->UpdateSubresource(pTexture, 0, nullptr, pixels, width * 4, 0);
+        stbi_image_free(pixels);
         ID3D11ShaderResourceView* pSRV = nullptr;
-        hr = pDevice->CreateShaderResourceView(pTexture, nullptr, &pSRV);
+        D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+        srvDesc.Format = desc.Format;
+        srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+        srvDesc.Texture2D.MostDetailedMip = 0;
+        srvDesc.Texture2D.MipLevels = UINT(-1);
+        hr = pDevice->CreateShaderResourceView(pTexture, &srvDesc, &pSRV);
         pTexture->Release();
         if (SUCCEEDED(hr)) {
+            pContext->GenerateMips(pSRV);
             g_watermarkTexture = (void*)pSRV;
             return true;
         }
+    } else {
+        stbi_image_free(pixels);
     }
     return false;
 }
