@@ -30,10 +30,6 @@ void NoHurtCam::ScanPattern(uintptr_t gameBase, size_t imageSize) {
         BYTE pattern[] = { 0xC7, 0x81, 0x24, 0x02, 0x00, 0x00, 0x0A, 0x00, 0x00, 0x00 };
         g_noHurtCamAddr = PatternScan::Scan(gameBase, imageSize, pattern, sizeof(pattern));
     }
-
-    char buf[128];
-    snprintf(buf, sizeof(buf), "[NoHurtCam] base=%p addr=%p", (void*)gameBase, (void*)g_noHurtCamAddr);
-    Terminal::AddOutput(buf);
 }
 
 void NoHurtCam::Initialize(uintptr_t gameBase) {
