@@ -87,8 +87,10 @@ namespace ArrayList {
         std::vector<ModEntry> currentStates;
         currentStates.push_back({"Reach", std::to_string((int)Reach::g_reachValue) + "m", Reach::g_reachEnabled});
         currentStates.push_back({"Hitbox", std::to_string((int)(Hitbox::g_hitboxValue * 10)) + "x", Hitbox::g_hitboxEnabled});
+        currentStates.push_back({"Rapid Hit", "", RapidHit::g_rapidHitEnabled});
         currentStates.push_back({"AutoSprint", "", AutoSprint::g_autoSprintEnabled});
         currentStates.push_back({"Glide", "", Glide::g_glideEnabled});
+        currentStates.push_back({"HighJump", std::to_string((int)HighJump::g_jumpValue) + "x", HighJump::g_enabled});
         currentStates.push_back({"Fly", "", Fly::g_flyEnabled});
         currentStates.push_back({"FullBright", "", FullBright::g_fullBrightEnabled});
         currentStates.push_back({"NoHurtCam", "", NoHurtCam::g_noHurtCamEnabled});

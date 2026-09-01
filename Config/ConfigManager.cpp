@@ -212,6 +212,8 @@ nlohmann::json ConfigManager::CollectCurrentConfig() {
     config["Combat"]["Reach"]["enabled"] = Reach::IsEnabled();
     config["Combat"]["Reach"]["value"] = Reach::g_reachValue;
 
+    config["Combat"]["RapidHit"]["enabled"] = RapidHit::g_rapidHitEnabled;
+
     // Movement modules
     config["Movement"]["AutoSprint"]["enabled"] = AutoSprint::g_autoSprintEnabled;
     config["Movement"]["Glide"]["enabled"] = Glide::g_glideEnabled;
@@ -219,6 +221,9 @@ nlohmann::json ConfigManager::CollectCurrentConfig() {
     config["Movement"]["Fly"]["enabled"] = Fly::g_flyEnabled;
     config["Movement"]["Timer"]["enabled"] = Timer::g_timerEnabled;
     config["Movement"]["Timer"]["value"] = Timer::g_timerValue;
+
+    config["Movement"]["HighJump"]["enabled"] = HighJump::g_enabled;
+    config["Movement"]["HighJump"]["value"] = HighJump::g_jumpValue;
 
     // Visuals modules
     config["Visuals"]["FullBright"]["enabled"] = FullBright::g_fullBrightEnabled;
@@ -566,6 +571,11 @@ void ConfigManager::ApplyConfig(const nlohmann::json& config) {
                 }
             }
         }
+        if (config["Combat"].contains("RapidHit")) {
+            if (config["Combat"]["RapidHit"].contains("enabled")) {
+                RapidHit::g_rapidHitEnabled = config["Combat"]["RapidHit"]["enabled"];
+            }
+        }
     }
 
     // Movement modules
@@ -594,6 +604,14 @@ void ConfigManager::ApplyConfig(const nlohmann::json& config) {
             }
             if (config["Movement"]["Timer"].contains("value")) {
                 Timer::g_timerValue = config["Movement"]["Timer"]["value"];
+            }
+        }
+        if (config["Movement"].contains("HighJump")) {
+            if (config["Movement"]["HighJump"].contains("enabled")) {
+                HighJump::g_enabled = config["Movement"]["HighJump"]["enabled"];
+            }
+            if (config["Movement"]["HighJump"].contains("value")) {
+                HighJump::g_jumpValue = config["Movement"]["HighJump"]["value"];
             }
         }
     }
@@ -1082,10 +1100,22 @@ void ConfigManager::ReloadModulesAfterConfig() {
         Reach::SetEnabled(false);
     }
 
+    if (RapidHit::g_rapidHitEnabled) {
+        RapidHit::Enable();
+    } else {
+        RapidHit::Disable();
+    }
+
     if (Timer::g_timerEnabled) {
         Timer::Enable();
     } else {
         Timer::Disable();
+    }
+
+    if (HighJump::g_enabled) {
+        HighJump::Enable();
+    } else {
+        HighJump::Disable();
     }
 
     Terminal::AddOutput("Modules reloaded after config load.");

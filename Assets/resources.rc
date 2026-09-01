@@ -59,6 +59,9 @@ IDR_MOD_UNLOCKFPS       RCDATA "Assets/Module/Misc/UnlockFPS.png"
 IDR_MOD_AUTOCLICKER     RCDATA "Assets/Module/Misc/Autoclicker.png"
 IDR_MOD_ANTIAFK         RCDATA "Assets/Module/Misc/AntiAFK.png"
 IDR_MOD_SCREENSHOT      RCDATA "Assets/Module/Misc/Screenshot.png"
+IDR_MOD_RAPIDHIT        RCDATA "Assets/Module/Combat/RapidHit.png"
+IDR_MOD_NOHURTCAM       RCDATA "Assets/Module/Visuals/NoHurtCam.png"
+IDR_MOD_HIGHJUMP        RCDATA "Assets/Module/Movement/HighJump.png"
 
 VS_VERSION_INFO VERSIONINFO
 FILEVERSION     1,0,0,0

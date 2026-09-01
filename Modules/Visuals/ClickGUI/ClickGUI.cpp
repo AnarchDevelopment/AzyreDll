@@ -1338,6 +1338,7 @@ void ClickGUI::RenderAuroraMenu(float screenWidth, float screenHeight) {
         if (selectedCategory == 0) {
             RenderModuleButton("Reach", &Reach::g_reachEnabled);
             RenderModuleButton("Hitbox", &Hitbox::g_hitboxEnabled);
+            RenderModuleButton("Rapid Hit", &RapidHit::g_rapidHitEnabled);
         } else if (selectedCategory == 1) {
             RenderModuleButton("Watermark", &Watermark::g_showWatermark);
             RenderModuleButton("ArrayList", &ArrayList::g_enabled);
@@ -1355,6 +1356,7 @@ void ClickGUI::RenderAuroraMenu(float screenWidth, float screenHeight) {
             RenderModuleButton("Glide", &Glide::g_glideEnabled);
             RenderModuleButton("Fly", &Fly::g_flyEnabled);
             RenderModuleButton("Timer", &Timer::g_timerEnabled);
+            RenderModuleButton("High Jump", &HighJump::g_enabled);
         } else if (selectedCategory == 3) {
             RenderModuleButton("UnlockFPS", &UnlockFPS::g_unlockFpsEnabled);
             RenderModuleButton("AutoClicker", &AutoClicker::g_enabled);
@@ -1465,6 +1467,7 @@ void ClickGUI::RenderFigmaMenu(float screenWidth, float screenHeight) {
         if (selectedCategory == 0) {
             RenderModuleButton("Reach", &Reach::g_reachEnabled);
             RenderModuleButton("Hitbox", &Hitbox::g_hitboxEnabled);
+            RenderModuleButton("Rapid Hit", &RapidHit::g_rapidHitEnabled);
         } else if (selectedCategory == 1) {
             RenderModuleButton("Watermark", &Watermark::g_showWatermark);
             RenderModuleButton("ArrayList", &ArrayList::g_enabled);
@@ -1482,6 +1485,7 @@ void ClickGUI::RenderFigmaMenu(float screenWidth, float screenHeight) {
             RenderModuleButton("Glide", &Glide::g_glideEnabled);
             RenderModuleButton("Fly", &Fly::g_flyEnabled);
             RenderModuleButton("Timer", &Timer::g_timerEnabled);
+            RenderModuleButton("High Jump", &HighJump::g_enabled);
         } else if (selectedCategory == 3) {
             RenderModuleButton("UnlockFPS", &UnlockFPS::g_unlockFpsEnabled);
             RenderModuleButton("AutoClicker", &AutoClicker::g_enabled);
@@ -1566,7 +1570,9 @@ void ClickGUI::RenderSeparatedMenu(float screenWidth, float screenHeight) {
     struct Toggles {
         static void toggleReach()     { Reach::SetEnabled(Reach::g_reachEnabled); }
         static void toggleHitbox()    { if (Hitbox::g_hitboxEnabled) Hitbox::Enable(); else Hitbox::Disable(); }
+        static void toggleRapidHit()  { if (RapidHit::g_rapidHitEnabled) RapidHit::Enable(); else RapidHit::Disable(); }
         static void toggleTimer()     { if (Timer::g_timerEnabled)   Timer::Enable(); else   Timer::Disable(); }
+        static void toggleHighJump()  { if (HighJump::g_enabled) HighJump::Enable(); else HighJump::Disable(); }
         static void toggleGlide()     { if (Glide::g_glideEnabled)   Glide::Enable(); else   Glide::Disable(); }
         static void toggleFly()       { if (Fly::g_flyEnabled)       Fly::Enable(); else     Fly::Disable(); }
         static void toggleFullBright(){ if (FullBright::g_fullBrightEnabled) FullBright::Enable(); else FullBright::Disable(); }
@@ -1638,11 +1644,13 @@ void ClickGUI::RenderSeparatedMenu(float screenWidth, float screenHeight) {
             if (i == 0) { // Combat
                 RenderModuleButton("Reach",   &Reach::g_reachEnabled,  Toggles::toggleReach);
                 RenderModuleButton("Hitbox",  &Hitbox::g_hitboxEnabled, Toggles::toggleHitbox);
+                RenderModuleButton("Rapid Hit", &RapidHit::g_rapidHitEnabled, Toggles::toggleRapidHit);
             } else if (i == 1) { // Movement
                 RenderModuleButton("AutoSprint", &AutoSprint::g_autoSprintEnabled);
                 RenderModuleButton("Glide",       &Glide::g_glideEnabled, Toggles::toggleGlide);
                 RenderModuleButton("Fly",         &Fly::g_flyEnabled,     Toggles::toggleFly);
                 RenderModuleButton("Timer",       &Timer::g_timerEnabled, Toggles::toggleTimer);
+                RenderModuleButton("High Jump",   &HighJump::g_enabled,   Toggles::toggleHighJump);
             } else if (i == 2) { // Visuals
                 RenderModuleButton("Watermark",   &Watermark::g_showWatermark);
                 RenderModuleButton("ArrayList",   &ArrayList::g_enabled);
@@ -1682,7 +1690,9 @@ void ClickGUI::RenderSeparatedMenu(float screenWidth, float screenHeight) {
 // without settings (AutoSprint, FullBright) get a plain toggle and cannot expand.
 static bool ModuleHasSettings(const char* name) {
     return strcmp(name, "Reach") == 0 || strcmp(name, "Hitbox") == 0 ||
+           strcmp(name, "Rapid Hit") == 0 ||
            strcmp(name, "Timer") == 0 || strcmp(name, "Glide") == 0 ||
+           strcmp(name, "High Jump") == 0 ||
            strcmp(name, "UnlockFPS") == 0 ||
            strcmp(name, "MotionBlur") == 0 || strcmp(name, "Watermark") == 0 ||
            strcmp(name, "ArrayList") == 0 || strcmp(name, "Render Info") == 0 ||
@@ -1833,11 +1843,17 @@ void ClickGUI::RenderModuleSettings(const char* name, float /*colWidth*/) {
     } else if (strcmp(name, "Hitbox") == 0) {
         if (GUI::RenderSlider("Size##H", &Hitbox::g_hitboxValue, 0.6f, 10.0f, "%.2f"))
             if (Hitbox::g_hitboxCave) memcpy((BYTE*)Hitbox::g_hitboxCave + 1, &Hitbox::g_hitboxValue, 4);
+    } else if (strcmp(name, "Rapid Hit") == 0) {
+        // Rapid Hit has no configurable settings
     } else if (strcmp(name, "Timer") == 0) {
         GUI::RenderSlider("Speed##T", &Timer::g_timerValue, 0.1f, 20.0f, "%.1fx");
     } else if (strcmp(name, "Glide") == 0) {
         if (GUI::RenderSlider("Fall Speed##G", &Glide::g_glideSpeed, -0.5f, 0.0f, "%.2f"))
             if (Glide::g_glideEnabled) Glide::UpdateSpeed();
+    } else if (strcmp(name, "High Jump") == 0) {
+        if (GUI::RenderSlider("Jump Height##HJ", &HighJump::g_jumpValue, 1.0f, 20.0f, "%.1f")) {
+            if (HighJump::g_jumpValuePtr) *HighJump::g_jumpValuePtr = HighJump::g_jumpValue;
+        }
     } else if (strcmp(name, "UnlockFPS") == 0) {
         GUI::RenderSlider("Limit##F", &UnlockFPS::g_fpsLimit, 0.0f, 1000.0f,
             UnlockFPS::g_fpsLimit <= 0.0f ? "Unlimited" : "%.0f");
@@ -2703,7 +2719,9 @@ static void RenderLunarModulesList(const char* categoryFilter, const char* query
     struct LLocal {
         static void toggleReach()      { Reach::SetEnabled(Reach::g_reachEnabled); }
         static void toggleHitbox()     { if (Hitbox::g_hitboxEnabled) Hitbox::Enable(); else Hitbox::Disable(); }
+        static void toggleRapidHit()   { if (RapidHit::g_rapidHitEnabled) RapidHit::Enable(); else RapidHit::Disable(); }
         static void toggleTimer()      { if (Timer::g_timerEnabled)   Timer::Enable(); else   Timer::Disable(); }
+        static void toggleHighJump()   { if (HighJump::g_enabled) HighJump::Enable(); else HighJump::Disable(); }
         static void toggleGlide()     { if (Glide::g_glideEnabled)   Glide::Enable(); else   Glide::Disable(); }
         static void toggleFly()       { if (Fly::g_flyEnabled)       Fly::Enable(); else     Fly::Disable(); }
         static void toggleFullBright() { if (FullBright::g_fullBrightEnabled) FullBright::Enable(); else FullBright::Disable(); }
@@ -2732,11 +2750,13 @@ static void RenderLunarModulesList(const char* categoryFilter, const char* query
         // Combat
         { "Reach", "R", "Combat", "Extends your attack reach / range on servers.", &Reach::g_reachEnabled, LLocal::toggleReach },
         { "Hitbox", "H", "Combat", "Expands client-side player hitboxes for easier hits.", &Hitbox::g_hitboxEnabled, LLocal::toggleHitbox },
+        { "Rapid Hit", "R", "Combat", "Enables rapid hit by modifying attack timing.", &RapidHit::g_rapidHitEnabled, LLocal::toggleRapidHit },
         // Movement
         { "AutoSprint", "A", "Movement", "Automatically sprints without pressing the sprint key.", &AutoSprint::g_autoSprintEnabled, nullptr },
         { "Glide", "G", "Movement", "Clamps your falling velocity for a slow, smooth glide.", &Glide::g_glideEnabled, LLocal::toggleGlide },
         { "Fly", "F", "Movement", "Disables the game's flight check for creative fly.", &Fly::g_flyEnabled, LLocal::toggleFly },
         { "Timer", "T", "Movement", "Accelerates or decelerates the game's internal speed.", &Timer::g_timerEnabled, LLocal::toggleTimer },
+        { "High Jump", "J", "Movement", "Increases your jump height to a configurable value.", &HighJump::g_enabled, LLocal::toggleHighJump },
         // Render
         { "Watermark", "W", "Render", "Renders the aesthetic Azyre watermark overlay.", &Watermark::g_showWatermark, nullptr },
         { "ArrayList", "L", "Render", "Displays active client modules in a clean list.", &ArrayList::g_enabled, nullptr },
@@ -3422,7 +3442,9 @@ void ClickGUI::RenderFlarialMenu(float screenWidth, float screenHeight) {
         struct FlarialToggles {
             static void toggleReach()      { Reach::SetEnabled(Reach::g_reachEnabled); }
             static void toggleHitbox()     { if (Hitbox::g_hitboxEnabled) Hitbox::Enable(); else Hitbox::Disable(); }
+            static void toggleRapidHit()   { if (RapidHit::g_rapidHitEnabled) RapidHit::Enable(); else RapidHit::Disable(); }
             static void toggleTimer()      { if (Timer::g_timerEnabled)   Timer::Enable(); else   Timer::Disable(); }
+            static void toggleHighJump()   { if (HighJump::g_enabled) HighJump::Enable(); else HighJump::Disable(); }
             static void toggleGlide()      { if (Glide::g_glideEnabled)   Glide::Enable(); else   Glide::Disable(); }
             static void toggleFly()        { if (Fly::g_flyEnabled)       Fly::Enable(); else     Fly::Disable(); }
             static void toggleFullBright() { if (FullBright::g_fullBrightEnabled) FullBright::Enable(); else FullBright::Disable(); }
@@ -3459,12 +3481,14 @@ void ClickGUI::RenderFlarialMenu(float screenWidth, float screenHeight) {
             // Combat
             { "Reach",        "Combat",   "Extend player attack distance",           &Reach::g_reachEnabled,          FlarialToggles::toggleReach },
             { "Hitbox",       "Combat",   "Expand entity hit collision size",        &Hitbox::g_hitboxEnabled,         FlarialToggles::toggleHitbox },
+            { "Rapid Hit",    "Combat",   "Enable rapid hit timing",                &RapidHit::g_rapidHitEnabled,    FlarialToggles::toggleRapidHit },
 
             // Movement
             { "AutoSprint",   "Movement", "Always sprint automatically",             &AutoSprint::g_autoSprintEnabled, nullptr },
             { "Glide",        "Movement", "Slow and controlled falling",             &Glide::g_glideEnabled,           FlarialToggles::toggleGlide },
             { "Fly",          "Movement", "Free movement flight mode",               &Fly::g_flyEnabled,               FlarialToggles::toggleFly },
             { "Timer",        "Movement", "Speed up or slow game tick speed",        &Timer::g_timerEnabled,           FlarialToggles::toggleTimer },
+            { "High Jump",    "Movement", "Increase jump height",                   &HighJump::g_enabled,             FlarialToggles::toggleHighJump },
 
             // Visuals
             { "Watermark",    "Visuals",  "Display modern client watermark HUD",     &Watermark::g_showWatermark,      nullptr },
@@ -3949,7 +3973,9 @@ void ClickGUI::RenderNixonMenu(float screenWidth, float screenHeight) {
             struct NixonLocalToggles {
                 static void toggleReach()     { Reach::SetEnabled(Reach::g_reachEnabled); }
                 static void toggleHitbox()    { if (Hitbox::g_hitboxEnabled) Hitbox::Enable(); else Hitbox::Disable(); }
+                static void toggleRapidHit()  { if (RapidHit::g_rapidHitEnabled) RapidHit::Enable(); else RapidHit::Disable(); }
                 static void toggleTimer()     { if (Timer::g_timerEnabled)   Timer::Enable(); else   Timer::Disable(); }
+                static void toggleHighJump()  { if (HighJump::g_enabled) HighJump::Enable(); else HighJump::Disable(); }
                 static void toggleGlide()     { if (Glide::g_glideEnabled)   Glide::Enable(); else   Glide::Disable(); }
                 static void toggleFly()       { if (Fly::g_flyEnabled)       Fly::Enable(); else     Fly::Disable(); }
                 static void toggleFullBright(){ if (FullBright::g_fullBrightEnabled) FullBright::Enable(); else FullBright::Disable(); }
@@ -3993,10 +4019,12 @@ void ClickGUI::RenderNixonMenu(float screenWidth, float screenHeight) {
             static const NixonMod nixonModules[] = {
                 { "Reach",        "Combat",   "Extend player attack distance",           &Reach::g_reachEnabled,          NixonLocalToggles::toggleReach },
                 { "Hitbox",       "Combat",   "Expand entity hit collision size",        &Hitbox::g_hitboxEnabled,        NixonLocalToggles::toggleHitbox },
+                { "Rapid Hit",    "Combat",   "Enable rapid hit timing",                &RapidHit::g_rapidHitEnabled,    NixonLocalToggles::toggleRapidHit },
                 { "AutoSprint",   "Movement", "Always sprint automatically",             &AutoSprint::g_autoSprintEnabled, nullptr },
                 { "Glide",        "Movement", "Slow and controlled falling",             &Glide::g_glideEnabled,          NixonLocalToggles::toggleGlide },
                 { "Fly",          "Movement", "Free movement flight mode",               &Fly::g_flyEnabled,              NixonLocalToggles::toggleFly },
                 { "Timer",        "Movement", "Speed up or slow game tick speed",        &Timer::g_timerEnabled,          NixonLocalToggles::toggleTimer },
+                { "High Jump",    "Movement", "Increase jump height",                   &HighJump::g_enabled,            NixonLocalToggles::toggleHighJump },
                 { "Watermark",    "Visuals",  "Display modern client watermark HUD",     &Watermark::g_showWatermark,     nullptr },
                 { "ArrayList",    "Visuals",  "HUD list of currently enabled modules",   &ArrayList::g_enabled,           nullptr },
                 { "Render Info",  "Visuals",  "Display coordinates, angle, and speed",   &RenderInfo::g_showRenderInfo,   nullptr },

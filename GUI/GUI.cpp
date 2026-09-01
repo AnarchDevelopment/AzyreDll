@@ -1557,12 +1557,14 @@ void GUI::RenderMenu(float screenWidth, float screenHeight) {
                                 case 0: return {
                                     { "Reach", "\xE2\x9A\x94", &Reach::g_reachEnabled, [](){ if (Reach::g_reachEnabled) Reach::SetEnabled(true); else Reach::SetEnabled(false); }, &Reach::RenderMenu },
                                     { "Hitbox", "\xF0\x9F\x94\xB1", &Hitbox::g_hitboxEnabled, [](){ if (Hitbox::g_hitboxEnabled) Hitbox::Enable(); else Hitbox::Disable(); }, &Hitbox::RenderMenu },
+                                    { "Rapid Hit", "\xE2\x9A\xA1", &RapidHit::g_rapidHitEnabled, [](){ if (RapidHit::g_rapidHitEnabled) RapidHit::Enable(); else RapidHit::Disable(); }, &RapidHit::RenderMenu },
                                 };
                                 case 1: return {
                                     { "Auto Sprint", "\xF0\x9F\x8F\x83", &AutoSprint::g_autoSprintEnabled, [](){ if (AutoSprint::g_autoSprintEnabled) AutoSprint::Enable(); else AutoSprint::Disable(); }, &AutoSprint::RenderMenu },
                                     { "Glide", "\xF0\x9F\xAB\x9F", &Glide::g_glideEnabled, [](){ if (Glide::g_glideEnabled) Glide::Enable(); else Glide::Disable(); }, &Glide::RenderMenu },
                                     { "Fly", "\xE2\x9C\x88", &Fly::g_flyEnabled, [](){ if (Fly::g_flyEnabled) Fly::Enable(); else Fly::Disable(); }, &Fly::RenderMenu },
                                     { "Timer", "\xE2\x8F\xB1", &Timer::g_timerEnabled, [](){ if (Timer::g_timerEnabled) Timer::Enable(); else Timer::Disable(); }, &Timer::RenderMenu },
+                                    { "High Jump", "\xF0\x9F\x94\xBC", &HighJump::g_enabled, [](){ if (HighJump::g_enabled) HighJump::Enable(); else HighJump::Disable(); }, &HighJump::RenderMenu },
                                 };
                                 case 2: return {
                                     { "Watermark", "\xF0\x9F\x92\xAC", &Watermark::g_showWatermark, nullptr, &Watermark::RenderMenu },
@@ -2017,10 +2019,12 @@ bool GUI::InitializeTextures() {
     // Module icons
     g_moduleTextures["Reach"]       = LoadTextureFromResource(IDR_MOD_REACH);
     g_moduleTextures["Hitbox"]      = LoadTextureFromResource(IDR_MOD_HITBOX);
+    g_moduleTextures["Rapid Hit"]   = LoadTextureFromResource(IDR_MOD_RAPIDHIT);
     g_moduleTextures["Auto Sprint"] = LoadTextureFromResource(IDR_MOD_AUTOSPRINT);
     g_moduleTextures["Fly"]         = LoadTextureFromResource(IDR_MOD_FLY);
     g_moduleTextures["Glide"]       = LoadTextureFromResource(IDR_MOD_GLIDE);
     g_moduleTextures["Timer"]       = LoadTextureFromResource(IDR_MOD_TIMER);
+    g_moduleTextures["High Jump"]   = LoadTextureFromResource(IDR_MOD_HIGHJUMP);
     g_moduleTextures["Watermark"]   = LoadTextureFromResource(IDR_MOD_WATERMARK);
     g_moduleTextures["ArrayList"]   = LoadTextureFromResource(IDR_MOD_ARRAYLIST);
     g_moduleTextures["Render Info"] = LoadTextureFromResource(IDR_MOD_RENDERINFO);
@@ -2032,6 +2036,7 @@ bool GUI::InitializeTextures() {
     g_moduleTextures["Mouse Strokes"]= LoadTextureFromResource(IDR_MOD_MOUSESTROKES);
     g_moduleTextures["FullBright"]  = LoadTextureFromResource(IDR_MOD_FULLBRIGHT);
     g_moduleTextures["Motion Blur"] = LoadTextureFromResource(IDR_MOD_MOTIONBLUR);
+    g_moduleTextures["NoHurtCam"]   = LoadTextureFromResource(IDR_MOD_NOHURTCAM);
     g_moduleTextures["Click GUI"]   = LoadTextureFromResource(IDR_MOD_CLICKGUI);
     g_moduleTextures["Unlock FPS"]  = LoadTextureFromResource(IDR_MOD_UNLOCKFPS);
     g_moduleTextures["Auto Clicker"]= LoadTextureFromResource(IDR_MOD_AUTOCLICKER);

@@ -4,10 +4,12 @@ Under an4rch Development Public Source License 1.0
 
 #include "Combat/Reach/Reach.hpp"
 #include "Combat/Hitbox/Hitbox.hpp"
+#include "Combat/RapidHit/RapidHit.hpp"
 #include "Movement/AutoSprint/AutoSprint.hpp"
 #include "Movement/Glide/Glide.hpp"
 #include "Movement/Fly/Fly.hpp"
 #include "Movement/Timer/Timer.hpp"
+#include "Movement/HighJump/HighJump.hpp"
 #include "Visuals/FullBright/FullBright.hpp"
 #include "Visuals/RenderInfo/RenderInfo.hpp"
 #include "Terminal/Terminal.hpp"

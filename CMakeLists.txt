@@ -76,6 +76,7 @@ set(SOURCES
     Modules/Alloc/AllocateNear.cpp
     Modules/Combat/Hitbox/Hitbox.cpp
     Modules/Combat/Reach/Reach.cpp
+    Modules/Combat/RapidHit/RapidHit.cpp
     Modules/Info/Info.cpp
     Modules/Misc/AntiAFK/AntiAFK.cpp
     Modules/Misc/AutoClicker/AutoClicker.cpp
@@ -84,6 +85,7 @@ set(SOURCES
     Modules/Movement/AutoSprint/AutoSprint.cpp
     Modules/Movement/Fly/Fly.cpp
     Modules/Movement/Glide/Glide.cpp
+    Modules/Movement/HighJump/HighJump.cpp
     Modules/Movement/Timer/Timer.cpp
     Modules/PatternScan/PatternScan.cpp
     Modules/Splash/Splash.cpp
@@ -143,6 +145,7 @@ set(HEADERS
     Modules/Alloc/AllocateNear.hpp
     Modules/Combat/Hitbox/Hitbox.hpp
     Modules/Combat/Reach/Reach.hpp
+    Modules/Combat/RapidHit/RapidHit.hpp
     Modules/Globals.hpp
     Modules/Info/Info.hpp
     Modules/Misc/AntiAFK/AntiAFK.hpp
@@ -153,6 +156,7 @@ set(HEADERS
     Modules/ModuleManager.hpp
     Modules/Movement/AutoSprint/AutoSprint.hpp
     Modules/Movement/Glide/Glide.hpp
+    Modules/Movement/HighJump/HighJump.hpp
     Modules/Movement/Fly/Fly.hpp
     Modules/Movement/Timer/Timer.hpp
     Modules/PatternScan/PatternScan.hpp

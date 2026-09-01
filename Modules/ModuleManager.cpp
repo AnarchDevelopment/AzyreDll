@@ -8,6 +8,7 @@ Under an4rch Development Public Source License 1.0
 void Module::Initialize(uintptr_t gameBase, size_t imageSize, HudElement* renderInfoHud, HudElement* watermarkHud, HudElement* keystrokesHud, HudElement* cpsHud, HudElement* fpsOverlayHud, HudElement* pingHud, HudElement* playerInfoHud, HudElement* mouseStrokesHud) {
     Reach::Initialize(gameBase);
     Hitbox::Initialize(gameBase);
+    RapidHit::Initialize(gameBase);
     Timer::Initialize(gameBase);
     FullBright::Initialize(gameBase);
     RenderInfo::Initialize(renderInfoHud);
@@ -28,6 +29,7 @@ void Module::Initialize(uintptr_t gameBase, size_t imageSize, HudElement* render
     AntiAFK::Initialize();
     Screenshot::Initialize();
     NoHurtCam::Initialize(gameBase);
+    HighJump::Initialize(gameBase);
 
     // Resolve the patch targets once (game module memory)
     AutoSprint::ScanPattern(gameBase, imageSize);
@@ -35,6 +37,8 @@ void Module::Initialize(uintptr_t gameBase, size_t imageSize, HudElement* render
     Glide::ScanPattern(gameBase, imageSize);
     Fly::ScanPattern(gameBase, imageSize);
     NoHurtCam::ScanPattern(gameBase, imageSize);
+    RapidHit::ScanPattern(gameBase, imageSize);
+    HighJump::ScanPattern(gameBase, imageSize);
 }
 
 void Module::UpdateAnimation(unsigned long long now) {
