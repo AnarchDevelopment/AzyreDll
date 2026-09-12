@@ -254,6 +254,16 @@ nlohmann::json ConfigManager::CollectCurrentConfig() {
     config["Visuals"]["Watermark"]["chromaText"] = Watermark::g_chromaText;
     config["Visuals"]["Watermark"]["chromaSpeed"] = Watermark::g_chromaSpeed;
     config["Visuals"]["Watermark"]["chromaDirection"] = Watermark::g_chromaDirection;
+    config["Visuals"]["Watermark"]["chromaPreset"] = Watermark::g_chromaPreset;
+    config["Visuals"]["Watermark"]["customColorCount"] = Watermark::g_customColorCount;
+    config["Visuals"]["Watermark"]["chromaAngle"] = Watermark::g_chromaAngle;
+    config["Visuals"]["Watermark"]["chromaSaturation"] = Watermark::g_chromaSaturation;
+    config["Visuals"]["Watermark"]["chromaLinear"] = Watermark::g_chromaLinear;
+    for (int i = 0; i < Watermark::g_customColorCount && i < 4; i++) {
+        config["Visuals"]["Watermark"]["customColors"][i] =
+            nlohmann::json::array({Watermark::g_customColors[i].x, Watermark::g_customColors[i].y,
+                                   Watermark::g_customColors[i].z, Watermark::g_customColors[i].w});
+    }
     config["Visuals"]["Watermark"]["mirroredGradient"] = Watermark::g_mirroredGradient;
     config["Visuals"]["Watermark"]["edgeFade"] = Watermark::g_edgeFade;
     config["Visuals"]["Watermark"]["imageOpacity"] = Watermark::g_imageOpacity;
@@ -302,6 +312,16 @@ nlohmann::json ConfigManager::CollectCurrentConfig() {
     config["Visuals"]["ArrayList"]["size"] = ArrayList::g_size;
     config["Visuals"]["ArrayList"]["chromaText"] = ArrayList::g_chromaText;
     config["Visuals"]["ArrayList"]["chromaSpeed"] = ArrayList::g_chromaSpeed;
+    config["Visuals"]["ArrayList"]["chromaPreset"] = ArrayList::g_chromaPreset;
+    config["Visuals"]["ArrayList"]["customColorCount"] = ArrayList::g_customColorCount;
+    config["Visuals"]["ArrayList"]["chromaAngle"] = ArrayList::g_chromaAngle;
+    config["Visuals"]["ArrayList"]["chromaSaturation"] = ArrayList::g_chromaSaturation;
+    config["Visuals"]["ArrayList"]["chromaLinear"] = ArrayList::g_chromaLinear;
+    for (int i = 0; i < ArrayList::g_customColorCount && i < 4; i++) {
+        config["Visuals"]["ArrayList"]["customColors"][i] =
+            nlohmann::json::array({ArrayList::g_customColors[i].x, ArrayList::g_customColors[i].y,
+                                   ArrayList::g_customColors[i].z, ArrayList::g_customColors[i].w});
+    }
     config["Visuals"]["ArrayList"]["glowEnabled"] = ArrayList::g_glowEnabled;
     config["Visuals"]["ArrayList"]["glowStrength"] = ArrayList::g_glowStrength;
     config["Visuals"]["ArrayList"]["animationStyle"] = ArrayList::g_animationStyle;
@@ -663,6 +683,20 @@ void ConfigManager::ApplyConfig(const nlohmann::json& config) {
             if (wm.contains("chromaText")) Watermark::g_chromaText = wm["chromaText"];
             if (wm.contains("chromaSpeed")) Watermark::g_chromaSpeed = wm["chromaSpeed"];
             if (wm.contains("chromaDirection")) Watermark::g_chromaDirection = wm["chromaDirection"];
+            if (wm.contains("chromaPreset")) Watermark::g_chromaPreset = wm["chromaPreset"];
+            if (wm.contains("customColorCount")) Watermark::g_customColorCount = wm["customColorCount"];
+            if (wm.contains("chromaAngle")) Watermark::g_chromaAngle = wm["chromaAngle"];
+            if (wm.contains("chromaSaturation")) Watermark::g_chromaSaturation = wm["chromaSaturation"];
+            if (wm.contains("chromaLinear")) Watermark::g_chromaLinear = wm["chromaLinear"];
+            if (wm.contains("customColors") && wm["customColors"].is_array()) {
+                for (size_t i = 0; i < wm["customColors"].size() && i < 4; i++) {
+                    if (wm["customColors"][i].size() == 4) {
+                        Watermark::g_customColors[i] = ImVec4(
+                            wm["customColors"][i][0], wm["customColors"][i][1],
+                            wm["customColors"][i][2], wm["customColors"][i][3]);
+                    }
+                }
+            }
             if (wm.contains("mirroredGradient")) Watermark::g_mirroredGradient = wm["mirroredGradient"];
             if (wm.contains("edgeFade")) Watermark::g_edgeFade = wm["edgeFade"];
             if (wm.contains("imageOpacity")) Watermark::g_imageOpacity = wm["imageOpacity"];
@@ -729,6 +763,20 @@ void ConfigManager::ApplyConfig(const nlohmann::json& config) {
             if (al.contains("size")) ArrayList::g_size = al["size"];
             if (al.contains("chromaText")) ArrayList::g_chromaText = al["chromaText"];
             if (al.contains("chromaSpeed")) ArrayList::g_chromaSpeed = al["chromaSpeed"];
+            if (al.contains("chromaPreset")) ArrayList::g_chromaPreset = al["chromaPreset"];
+            if (al.contains("customColorCount")) ArrayList::g_customColorCount = al["customColorCount"];
+            if (al.contains("chromaAngle")) ArrayList::g_chromaAngle = al["chromaAngle"];
+            if (al.contains("chromaSaturation")) ArrayList::g_chromaSaturation = al["chromaSaturation"];
+            if (al.contains("chromaLinear")) ArrayList::g_chromaLinear = al["chromaLinear"];
+            if (al.contains("customColors") && al["customColors"].is_array()) {
+                for (size_t i = 0; i < al["customColors"].size() && i < 4; i++) {
+                    if (al["customColors"][i].size() == 4) {
+                        ArrayList::g_customColors[i] = ImVec4(
+                            al["customColors"][i][0], al["customColors"][i][1],
+                            al["customColors"][i][2], al["customColors"][i][3]);
+                    }
+                }
+            }
             if (al.contains("glowEnabled")) ArrayList::g_glowEnabled = al["glowEnabled"];
             if (al.contains("glowStrength")) ArrayList::g_glowStrength = al["glowStrength"];
             if (al.contains("animationStyle")) ArrayList::g_animationStyle = al["animationStyle"];

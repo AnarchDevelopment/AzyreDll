@@ -5,6 +5,26 @@ project(Azyre
     LANGUAGES C CXX RC
 )
 
+# ANSI Terminal Color Codes
+string(ASCII 27 ESC)
+set(C_RESET    "${ESC}[0m")
+set(C_BOLD     "${ESC}[1m")
+set(C_DIM      "${ESC}[2m")
+set(C_RED      "${ESC}[31m")
+set(C_GREEN    "${ESC}[32m")
+set(C_YELLOW   "${ESC}[33m")
+set(C_BLUE     "${ESC}[34m")
+set(C_MAGENTA  "${ESC}[35m")
+set(C_CYAN     "${ESC}[36m")
+set(C_WHITE    "${ESC}[37m")
+set(C_GRAY     "${ESC}[90m")
+set(C_B_RED    "${ESC}[1;31m")
+set(C_B_GREEN  "${ESC}[1;32m")
+set(C_B_YELLOW "${ESC}[1;33m")
+set(C_B_CYAN   "${ESC}[1;36m")
+set(C_B_WHITE  "${ESC}[1;37m")
+set(C_B_MAG    "${ESC}[1;35m")
+
 # Standard C++20
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -256,3 +276,42 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     winhttp
     WindowsApp
 )
+
+# ==============================================================================
+# Build Time Visual Notifications
+# ==============================================================================
+# Banner shown right before compilation begins
+add_custom_command(TARGET ${PROJECT_NAME} PRE_BUILD
+    COMMAND ${CMAKE_COMMAND} -E cmake_echo_color --yellow --bold "[!] Building ${PROJECT_NAME}..."
+    COMMENT ""
+)
+
+# Banner shown right after successful link
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E cmake_echo_color --green --bold "[+] ${PROJECT_NAME}.dll built successfully!"
+    COMMENT ""
+)
+
+# ==============================================================================
+# Configuration Summary (ANSI)
+# ==============================================================================
+list(LENGTH SOURCES TOTAL_SOURCES)
+
+message("")
+message("${C_B_CYAN}       _                     ${C_RESET}")
+message("${C_B_CYAN}      / \\   _____   _ _ __ ___ ${C_RESET}   :: ${C_BOLD}${PROJECT_NAME} Client DLL${C_RESET} ::")
+message("${C_B_CYAN}     / _ \\ |_  / | | | '__/ _ \\${C_RESET}   v${PROJECT_VERSION} (${C_B_MAG}${GIT_COMMIT_HASH}${C_RESET})")
+message("${C_B_CYAN}    / ___ \\ / /| |_| | | |  __/${C_RESET}")
+message("${C_B_CYAN}   /_/   \\_/___|\\__, |_|  \\___|${C_RESET}")
+message("${C_B_CYAN}                |___/          ${C_RESET}")
+message("${C_GRAY}------------------------------------------------------------${C_RESET}")
+message("  ${C_CYAN}• Target${C_RESET}        : ${C_B_WHITE}${PROJECT_NAME}.dll${C_RESET}")
+message("  ${C_CYAN}• Source Files${C_RESET}  : ${C_B_WHITE}${TOTAL_SOURCES}${C_RESET} files")
+message("  ${C_CYAN}• Architecture${C_RESET}  : ${C_WHITE}${CMAKE_SYSTEM_PROCESSOR}${C_RESET}")
+message("  ${C_CYAN}• Standard${C_RESET}      : ${C_WHITE}C++${CMAKE_CXX_STANDARD}${C_RESET}")
+message("  ${C_CYAN}• Runtime${C_RESET}       : ${C_WHITE}MSVC /MT (MultiThreaded)${C_RESET}")
+message("  ${C_CYAN}• Commit${C_RESET}        : ${C_B_MAG}${GIT_COMMIT_HASH}${C_RESET}")
+message("${C_GRAY}------------------------------------------------------------${C_RESET}")
+message("${C_B_GREEN}[✓] CMake configured successfully.${C_RESET}")
+message("")
+

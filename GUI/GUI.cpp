@@ -1769,7 +1769,7 @@ void GUI::RenderMenu(float screenWidth, float screenHeight) {
                 ImGui::EndChild();
                 ImGui::PopStyleVar(2);
                 ImGui::PopStyleColor(4);
-                
+
                 ImGui::PopStyleVar();
             }
             ImGui::EndChild();

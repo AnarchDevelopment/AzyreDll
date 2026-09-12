@@ -4,11 +4,13 @@ Under an4rch Development Public Source License 1.0
 
 #include "Watermark.hpp"
 #include "../../../Animations/Animations.hpp"
+#include "../../../Utils/GradientText.hpp"
 #include "../../../Utils/HudElement.hpp"
 #include "../../../ImGui/imgui.h"
+#include "../../../ImGui/backend/imgui_impl_dx11.h"
 #include "../../../GUI/GUI.hpp"
-#include "../../../Assets/resource.h"
 #include "../../../Assets/stb/stb_image.h"
+#include "../../../Assets/resource.h"
 #include <d3d11.h>
 #include <windows.h>
 #include <cmath>
@@ -51,6 +53,18 @@ std::vector<ImVec4> Watermark::g_chromaColors = {
 float Watermark::g_imageOpacity = 1.0f;
 float Watermark::g_imageSize = 50.0f;
 
+int Watermark::g_chromaPreset = 1; // Default to Rainbow
+ImVec4 Watermark::g_customColors[4] = {
+    ImVec4(1.0f, 0.4f, 0.8f, 1.0f),
+    ImVec4(0.6f, 0.5f, 1.0f, 1.0f),
+    ImVec4(0.4f, 0.8f, 1.0f, 1.0f),
+    ImVec4(1.0f, 0.6f, 0.3f, 1.0f)
+};
+int Watermark::g_customColorCount = 4;
+float Watermark::g_chromaAngle = 0.0f;
+float Watermark::g_chromaSaturation = 1.0f;
+bool Watermark::g_chromaLinear = false;
+
 int Watermark::g_animStyle = 0;
 float Watermark::g_slideOffset = 40.0f;
 
@@ -70,74 +84,49 @@ void* Watermark::g_watermarkTexture = nullptr;
 int Watermark::g_texWidth = 0;
 int Watermark::g_texHeight = 0;
 
-// Local helper function for chroma color cycling
-// Helper for multi-color interpolation
-ImVec4 GetInterpolatedColor(const std::vector<ImVec4>& colors, float t) {
-    if (colors.empty()) return ImVec4(1, 1, 1, 1);
-    if (colors.size() == 1) return colors[0];
-    
-    t = fmodf(fmaxf(0.0f, t), 1.0f);
-    float scaledT = t * (colors.size() - 1);
-    int idx1 = (int)scaledT;
-    int idx2 = (idx1 + 1) % colors.size();
-    float blend = scaledT - idx1;
-    
-    const ImVec4& c1 = colors[idx1];
-    const ImVec4& c2 = colors[idx2];
-    
-    return ImVec4(
-        c1.x + (c2.x - c1.x) * blend,
-        c1.y + (c2.y - c1.y) * blend,
-        c1.z + (c2.z - c1.z) * blend,
-        c1.w + (c2.w - c1.w) * blend
-    );
-}
+struct WatermarkPreset {
+    const char* name;
+    std::vector<ImVec4> colors;
+};
 
-void DrawGradientText(ImDrawList* draw, ImFont* font, float fontSize, ImVec2 pos, const char* text, const std::vector<ImVec4>& colors, float alpha, bool animate) {
-    std::string sText = text;
-    if (sText.empty()) return;
-    
-    float totalWidth = 0.0f;
-    ImFontBaked* baked = font->GetFontBaked(fontSize);
-    for (char c : sText) {
-        totalWidth += baked->GetCharAdvance(c);
+static const WatermarkPreset g_wmPresets[] = {
+    { "Custom",     {} },
+    { "Rainbow",    { ImVec4(1,0,0,1), ImVec4(1,0.5f,0,1), ImVec4(1,1,0,1),
+                      ImVec4(0,1,0,1), ImVec4(0,0,1,1), ImVec4(0.5f,0,1,1) } },
+    { "Poison",     { ImVec4(0,0.9f,0.3f,1), ImVec4(0.2f,0.8f,0.1f,1),
+                      ImVec4(0.6f,0,0.8f,1), ImVec4(0.1f,0.9f,0.4f,1) } },
+    { "Bubblegum",  { ImVec4(1,0.4f,0.7f,1), ImVec4(0.9f,0.3f,0.9f,1),
+                      ImVec4(0.5f,0.2f,1,1), ImVec4(1,0.6f,0.8f,1) } },
+    { "Cute",       { ImVec4(1,0.5f,0.7f,1), ImVec4(1,0.7f,0.8f,1),
+                      ImVec4(0.8f,0.5f,1,1), ImVec4(0.6f,0.8f,1,1) } },
+    { "Sunset",     { ImVec4(1,0.2f,0,1), ImVec4(1,0.6f,0,1),
+                      ImVec4(1,0.9f,0,1), ImVec4(0.8f,0,0.5f,1) } },
+    { "Ocean",      { ImVec4(0,0.4f,0.8f,1), ImVec4(0,0.7f,0.9f,1),
+                      ImVec4(0,1,1,1), ImVec4(0.2f,0.6f,0.9f,1) } },
+    { "Fire",       { ImVec4(1,0,0,1), ImVec4(1,0.4f,0,1),
+                      ImVec4(1,0.8f,0,1), ImVec4(1,0.2f,0,1) } },
+    { "Frost",      { ImVec4(0.7f,0.9f,1,1), ImVec4(0.4f,0.7f,1,1),
+                      ImVec4(0.8f,0.95f,1,1), ImVec4(0.5f,0.8f,1,1) } },
+    { "Neon",       { ImVec4(1,0,0.5f,1), ImVec4(0,1,0.5f,1),
+                      ImVec4(0.5f,0,1,1), ImVec4(1,1,0,1) } },
+    { "Pastel",     { ImVec4(1,0.7f,0.7f,1), ImVec4(0.7f,1,0.7f,1),
+                      ImVec4(0.7f,0.7f,1,1), ImVec4(1,1,0.7f,1) } },
+    { "Lavender",   { ImVec4(0.7f,0.5f,1,1), ImVec4(0.9f,0.6f,1,1),
+                      ImVec4(0.5f,0.3f,0.9f,1), ImVec4(0.8f,0.7f,1,1) } },
+};
+static const int kWmPresetCount = sizeof(g_wmPresets) / sizeof(g_wmPresets[0]);
+
+std::vector<ImVec4> Watermark::GetChromaColors() {
+    if (g_chromaPreset == 0) {
+        std::vector<ImVec4> cols;
+        for (int i = 0; i < g_customColorCount && i < 4; i++)
+            cols.push_back(g_customColors[i]);
+        if (cols.empty()) cols.push_back(ImVec4(1, 1, 1, 1));
+        return cols;
     }
-    
-    float startX = pos.x;
-    float currentX = pos.x;
-    float timeOffset = animate ? ((float)GetTickCount64() / 1000.0f * Watermark::g_chromaSpeed) : 0.0f;
-    
-    for (size_t i = 0; i < sText.length(); i++) {
-        char c = sText[i];
-        float charWidth = baked->GetCharAdvance(c);
-        
-        // Calculate t based on pixel position for smoother transition
-        float t = (currentX - startX) / (totalWidth > 0 ? totalWidth : 1.0f);
-        
-        // Apply direction
-        float finalT = Watermark::g_chromaDirection ? (t + timeOffset) : (1.0f - t + timeOffset);
-        
-        // Mirror the gradient if enabled
-        if (Watermark::g_mirroredGradient) {
-            finalT = fmodf(finalT * 2.0f, 2.0f);
-            if (finalT > 1.0f) finalT = 2.0f - finalT;
-        }
-        
-        ImVec4 col = GetInterpolatedColor(colors, fmodf(finalT, 1.0f));
-        float charAlpha = alpha;
-        
-        // Apply edge fade (transparency at start/end)
-        if (Watermark::g_edgeFade) {
-            float edgeFade = 1.0f - powf(abs(t - 0.5f) * 2.0f, 4.0f);
-            charAlpha *= fmaxf(0.0f, edgeFade);
-        }
-        
-        col.w *= charAlpha;
-        
-        char buf[2] = { c, '\0' };
-        draw->AddText(font, fontSize, ImVec2(currentX, pos.y), ImGui::GetColorU32(col), buf);
-        currentX += charWidth;
-    }
+    if (g_chromaPreset >= 0 && g_chromaPreset < kWmPresetCount)
+        return g_wmPresets[g_chromaPreset].colors;
+    return g_wmPresets[1].colors;
 }
 
 void Watermark::Initialize(HudElement* hud) {
@@ -296,12 +285,13 @@ void Watermark::RenderDisplay() {
 
             if (g_showGlow) {
                 // Improved 4-way glow for symmetric "fade" appearance
+                std::vector<ImVec4> cols = g_chromaText ? Watermark::GetChromaColors() : std::vector<ImVec4>{Watermark::g_staticColor};
                 for (int i = 2; i >= 1; --i) {
                     float glowAlpha = easedAnim * (0.12f / i);
-                    DrawGradientText(draw, font, renderSize, ImVec2(pos.x + i, pos.y), g_customText, Watermark::g_chromaColors, glowAlpha, g_chromaText);
-                    DrawGradientText(draw, font, renderSize, ImVec2(pos.x - i, pos.y), g_customText, Watermark::g_chromaColors, glowAlpha, g_chromaText);
-                    DrawGradientText(draw, font, renderSize, ImVec2(pos.x, pos.y + i), g_customText, Watermark::g_chromaColors, glowAlpha, g_chromaText);
-                    DrawGradientText(draw, font, renderSize, ImVec2(pos.x, pos.y - i), g_customText, Watermark::g_chromaColors, glowAlpha, g_chromaText);
+                    GradientText::DrawGradientText(draw, font, renderSize, ImVec2(pos.x + i, pos.y), g_customText, cols, glowAlpha, g_chromaSpeed, g_chromaAngle, g_chromaSaturation, g_chromaLinear);
+                    GradientText::DrawGradientText(draw, font, renderSize, ImVec2(pos.x - i, pos.y), g_customText, cols, glowAlpha, g_chromaSpeed, g_chromaAngle, g_chromaSaturation, g_chromaLinear);
+                    GradientText::DrawGradientText(draw, font, renderSize, ImVec2(pos.x, pos.y + i), g_customText, cols, glowAlpha, g_chromaSpeed, g_chromaAngle, g_chromaSaturation, g_chromaLinear);
+                    GradientText::DrawGradientText(draw, font, renderSize, ImVec2(pos.x, pos.y - i), g_customText, cols, glowAlpha, g_chromaSpeed, g_chromaAngle, g_chromaSaturation, g_chromaLinear);
                 }
             }
 
@@ -314,11 +304,11 @@ void Watermark::RenderDisplay() {
                     { -ow * 0.7f, ow * 0.7f }, { ow * 0.7f, ow * 0.7f }
                 };
                 for (const auto& off : offs) {
-                    DrawGradientText(draw, font, renderSize, ImVec2(pos.x + off.x, pos.y + off.y), g_customText, outlineCols, easedAnim, false);
+                    GradientText::DrawGradientText(draw, font, renderSize, ImVec2(pos.x + off.x, pos.y + off.y), g_customText, outlineCols, easedAnim, 0.0f, 0.0f, 1.0f);
                 }
             }
             
-            DrawGradientText(draw, font, renderSize, pos, g_customText, g_chromaText ? Watermark::g_chromaColors : std::vector<ImVec4>{Watermark::g_staticColor}, easedAnim, g_chromaText);
+            GradientText::DrawGradientText(draw, font, renderSize, pos, g_customText, g_chromaText ? Watermark::GetChromaColors() : std::vector<ImVec4>{Watermark::g_staticColor}, easedAnim, g_chromaSpeed, g_chromaAngle, g_chromaSaturation, g_chromaLinear);
             
             // Shimmer effect (Light streak)
             if (g_showShimmer) {
@@ -390,25 +380,27 @@ void Watermark::RenderMenu() {
             ImGui::Text("Color Settings");
             GUI::RenderCustomSwitch("Gradient Animation", &g_chromaText);
             if (g_chromaText) {
-                for (size_t i = 0; i < Watermark::g_chromaColors.size(); i++) {
-                    char label[32];
-                    sprintf_s(label, "Color %d", (int)i + 1);
-                    ImGui::ColorEdit4(label, (float*)&Watermark::g_chromaColors[i], ImGuiColorEditFlags_NoInputs);
-                    if (Watermark::g_chromaColors.size() > 2) {
-                        ImGui::SameLine();
-                        char btnLabel[32];
-                        sprintf_s(btnLabel, "X##%d", (int)i);
-                        if (GUI::RenderButton(btnLabel, ImVec2(24, 0))) {
-                            Watermark::g_chromaColors.erase(Watermark::g_chromaColors.begin() + i);
-                        }
+                const char* presetNames[32];
+                for (int i = 0; i < kWmPresetCount && i < 32; i++) presetNames[i] = g_wmPresets[i].name;
+                ImGui::SetNextItemWidth(-1.0f);
+                GUI::RenderCombo("Preset##WM", &g_chromaPreset, presetNames, kWmPresetCount);
+
+                if (g_chromaPreset == 0) {
+                    float colorCountF = (float)g_customColorCount;
+                    ImGui::SetNextItemWidth(-1.0f);
+                    if (GUI::RenderSlider("Colors##WM", &colorCountF, 2.0f, 4.0f, "%.0f"))
+                        g_customColorCount = (int)colorCountF;
+                    for (int i = 0; i < g_customColorCount && i < 4; i++) {
+                        char label[32];
+                        sprintf_s(label, "Color %d##WM", i);
+                        ImGui::ColorEdit4(label, (float*)&g_customColors[i], ImGuiColorEditFlags_NoInputs);
                     }
                 }
-                if (Watermark::g_chromaColors.size() < 6) {
-                    if (GUI::RenderButton("Add Color")) {
-                        Watermark::g_chromaColors.push_back(ImVec4(1, 1, 1, 1));
-                    }
-                }
+
                 GUI::RenderSlider("Speed", &g_chromaSpeed, 0.1f, 5.0f, "%.1fx");
+                GUI::RenderSlider("Gradient Angle", &g_chromaAngle, 0.0f, 360.0f, "%.0f°");
+                GUI::RenderSlider("Saturation##WM", &g_chromaSaturation, 0.0f, 2.0f, "%.2f");
+                GUI::RenderCustomSwitch("Linear Animation##WM", &g_chromaLinear);
                 GUI::RenderCustomSwitch("Forward Direction", &g_chromaDirection);
                 GUI::RenderCustomSwitch("Mirrored Gradient", &g_mirroredGradient);
                 GUI::RenderCustomSwitch("Side Alpha Fade", &g_edgeFade);

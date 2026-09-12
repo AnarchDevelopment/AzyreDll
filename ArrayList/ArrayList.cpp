@@ -4,6 +4,7 @@ Under an4rch Development Public Source License 1.0
 
 #include "ArrayList.hpp"
 #include "../Animations/Animations.hpp"
+#include "../Utils/GradientText.hpp"
 #include "../Modules/ModuleHeader.hpp"
 #include "../Modules/Visuals/ClickGUI/ClickGUI.hpp"
 #include "../Modules/Globals.hpp"
@@ -37,6 +38,63 @@ namespace ArrayList {
     ImVec4 g_textColor = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
     ImVec4 g_suffixColor = ImVec4(0.55f, 0.55f, 0.68f, 1.0f);
     float g_chromaSpeed = 2.0f;
+    int g_chromaPreset = 0;
+    ImVec4 g_customColors[4] = {
+        ImVec4(0.00f, 0.949f, 0.988f, 1.0f),
+        ImVec4(0.310f, 0.686f, 0.992f, 1.0f),
+        ImVec4(1.000f, 0.031f, 0.267f, 1.0f),
+        ImVec4(0.961f, 0.686f, 0.098f, 1.0f)
+    };
+    int g_customColorCount = 4;
+    float g_chromaAngle = 0.0f;
+    float g_chromaSaturation = 1.0f;
+    bool g_chromaLinear = false;
+
+    struct GradientPreset {
+        const char* name;
+        std::vector<ImVec4> colors;
+    };
+
+    static const GradientPreset g_presets[] = {
+        { "Custom",     {} },
+        { "Rainbow",    { ImVec4(1.0f,0.0f,0.0f,1), ImVec4(1.0f,0.5f,0.0f,1), ImVec4(1.0f,1.0f,0.0f,1),
+                          ImVec4(0.0f,1.0f,0.0f,1), ImVec4(0.0f,0.0f,1.0f,1), ImVec4(0.5f,0.0f,1.0f,1) } },
+        { "Poison",     { ImVec4(0.0f,0.9f,0.3f,1), ImVec4(0.2f,0.8f,0.1f,1), ImVec4(0.6f,0.0f,0.8f,1),
+                          ImVec4(0.1f,0.9f,0.4f,1) } },
+        { "Bubblegum",  { ImVec4(1.0f,0.4f,0.7f,1), ImVec4(0.9f,0.3f,0.9f,1), ImVec4(0.5f,0.2f,1.0f,1),
+                          ImVec4(1.0f,0.6f,0.8f,1) } },
+        { "Cute",       { ImVec4(1.0f,0.5f,0.7f,1), ImVec4(1.0f,0.7f,0.8f,1), ImVec4(0.8f,0.5f,1.0f,1),
+                          ImVec4(0.6f,0.8f,1.0f,1) } },
+        { "Sunset",     { ImVec4(1.0f,0.2f,0.0f,1), ImVec4(1.0f,0.6f,0.0f,1), ImVec4(1.0f,0.9f,0.0f,1),
+                          ImVec4(0.8f,0.0f,0.5f,1) } },
+        { "Ocean",      { ImVec4(0.0f,0.4f,0.8f,1), ImVec4(0.0f,0.7f,0.9f,1), ImVec4(0.0f,1.0f,1.0f,1),
+                          ImVec4(0.2f,0.6f,0.9f,1) } },
+        { "Fire",       { ImVec4(1.0f,0.0f,0.0f,1), ImVec4(1.0f,0.4f,0.0f,1), ImVec4(1.0f,0.8f,0.0f,1),
+                          ImVec4(1.0f,0.2f,0.0f,1) } },
+        { "Frost",      { ImVec4(0.7f,0.9f,1.0f,1), ImVec4(0.4f,0.7f,1.0f,1), ImVec4(0.8f,0.95f,1.0f,1),
+                          ImVec4(0.5f,0.8f,1.0f,1) } },
+        { "Neon",       { ImVec4(1.0f,0.0f,0.5f,1), ImVec4(0.0f,1.0f,0.5f,1), ImVec4(0.5f,0.0f,1.0f,1),
+                          ImVec4(1.0f,1.0f,0.0f,1) } },
+        { "Pastel",     { ImVec4(1.0f,0.7f,0.7f,1), ImVec4(0.7f,1.0f,0.7f,1), ImVec4(0.7f,0.7f,1.0f,1),
+                          ImVec4(1.0f,1.0f,0.7f,1) } },
+        { "Lavender",   { ImVec4(0.7f,0.5f,1.0f,1), ImVec4(0.9f,0.6f,1.0f,1), ImVec4(0.5f,0.3f,0.9f,1),
+                          ImVec4(0.8f,0.7f,1.0f,1) } },
+    };
+    static const int kPresetCount = sizeof(g_presets) / sizeof(g_presets[0]);
+
+    std::vector<ImVec4> GetChromaColors() {
+        if (g_chromaPreset == 0) {
+            // Custom: use user-defined colors
+            std::vector<ImVec4> cols;
+            for (int i = 0; i < g_customColorCount && i < 4; i++)
+                cols.push_back(g_customColors[i]);
+            if (cols.empty()) cols.push_back(ImVec4(1, 1, 1, 1));
+            return cols;
+        }
+        if (g_chromaPreset >= 0 && g_chromaPreset < kPresetCount)
+            return g_presets[g_chromaPreset].colors;
+        return g_presets[1].colors; // fallback: Rainbow
+    }
 
     bool g_glowEnabled = false;
     float g_glowStrength = 3.0f;
@@ -148,12 +206,35 @@ namespace ArrayList {
             ImGui::Separator();
             ImGui::TextDisabled("Text");
             GUI::RenderCustomSwitch("Chroma Text", &g_chromaText);
-            if (!g_chromaText) {
+            if (g_chromaText) {
+                const char* presetNames[32];
+                for (int i = 0; i < kPresetCount && i < 32; i++) presetNames[i] = g_presets[i].name;
+                ImGui::SetNextItemWidth(-1.0f);
+                GUI::RenderCombo("Preset##CT", &g_chromaPreset, presetNames, kPresetCount);
+
+                if (g_chromaPreset == 0) {
+                    // Custom: show color editor
+                    float colorCountF = (float)g_customColorCount;
+                    ImGui::SetNextItemWidth(-1.0f);
+                    if (GUI::RenderSlider("Colors##CT", &colorCountF, 2.0f, 4.0f, "%.0f"))
+                        g_customColorCount = (int)colorCountF;
+                    for (int i = 0; i < g_customColorCount && i < 4; i++) {
+                        char label[32];
+                        sprintf_s(label, "Color %d##CT", i);
+                        ImGui::ColorEdit4(label, (float*)&g_customColors[i], ImGuiColorEditFlags_NoInputs);
+                    }
+                }
+            } else {
                 ImGui::ColorEdit4("Text Color", (float*)&g_textColor, ImGuiColorEditFlags_NoInputs);
                 ImGui::ColorEdit4("Suffix Color", (float*)&g_suffixColor, ImGuiColorEditFlags_NoInputs);
             }
             if (g_chromaText || g_chromaSideBar) {
                 GUI::RenderSlider("Chroma Speed", &g_chromaSpeed, 0.5f, 6.0f, "%.1fx");
+            }
+            if (g_chromaText) {
+                GUI::RenderSlider("Gradient Angle", &g_chromaAngle, 0.0f, 360.0f, "%.0f°");
+                GUI::RenderSlider("Saturation##CT", &g_chromaSaturation, 0.0f, 2.0f, "%.2f");
+                GUI::RenderCustomSwitch("Linear Animation", &g_chromaLinear);
             }
             GUI::RenderCustomSwitch("Text Glow", &g_glowEnabled);
             if (g_glowEnabled) {
@@ -357,32 +438,61 @@ namespace ArrayList {
 
             // Render Text
             if (anim > 0.4f) {
-                ImVec4 tc = g_chromaText ? GetArrayListChroma((float)i, (float)activeMods.size()) : g_textColor;
-                tc.w = moveT;
-                ImU32 textCol = ImGui::GetColorU32(tc);
                 float textY = yPos + (currentSpacing - textSize.y) * 0.5f;
 
-                if (g_textShadow) {
-                    ImU32 shadowCol = IM_COL32(0, 0, 0, (int)(moveT * 200.0f));
-                    float shOff = g_textShadowOffset * s;
-                    draw->AddText(font, fontPx, ImVec2(xPos + shOff, textY + shOff), shadowCol, m->name.c_str());
+                if (g_chromaText) {
+                    // Per-character animated gradient text
+                    std::vector<ImVec4> chromaColors = GetChromaColors();
+
+                    if (g_textShadow) {
+                        float shOff = g_textShadowOffset * s;
+                        GradientText::DrawGradientText(draw, font, fontPx,
+                            ImVec2(xPos + shOff, textY + shOff), m->name.c_str(),
+                            {ImVec4(0, 0, 0, 1)}, moveT * 0.78f, g_chromaSpeed, g_chromaAngle, 1.0f);
+                    }
+
+                    if (g_glowEnabled) {
+                        ImU32 glowCol = ImGui::GetColorU32(ImVec4(chromaColors[0].x, chromaColors[0].y, chromaColors[0].z, moveT * 0.60f));
+                        GUI::AddTextGlow(draw, font, fontPx, ImVec2(xPos, textY), glowCol, m->name.c_str(), g_glowStrength);
+                    }
+
+                    GradientText::DrawGradientText(draw, font, fontPx,
+                        ImVec2(xPos, textY), m->name.c_str(),
+                        chromaColors, moveT, g_chromaSpeed, g_chromaAngle, g_chromaSaturation, g_chromaLinear);
+
                     if (!m->suffix.empty() && g_showSuffix) {
                         float nameWidth = ts(m->name).x;
-                        draw->AddText(font, fontPx, ImVec2(xPos + nameWidth + shOff, textY + shOff), shadowCol, (" [" + m->suffix + "]").c_str());
+                        GradientText::DrawGradientText(draw, font, fontPx,
+                            ImVec2(xPos + nameWidth, textY), (" [" + m->suffix + "]").c_str(),
+                            chromaColors, moveT, g_chromaSpeed, g_chromaAngle, g_chromaSaturation, g_chromaLinear);
                     }
-                }
+                } else {
+                    ImVec4 tc = g_textColor;
+                    tc.w = moveT;
+                    ImU32 textCol = ImGui::GetColorU32(tc);
 
-                if (g_glowEnabled) {
-                    ImU32 glowCol = ImGui::GetColorU32(ImVec4(tc.x, tc.y, tc.z, moveT * 0.60f));
-                    GUI::AddTextGlow(draw, font, fontPx, ImVec2(xPos, textY), glowCol, m->name.c_str(), g_glowStrength);
-                }
-                draw->AddText(font, fontPx, ImVec2(xPos, textY), textCol, m->name.c_str());
+                    if (g_textShadow) {
+                        ImU32 shadowCol = IM_COL32(0, 0, 0, (int)(moveT * 200.0f));
+                        float shOff = g_textShadowOffset * s;
+                        draw->AddText(font, fontPx, ImVec2(xPos + shOff, textY + shOff), shadowCol, m->name.c_str());
+                        if (!m->suffix.empty() && g_showSuffix) {
+                            float nameWidth = ts(m->name).x;
+                            draw->AddText(font, fontPx, ImVec2(xPos + nameWidth + shOff, textY + shOff), shadowCol, (" [" + m->suffix + "]").c_str());
+                        }
+                    }
 
-                if (!m->suffix.empty() && g_showSuffix) {
-                    float nameWidth = ts(m->name).x;
-                    ImVec4 suffixCol = g_chromaText ? GetArrayListChroma((float)i, (float)activeMods.size()) : g_suffixColor;
-                    suffixCol.w = moveT;
-                    draw->AddText(font, fontPx, ImVec2(xPos + nameWidth, textY), ImGui::GetColorU32(suffixCol), (" [" + m->suffix + "]").c_str());
+                    if (g_glowEnabled) {
+                        ImU32 glowCol = ImGui::GetColorU32(ImVec4(tc.x, tc.y, tc.z, moveT * 0.60f));
+                        GUI::AddTextGlow(draw, font, fontPx, ImVec2(xPos, textY), glowCol, m->name.c_str(), g_glowStrength);
+                    }
+                    draw->AddText(font, fontPx, ImVec2(xPos, textY), textCol, m->name.c_str());
+
+                    if (!m->suffix.empty() && g_showSuffix) {
+                        float nameWidth = ts(m->name).x;
+                        ImVec4 suffixCol = g_suffixColor;
+                        suffixCol.w = moveT;
+                        draw->AddText(font, fontPx, ImVec2(xPos + nameWidth, textY), ImGui::GetColorU32(suffixCol), (" [" + m->suffix + "]").c_str());
+                    }
                 }
             }
 

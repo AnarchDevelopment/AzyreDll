@@ -44,6 +44,12 @@ public:
     // Advanced Customization
     static std::string g_fontName;
     static std::vector<ImVec4> g_chromaColors;
+    static int g_chromaPreset;
+    static ImVec4 g_customColors[4];
+    static int g_customColorCount;
+    static float g_chromaAngle;
+    static float g_chromaSaturation;
+    static bool g_chromaLinear;
     static float g_imageOpacity;
     static float g_imageSize;
 
@@ -91,4 +97,7 @@ public:
 
     /// @brief Render menu controls
     static void RenderMenu();
+
+    /// @brief Get current chroma colors based on preset selection
+    static std::vector<ImVec4> GetChromaColors();
 };

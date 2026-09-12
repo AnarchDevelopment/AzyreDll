@@ -38,6 +38,12 @@ namespace ArrayList {
     extern ImVec4 g_textColor;
     extern ImVec4 g_suffixColor;
     extern float g_chromaSpeed;
+    extern int g_chromaPreset;
+    extern ImVec4 g_customColors[4];
+    extern int g_customColorCount;
+    extern float g_chromaAngle;
+    extern float g_chromaSaturation;
+    extern bool g_chromaLinear;
 
     // Glow
     extern bool g_glowEnabled;
