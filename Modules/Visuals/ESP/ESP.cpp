@@ -8,11 +8,13 @@ Under an4rch Development Public Source License 1.0
 #include "ESP.hpp"
 #include "../../../ImGui/imgui.h"
 #include "../../../GUI/GUI.hpp"
+#include "../../Terminal/Terminal.hpp"
 #include <windows.h>
 #include <cmath>
 #include <cstring>
 #include <cstdio>
 #include <algorithm>
+#include <unordered_map>
 #include <immintrin.h>
 
 bool ESP::g_enabled = false;
@@ -482,6 +484,10 @@ static bool WorldToScreen(float px, float py, float pz,
 }
 
 // ─── Render ───────────────────────────────────────────────────────
+// Per-entity position smoother (frame-rate-independent exponential)
+struct SmoothedPos { float x, y, z; bool valid; };
+static std::unordered_map<uintptr_t, SmoothedPos> s_posSmooth;
+
 void ESP::RenderDisplay(float sw, float sh) {
     if (!g_enabled || sw <= 0 || sh <= 0) return;
     uintptr_t lp = g_lp.load();
@@ -497,6 +503,21 @@ void ESP::RenderDisplay(float sw, float sh) {
     {
         std::lock_guard<std::mutex> lk(g_rpMtx);
         rps = g_rpCache;
+    }
+
+    // Frame delta for smoothing (capped at 100ms to avoid big jumps after lag)
+    static ULONGLONG s_lastFrameMs = 0;
+    ULONGLONG nowMs = GetTickCount64();
+    float dtSec = s_lastFrameMs ? fminf((nowMs - s_lastFrameMs) * 0.001f, 0.1f) : 0.016f;
+    s_lastFrameMs = nowMs;
+    // k=30 → time constant ~33ms; fast enough to feel responsive, smooth enough to hide 50ms tick steps
+    float alpha = 1.0f - expf(-30.0f * dtSec);
+
+    // Remove smooth-state entries for players that left the cache
+    for (auto it = s_posSmooth.begin(); it != s_posSmooth.end(); ) {
+        bool found = false;
+        for (auto r : rps) if (r == it->first) { found = true; break; }
+        it = found ? std::next(it) : s_posSmooth.erase(it);
     }
 
     ImDrawList* d = ImGui::GetForegroundDrawList();
@@ -515,6 +536,19 @@ void ESP::RenderDisplay(float sw, float sh) {
         // Skip any entity that doesn't have a valid player gamertag
         char nm[32] = { 0 };
         if (!ReadName(rp, nm, sizeof(nm))) continue;
+
+        // ── Position smoothing ──────────────────────────────────────
+        // Minecraft remote-player positions update at ~20TPS (every 50ms).
+        // Exponential lerp eliminates the discrete 50ms jump; the box glides
+        // smoothly to the latest server-tick position each render frame.
+        {
+            auto& sm = s_posSmooth[rp];
+            if (!sm.valid) { sm.x = ex; sm.y = ey; sm.z = ez; sm.valid = true; }
+            sm.x += (ex - sm.x) * alpha;
+            sm.y += (ey - sm.y) * alpha;
+            sm.z += (ez - sm.z) * alpha;
+            ex = sm.x; ey = sm.y; ez = sm.z;
+        }
 
         float ht = 1.8f;
         ReadHeight(rp, &ht);
