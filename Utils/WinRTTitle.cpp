@@ -76,7 +76,7 @@ namespace {
         std::string response;
 
         if (request) {
-            std::wstring headers = L"Accept: application/vnd.github+json\r\nUser-Agent: AzyreClient\r\n";
+            std::wstring headers = L"Accept: application/vnd.github+json\r\nUser-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.8010.100 Safari/537.3\r\n";
             if (!token.empty()) {
                 headers += L"Authorization: Bearer ";
                 for (const char character : token) {

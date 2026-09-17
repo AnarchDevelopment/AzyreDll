@@ -1351,6 +1351,7 @@ void ClickGUI::RenderAuroraMenu(float screenWidth, float screenHeight) {
             RenderModuleButton("MouseStrokes", &MouseStrokes::g_showMouseStrokes);
             RenderModuleButton("FullBright", &FullBright::g_fullBrightEnabled);
             RenderModuleButton("MotionBlur", &MotionBlur::g_motionBlurEnabled);
+            RenderModuleButton("ESP", &ESP::g_enabled);
         } else if (selectedCategory == 2) {
             RenderModuleButton("AutoSprint", &AutoSprint::g_autoSprintEnabled);
             RenderModuleButton("Glide", &Glide::g_glideEnabled);
@@ -1480,6 +1481,7 @@ void ClickGUI::RenderFigmaMenu(float screenWidth, float screenHeight) {
             RenderModuleButton("MouseStrokes", &MouseStrokes::g_showMouseStrokes);
             RenderModuleButton("FullBright", &FullBright::g_fullBrightEnabled);
             RenderModuleButton("MotionBlur", &MotionBlur::g_motionBlurEnabled);
+            RenderModuleButton("ESP", &ESP::g_enabled);
         } else if (selectedCategory == 2) {
             RenderModuleButton("AutoSprint", &AutoSprint::g_autoSprintEnabled);
             RenderModuleButton("Glide", &Glide::g_glideEnabled);
@@ -1571,11 +1573,13 @@ void ClickGUI::RenderSeparatedMenu(float screenWidth, float screenHeight) {
         static void toggleReach()     { Reach::SetEnabled(Reach::g_reachEnabled); }
         static void toggleHitbox()    { if (Hitbox::g_hitboxEnabled) Hitbox::Enable(); else Hitbox::Disable(); }
         static void toggleRapidHit()  { if (RapidHit::g_rapidHitEnabled) RapidHit::Enable(); else RapidHit::Disable(); }
+        static void toggleAimAssist() { if (AimAssist::g_enabled) AimAssist::Enable(); else AimAssist::Disable(); }
         static void toggleTimer()     { if (Timer::g_timerEnabled)   Timer::Enable(); else   Timer::Disable(); }
         static void toggleHighJump()  { if (HighJump::g_enabled) HighJump::Enable(); else HighJump::Disable(); }
         static void toggleGlide()     { if (Glide::g_glideEnabled)   Glide::Enable(); else   Glide::Disable(); }
         static void toggleFly()       { if (Fly::g_flyEnabled)       Fly::Enable(); else     Fly::Disable(); }
         static void toggleFullBright(){ if (FullBright::g_fullBrightEnabled) FullBright::Enable(); else FullBright::Disable(); }
+        static void toggleESP()       { if (ESP::g_enabled) ESP::Enable(); else ESP::Disable(); }
         static void toggleFPSOverlay() {
             if (FPSOverlay::g_showFpsOverlay) {
                 FPSOverlay::g_fpsOverlayEnableTime  = GetTickCount64();
@@ -1645,6 +1649,7 @@ void ClickGUI::RenderSeparatedMenu(float screenWidth, float screenHeight) {
                 RenderModuleButton("Reach",   &Reach::g_reachEnabled,  Toggles::toggleReach);
                 RenderModuleButton("Hitbox",  &Hitbox::g_hitboxEnabled, Toggles::toggleHitbox);
                 RenderModuleButton("Rapid Hit", &RapidHit::g_rapidHitEnabled, Toggles::toggleRapidHit);
+                RenderModuleButton("AimAssist", &AimAssist::g_enabled, Toggles::toggleAimAssist);
             } else if (i == 1) { // Movement
                 RenderModuleButton("AutoSprint", &AutoSprint::g_autoSprintEnabled);
                 RenderModuleButton("Glide",       &Glide::g_glideEnabled, Toggles::toggleGlide);
@@ -1663,6 +1668,7 @@ void ClickGUI::RenderSeparatedMenu(float screenWidth, float screenHeight) {
                 RenderModuleButton("MouseStrokes", &MouseStrokes::g_showMouseStrokes, Toggles::toggleMouseStrokes);
                 RenderModuleButton("FullBright",  &FullBright::g_fullBrightEnabled, Toggles::toggleFullBright);
                 RenderModuleButton("MotionBlur",  &MotionBlur::g_motionBlurEnabled);
+                RenderModuleButton("ESP",         &ESP::g_enabled, Toggles::toggleESP);
                 RenderModuleButton("ClickGUI",    &ClickGUI::g_enabled, Toggles::toggleClickGUI);
             } else if (i == 3) { // Misc
                 RenderModuleButton("UnlockFPS", &UnlockFPS::g_unlockFpsEnabled);
@@ -1700,7 +1706,8 @@ static bool ModuleHasSettings(const char* name) {
            strcmp(name, "FPS Overlay") == 0 || strcmp(name, "Ping Counter") == 0 ||
            strcmp(name, "ClickGUI") == 0 || strcmp(name, "AutoClicker") == 0 ||
            strcmp(name, "Anti-AFK") == 0 || strcmp(name, "Screenshot") == 0 ||
-           strcmp(name, "Player Info") == 0 || strcmp(name, "MouseStrokes") == 0;
+           strcmp(name, "Player Info") == 0 || strcmp(name, "MouseStrokes") == 0 ||
+           strcmp(name, "ESP") == 0;
 }
 
 void ClickGUI::RenderModuleButton(const char* label, bool* enabledPtr, void (*toggleCallback)()) {
@@ -1868,6 +1875,17 @@ void ClickGUI::RenderModuleSettings(const char* name, float /*colWidth*/) {
         } else {
             GUI::RenderSlider("Intensity##MB", &MotionBlur::g_blurIntensity, 1.0f, 30.0f, "%.0f");
         }
+    } else if (strcmp(name, "ESP") == 0) {
+        GUI::RenderCustomSwitch("Box##ESP", &ESP::g_showBox);
+        GUI::RenderCustomSwitch("Name##ESP", &ESP::g_showName);
+        GUI::RenderCustomSwitch("Distance##ESP", &ESP::g_showDistance);
+        GUI::RenderCustomSwitch("Health##ESP", &ESP::g_showHealth);
+        GUI::RenderCustomSwitch("Tracer##ESP", &ESP::g_showTracer);
+        GUI::RenderSlider("Max Dist##ESP", &ESP::g_maxDistance, 8.0f, 256.0f, "%.0f");
+        GUI::RenderSlider("FOV##ESP", &ESP::g_fov, 40.0f, 110.0f, "%.0f");
+        GUI::RenderSlider("Eye Height##ESP", &ESP::g_eyeHeight, 0.0f, 2.5f, "%.2f");
+        ImGui::ColorEdit4("Box##ESPC", ESP::g_boxColor, ImGuiColorEditFlags_NoInputs);
+        ImGui::ColorEdit4("Name##ESPC", ESP::g_nameColor, ImGuiColorEditFlags_NoInputs);
     } else if (strcmp(name, "Watermark") == 0) {
         GUI::RenderCustomSwitch("Chroma##WM",  &Watermark::g_chromaText);
         GUI::RenderCustomSwitch("Glow##WM",    &Watermark::g_showGlow);
@@ -2112,6 +2130,7 @@ static void RenderRiseModulesList(const char* query, const char* categoryFilter,
         static void toggleGlide()     { if (Glide::g_glideEnabled)   Glide::Enable(); else   Glide::Disable(); }
         static void toggleFly()       { if (Fly::g_flyEnabled)       Fly::Enable(); else     Fly::Disable(); }
         static void toggleFullBright(){ if (FullBright::g_fullBrightEnabled) FullBright::Enable(); else FullBright::Disable(); }
+        static void toggleESP()       { if (ESP::g_enabled) ESP::Enable(); else ESP::Disable(); }
         static void toggleFPSOverlay() {
             if (FPSOverlay::g_showFpsOverlay) {
                 FPSOverlay::g_fpsOverlayEnableTime  = GetTickCount64();
@@ -2156,6 +2175,7 @@ static void RenderRiseModulesList(const char* query, const char* categoryFilter,
         { "Player Info", "Render", "Displays your skin head and nickname on HUD.", &PlayerInfo::g_showPlayerInfo, nullptr },
         { "MouseStrokes", "Render", "Visualizes your camera and mouse movement with live trail.", &MouseStrokes::g_showMouseStrokes, LocalToggles::toggleMouseStrokes },
         { "FullBright", "Render", "Forces light levels to maximum brightness.", &FullBright::g_fullBrightEnabled, LocalToggles::toggleFullBright },
+        { "ESP", "Render", "2D world-to-screen player boxes.", &ESP::g_enabled, LocalToggles::toggleESP },
         { "MotionBlur", "Render", "Adds a realistic screen motion blur effect.", &MotionBlur::g_motionBlurEnabled, nullptr },
         { "ClickGUI", "Render", "Toggles and configures this ClickGUI overlay.", &ClickGUI::g_enabled, LocalToggles::toggleClickGUI },
         
@@ -2720,11 +2740,13 @@ static void RenderLunarModulesList(const char* categoryFilter, const char* query
         static void toggleReach()      { Reach::SetEnabled(Reach::g_reachEnabled); }
         static void toggleHitbox()     { if (Hitbox::g_hitboxEnabled) Hitbox::Enable(); else Hitbox::Disable(); }
         static void toggleRapidHit()   { if (RapidHit::g_rapidHitEnabled) RapidHit::Enable(); else RapidHit::Disable(); }
+        static void toggleAimAssist()  { if (AimAssist::g_enabled) AimAssist::Enable(); else AimAssist::Disable(); }
         static void toggleTimer()      { if (Timer::g_timerEnabled)   Timer::Enable(); else   Timer::Disable(); }
         static void toggleHighJump()   { if (HighJump::g_enabled) HighJump::Enable(); else HighJump::Disable(); }
         static void toggleGlide()     { if (Glide::g_glideEnabled)   Glide::Enable(); else   Glide::Disable(); }
         static void toggleFly()       { if (Fly::g_flyEnabled)       Fly::Enable(); else     Fly::Disable(); }
         static void toggleFullBright() { if (FullBright::g_fullBrightEnabled) FullBright::Enable(); else FullBright::Disable(); }
+        static void toggleESP()        { if (ESP::g_enabled) ESP::Enable(); else ESP::Disable(); }
         static void toggleFPSOverlay() {
             if (FPSOverlay::g_showFpsOverlay) {
                 FPSOverlay::g_fpsOverlayEnableTime  = GetTickCount64();
@@ -2751,6 +2773,7 @@ static void RenderLunarModulesList(const char* categoryFilter, const char* query
         { "Reach", "R", "Combat", "Extends your attack reach / range on servers.", &Reach::g_reachEnabled, LLocal::toggleReach },
         { "Hitbox", "H", "Combat", "Expands client-side player hitboxes for easier hits.", &Hitbox::g_hitboxEnabled, LLocal::toggleHitbox },
         { "Rapid Hit", "R", "Combat", "Enables rapid hit by modifying attack timing.", &RapidHit::g_rapidHitEnabled, LLocal::toggleRapidHit },
+        { "AimAssist", "A", "Combat", "Smooth aim toward nearest enemy.", &AimAssist::g_enabled, LLocal::toggleAimAssist },
         // Movement
         { "AutoSprint", "A", "Movement", "Automatically sprints without pressing the sprint key.", &AutoSprint::g_autoSprintEnabled, nullptr },
         { "Glide", "G", "Movement", "Clamps your falling velocity for a slow, smooth glide.", &Glide::g_glideEnabled, LLocal::toggleGlide },
@@ -2768,6 +2791,7 @@ static void RenderLunarModulesList(const char* categoryFilter, const char* query
         { "Player Info", "N", "Render", "Displays your skin head and nickname on HUD.", &PlayerInfo::g_showPlayerInfo, nullptr },
         { "MouseStrokes", "M", "Render", "Visualizes your camera and mouse movement with live trail.", &MouseStrokes::g_showMouseStrokes, LLocal::toggleMouseStrokes },
         { "FullBright", "B", "Render", "Forces light levels to maximum brightness.", &FullBright::g_fullBrightEnabled, LLocal::toggleFullBright },
+        { "ESP", "E", "Render", "2D world-to-screen boxes for nearby players.", &ESP::g_enabled, LLocal::toggleESP },
         { "MotionBlur", "M", "Render", "Adds a realistic screen motion blur effect.", &MotionBlur::g_motionBlurEnabled, nullptr },
         { "ClickGUI", "G", "Render", "Toggles and configures this ClickGUI overlay.", &ClickGUI::g_enabled, LLocal::toggleClickGUI },
         // Exploit
@@ -3443,11 +3467,13 @@ void ClickGUI::RenderFlarialMenu(float screenWidth, float screenHeight) {
             static void toggleReach()      { Reach::SetEnabled(Reach::g_reachEnabled); }
             static void toggleHitbox()     { if (Hitbox::g_hitboxEnabled) Hitbox::Enable(); else Hitbox::Disable(); }
             static void toggleRapidHit()   { if (RapidHit::g_rapidHitEnabled) RapidHit::Enable(); else RapidHit::Disable(); }
+            static void toggleAimAssist()  { if (AimAssist::g_enabled) AimAssist::Enable(); else AimAssist::Disable(); }
             static void toggleTimer()      { if (Timer::g_timerEnabled)   Timer::Enable(); else   Timer::Disable(); }
             static void toggleHighJump()   { if (HighJump::g_enabled) HighJump::Enable(); else HighJump::Disable(); }
             static void toggleGlide()      { if (Glide::g_glideEnabled)   Glide::Enable(); else   Glide::Disable(); }
             static void toggleFly()        { if (Fly::g_flyEnabled)       Fly::Enable(); else     Fly::Disable(); }
             static void toggleFullBright() { if (FullBright::g_fullBrightEnabled) FullBright::Enable(); else FullBright::Disable(); }
+            static void toggleESP()        { if (ESP::g_enabled) ESP::Enable(); else ESP::Disable(); }
             static void toggleFPSOverlay() {
                 if (FPSOverlay::g_showFpsOverlay) {
                     FPSOverlay::g_fpsOverlayEnableTime  = GetTickCount64();
@@ -3482,6 +3508,7 @@ void ClickGUI::RenderFlarialMenu(float screenWidth, float screenHeight) {
             { "Reach",        "Combat",   "Extend player attack distance",           &Reach::g_reachEnabled,          FlarialToggles::toggleReach },
             { "Hitbox",       "Combat",   "Expand entity hit collision size",        &Hitbox::g_hitboxEnabled,         FlarialToggles::toggleHitbox },
             { "Rapid Hit",    "Combat",   "Enable rapid hit timing",                &RapidHit::g_rapidHitEnabled,    FlarialToggles::toggleRapidHit },
+            { "AimAssist",    "Combat",   "Smooth aim toward nearest enemy",        &AimAssist::g_enabled,           FlarialToggles::toggleAimAssist },
 
             // Movement
             { "AutoSprint",   "Movement", "Always sprint automatically",             &AutoSprint::g_autoSprintEnabled, nullptr },
@@ -3501,6 +3528,7 @@ void ClickGUI::RenderFlarialMenu(float screenWidth, float screenHeight) {
             { "Player Info",  "Visuals",  "Target health, equipment and status",     &PlayerInfo::g_showPlayerInfo,    nullptr },
             { "MouseStrokes", "Visuals",  "Visualize mouse buttons and movement",    &MouseStrokes::g_showMouseStrokes,FlarialToggles::toggleMouseStrokes },
             { "FullBright",   "Visuals",  "Permanent maximum ambient light",         &FullBright::g_fullBrightEnabled, FlarialToggles::toggleFullBright },
+            { "ESP",          "Visuals",  "2D world-to-screen player boxes",           &ESP::g_enabled,                  FlarialToggles::toggleESP },
             { "MotionBlur",   "Visuals",  "High performance camera motion blur",     &MotionBlur::g_motionBlurEnabled, nullptr },
             { "ClickGUI",     "Visuals",  "In-game menu configuration settings",     &ClickGUI::g_enabled,             FlarialToggles::toggleClickGUI },
 
@@ -3974,12 +4002,14 @@ void ClickGUI::RenderNixonMenu(float screenWidth, float screenHeight) {
                 static void toggleReach()     { Reach::SetEnabled(Reach::g_reachEnabled); }
                 static void toggleHitbox()    { if (Hitbox::g_hitboxEnabled) Hitbox::Enable(); else Hitbox::Disable(); }
                 static void toggleRapidHit()  { if (RapidHit::g_rapidHitEnabled) RapidHit::Enable(); else RapidHit::Disable(); }
+                static void toggleAimAssist() { if (AimAssist::g_enabled) AimAssist::Enable(); else AimAssist::Disable(); }
                 static void toggleTimer()     { if (Timer::g_timerEnabled)   Timer::Enable(); else   Timer::Disable(); }
                 static void toggleHighJump()  { if (HighJump::g_enabled) HighJump::Enable(); else HighJump::Disable(); }
                 static void toggleGlide()     { if (Glide::g_glideEnabled)   Glide::Enable(); else   Glide::Disable(); }
                 static void toggleFly()       { if (Fly::g_flyEnabled)       Fly::Enable(); else     Fly::Disable(); }
-                static void toggleFullBright(){ if (FullBright::g_fullBrightEnabled) FullBright::Enable(); else FullBright::Disable(); }
-                static void toggleFPSOverlay() {
+        static void toggleFullBright(){ if (FullBright::g_fullBrightEnabled) FullBright::Enable(); else FullBright::Disable(); }
+        static void toggleESP()       { if (ESP::g_enabled) ESP::Enable(); else ESP::Disable(); }
+        static void toggleFPSOverlay() {
                     if (FPSOverlay::g_showFpsOverlay) {
                         FPSOverlay::g_fpsOverlayEnableTime  = GetTickCount64();
                         FPSOverlay::g_fpsOverlayDisableTime = 0;
@@ -4020,6 +4050,7 @@ void ClickGUI::RenderNixonMenu(float screenWidth, float screenHeight) {
                 { "Reach",        "Combat",   "Extend player attack distance",           &Reach::g_reachEnabled,          NixonLocalToggles::toggleReach },
                 { "Hitbox",       "Combat",   "Expand entity hit collision size",        &Hitbox::g_hitboxEnabled,        NixonLocalToggles::toggleHitbox },
                 { "Rapid Hit",    "Combat",   "Enable rapid hit timing",                &RapidHit::g_rapidHitEnabled,    NixonLocalToggles::toggleRapidHit },
+                { "AimAssist",    "Combat",   "Smooth aim toward nearest enemy",        &AimAssist::g_enabled,           NixonLocalToggles::toggleAimAssist },
                 { "AutoSprint",   "Movement", "Always sprint automatically",             &AutoSprint::g_autoSprintEnabled, nullptr },
                 { "Glide",        "Movement", "Slow and controlled falling",             &Glide::g_glideEnabled,          NixonLocalToggles::toggleGlide },
                 { "Fly",          "Movement", "Free movement flight mode",               &Fly::g_flyEnabled,              NixonLocalToggles::toggleFly },
@@ -4038,6 +4069,7 @@ void ClickGUI::RenderNixonMenu(float screenWidth, float screenHeight) {
                 { "MotionBlur",   "Visuals",  "High performance camera motion blur",     &MotionBlur::g_motionBlurEnabled, nullptr },
                 { "ClickGUI",     "Visuals",  "In-game menu configuration settings",     &ClickGUI::g_enabled,            NixonLocalToggles::toggleClickGUI },
                 { "NoHurtCam",    "Visuals",  "Removes hurt camera shake effect",         &NoHurtCam::g_noHurtCamEnabled,  nullptr },
+                { "ESP",          "Visuals",  "2D world-to-screen player boxes",           &ESP::g_enabled,                 NixonLocalToggles::toggleESP },
                 { "UnlockFPS",    "Misc",     "Bypass Minecraft framerate limiter",      &UnlockFPS::g_unlockFpsEnabled,  nullptr },
                 { "AutoClicker",  "Misc",     "Simulate ultra-fast mouse clicking",      &AutoClicker::g_enabled,         nullptr },
                 { "Anti-AFK",     "Misc",     "Prevent automated idle disconnects",      &AntiAFK::g_enabled,             nullptr },

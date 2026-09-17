@@ -214,6 +214,14 @@ nlohmann::json ConfigManager::CollectCurrentConfig() {
 
     config["Combat"]["RapidHit"]["enabled"] = RapidHit::g_rapidHitEnabled;
 
+    config["Combat"]["AimAssist"]["enabled"] = AimAssist::g_enabled;
+    config["Combat"]["AimAssist"]["smoothness"] = AimAssist::g_smoothness;
+    config["Combat"]["AimAssist"]["maxDistance"] = AimAssist::g_maxDistance;
+    config["Combat"]["AimAssist"]["fov"] = AimAssist::g_fov;
+    config["Combat"]["AimAssist"]["targetHead"] = AimAssist::g_targetHead;
+    config["Combat"]["AimAssist"]["aimYawPitch"] = AimAssist::g_aimYawPitch;
+    config["Combat"]["AimAssist"]["crosshairPriority"] = AimAssist::g_crosshairPriority;
+
     // Movement modules
     config["Movement"]["AutoSprint"]["enabled"] = AutoSprint::g_autoSprintEnabled;
     config["Movement"]["Glide"]["enabled"] = Glide::g_glideEnabled;
@@ -361,6 +369,21 @@ nlohmann::json ConfigManager::CollectCurrentConfig() {
     config["Visuals"]["MotionBlur"]["enabled"] = MotionBlur::g_motionBlurEnabled;
 
     config["Visuals"]["NoHurtCam"]["enabled"] = NoHurtCam::g_noHurtCamEnabled;
+
+    config["Visuals"]["ESP"]["enabled"] = ESP::g_enabled;
+    config["Visuals"]["ESP"]["showBox"] = ESP::g_showBox;
+    config["Visuals"]["ESP"]["showName"] = ESP::g_showName;
+    config["Visuals"]["ESP"]["showDistance"] = ESP::g_showDistance;
+    config["Visuals"]["ESP"]["showHealth"] = ESP::g_showHealth;
+    config["Visuals"]["ESP"]["showTracer"] = ESP::g_showTracer;
+    config["Visuals"]["ESP"]["maxDistance"] = ESP::g_maxDistance;
+    config["Visuals"]["ESP"]["fov"] = ESP::g_fov;
+    config["Visuals"]["ESP"]["eyeHeight"] = ESP::g_eyeHeight;
+    config["Visuals"]["ESP"]["boxThickness"] = ESP::g_boxThickness;
+    config["Visuals"]["ESP"]["boxColor"] = nlohmann::json::array({ESP::g_boxColor[0], ESP::g_boxColor[1], ESP::g_boxColor[2], ESP::g_boxColor[3]});
+    config["Visuals"]["ESP"]["nameColor"] = nlohmann::json::array({ESP::g_nameColor[0], ESP::g_nameColor[1], ESP::g_nameColor[2], ESP::g_nameColor[3]});
+    config["Visuals"]["ESP"]["tracerColor"] = nlohmann::json::array({ESP::g_tracerColor[0], ESP::g_tracerColor[1], ESP::g_tracerColor[2], ESP::g_tracerColor[3]});
+    config["Visuals"]["ESP"]["distanceColor"] = nlohmann::json::array({ESP::g_distanceColor[0], ESP::g_distanceColor[1], ESP::g_distanceColor[2], ESP::g_distanceColor[3]});
     
     config["Visuals"]["Keystrokes"]["enabled"] = Keystrokes::g_showKeystrokes;
     config["Visuals"]["Keystrokes"]["scale"] = Keystrokes::g_keystrokesUIScale;
@@ -596,6 +619,16 @@ void ConfigManager::ApplyConfig(const nlohmann::json& config) {
                 RapidHit::g_rapidHitEnabled = config["Combat"]["RapidHit"]["enabled"];
             }
         }
+        if (config["Combat"].contains("AimAssist")) {
+            auto& aa = config["Combat"]["AimAssist"];
+            if (aa.contains("enabled")) AimAssist::g_enabled = aa["enabled"];
+            if (aa.contains("smoothness")) AimAssist::g_smoothness = aa["smoothness"];
+            if (aa.contains("maxDistance")) AimAssist::g_maxDistance = aa["maxDistance"];
+            if (aa.contains("fov")) AimAssist::g_fov = aa["fov"];
+            if (aa.contains("targetHead")) AimAssist::g_targetHead = aa["targetHead"];
+            if (aa.contains("aimYawPitch")) AimAssist::g_aimYawPitch = aa["aimYawPitch"];
+            if (aa.contains("crosshairPriority")) AimAssist::g_crosshairPriority = aa["crosshairPriority"];
+        }
     }
 
     // Movement modules
@@ -829,6 +862,26 @@ void ConfigManager::ApplyConfig(const nlohmann::json& config) {
             if (visuals["NoHurtCam"].contains("enabled")) {
                 NoHurtCam::g_noHurtCamEnabled = visuals["NoHurtCam"]["enabled"];
             }
+        }
+        if (visuals.contains("ESP")) {
+            auto& es = visuals["ESP"];
+            if (es.contains("enabled")) ESP::g_enabled = es["enabled"];
+            if (es.contains("showBox")) ESP::g_showBox = es["showBox"];
+            if (es.contains("showName")) ESP::g_showName = es["showName"];
+            if (es.contains("showDistance")) ESP::g_showDistance = es["showDistance"];
+            if (es.contains("showHealth")) ESP::g_showHealth = es["showHealth"];
+            if (es.contains("showTracer")) ESP::g_showTracer = es["showTracer"];
+            if (es.contains("maxDistance")) ESP::g_maxDistance = es["maxDistance"];
+            if (es.contains("fov")) ESP::g_fov = es["fov"];
+            if (es.contains("eyeHeight")) ESP::g_eyeHeight = es["eyeHeight"];
+            if (es.contains("boxThickness")) ESP::g_boxThickness = es["boxThickness"];
+            auto loadCol = [](const nlohmann::json& j, float* dst) {
+                if (j.is_array() && j.size() == 4) { for (int i = 0; i < 4; i++) dst[i] = j[i]; }
+            };
+            if (es.contains("boxColor")) loadCol(es["boxColor"], ESP::g_boxColor);
+            if (es.contains("nameColor")) loadCol(es["nameColor"], ESP::g_nameColor);
+            if (es.contains("tracerColor")) loadCol(es["tracerColor"], ESP::g_tracerColor);
+            if (es.contains("distanceColor")) loadCol(es["distanceColor"], ESP::g_distanceColor);
         }
         if (visuals.contains("Keystrokes")) {
             if (visuals["Keystrokes"].contains("enabled")) {
@@ -1142,6 +1195,12 @@ void ConfigManager::ReloadModulesAfterConfig() {
         NoHurtCam::Disable();
     }
 
+    if (ESP::g_enabled) {
+        ESP::Enable();
+    } else {
+        ESP::Disable();
+    }
+
     if (Reach::IsEnabled()) {
         Reach::SetEnabled(true);
     } else {
@@ -1152,6 +1211,12 @@ void ConfigManager::ReloadModulesAfterConfig() {
         RapidHit::Enable();
     } else {
         RapidHit::Disable();
+    }
+
+    if (AimAssist::g_enabled) {
+        AimAssist::Enable();
+    } else {
+        AimAssist::Disable();
     }
 
     if (Timer::g_timerEnabled) {

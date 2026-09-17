@@ -146,6 +146,7 @@ namespace ArrayList {
         currentStates.push_back({"Reach", std::to_string((int)Reach::g_reachValue) + "m", Reach::g_reachEnabled});
         currentStates.push_back({"Hitbox", std::to_string((int)(Hitbox::g_hitboxValue * 10)) + "x", Hitbox::g_hitboxEnabled});
         currentStates.push_back({"Rapid Hit", "", RapidHit::g_rapidHitEnabled});
+        currentStates.push_back({"AimAssist", "", AimAssist::g_enabled});
         currentStates.push_back({"AutoSprint", "", AutoSprint::g_autoSprintEnabled});
         currentStates.push_back({"Glide", "", Glide::g_glideEnabled});
         currentStates.push_back({"HighJump", std::to_string((int)HighJump::g_jumpValue) + "x", HighJump::g_enabled});
@@ -163,6 +164,7 @@ namespace ArrayList {
         currentStates.push_back({"FPS Overlay", "", FPSOverlay::g_showFpsOverlay});
         currentStates.push_back({"Ping Counter", (PingCounter::g_currentPing >= 0) ? std::to_string(PingCounter::g_currentPing) + "ms" : "--", PingCounter::g_showPingCounter});
         currentStates.push_back({"Player Info", "", PlayerInfo::g_showPlayerInfo});
+        currentStates.push_back({"ESP", "", ESP::g_enabled});
         currentStates.push_back({"Render Info", "", RenderInfo::g_showRenderInfo});
         currentStates.push_back({"Watermark", "", Watermark::g_showWatermark});
 

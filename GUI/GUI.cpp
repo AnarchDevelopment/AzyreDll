@@ -1558,6 +1558,7 @@ void GUI::RenderMenu(float screenWidth, float screenHeight) {
                                     { "Reach", "\xE2\x9A\x94", &Reach::g_reachEnabled, [](){ if (Reach::g_reachEnabled) Reach::SetEnabled(true); else Reach::SetEnabled(false); }, &Reach::RenderMenu },
                                     { "Hitbox", "\xF0\x9F\x94\xB1", &Hitbox::g_hitboxEnabled, [](){ if (Hitbox::g_hitboxEnabled) Hitbox::Enable(); else Hitbox::Disable(); }, &Hitbox::RenderMenu },
                                     { "Rapid Hit", "\xE2\x9A\xA1", &RapidHit::g_rapidHitEnabled, [](){ if (RapidHit::g_rapidHitEnabled) RapidHit::Enable(); else RapidHit::Disable(); }, &RapidHit::RenderMenu },
+                                    { "AimAssist", "\xF0\x9F\x94\xB5", &AimAssist::g_enabled, [](){ if (AimAssist::g_enabled) AimAssist::Enable(); else AimAssist::Disable(); }, &AimAssist::RenderMenu },
                                 };
                                 case 1: return {
                                     { "Auto Sprint", "\xF0\x9F\x8F\x83", &AutoSprint::g_autoSprintEnabled, [](){ if (AutoSprint::g_autoSprintEnabled) AutoSprint::Enable(); else AutoSprint::Disable(); }, &AutoSprint::RenderMenu },
@@ -1580,6 +1581,7 @@ void GUI::RenderMenu(float screenWidth, float screenHeight) {
                                     { "Motion Blur", "\xF0\x9F\xAA\x9C", &MotionBlur::g_motionBlurEnabled, nullptr, &MotionBlur::RenderMenu },
                                     { "Click GUI", "\xE2\x9A\x99", &ClickGUI::g_enabled, [](){ g_showMenu = ClickGUI::g_enabled; GUI::g_showMenu = g_showMenu; }, &ClickGUI::RenderMenu },
                                     { "NoHurtCam", "\xF0\x9F\x94\x84", &NoHurtCam::g_noHurtCamEnabled, [](){ if (NoHurtCam::g_noHurtCamEnabled) NoHurtCam::Enable(); else NoHurtCam::Disable(); }, &NoHurtCam::RenderMenu },
+                                    { "ESP", "\xF0\x9F\x8E\xAF", &ESP::g_enabled, [](){ if (ESP::g_enabled) ESP::Enable(); else ESP::Disable(); }, &ESP::RenderMenu },
                                 };
                                 case 3: return {
                                     { "Unlock FPS", "\xE2\x8F\xB1", &UnlockFPS::g_unlockFpsEnabled, nullptr, &UnlockFPS::RenderMenu },

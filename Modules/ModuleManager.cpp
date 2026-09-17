@@ -9,6 +9,7 @@ void Module::Initialize(uintptr_t gameBase, size_t imageSize, HudElement* render
     Reach::Initialize(gameBase);
     Hitbox::Initialize(gameBase);
     RapidHit::Initialize(gameBase);
+    AimAssist::Initialize(gameBase);
     Timer::Initialize(gameBase);
     FullBright::Initialize(gameBase);
     RenderInfo::Initialize(renderInfoHud);
@@ -18,6 +19,7 @@ void Module::Initialize(uintptr_t gameBase, size_t imageSize, HudElement* render
     FPSOverlay::Initialize(fpsOverlayHud);
     PingCounter::Initialize(pingHud);
     PlayerInfo::Initialize(playerInfoHud);
+    ESP::Initialize(gameBase);
     MouseStrokes::Initialize(mouseStrokesHud);
     Terminal::Initialize();
     Info::Initialize();
@@ -56,6 +58,8 @@ void Module::UpdateAnimation(unsigned long long now) {
     // Tick background modules
     AutoClicker::Tick();
     AntiAFK::Tick();
+    AimAssist::Tick();
+    ESP::Tick();
 }
 
 void Module::RenderDisplay(float sw, float sh) {
@@ -67,6 +71,7 @@ void Module::RenderDisplay(float sw, float sh) {
     PingCounter::RenderDisplay(sw, sh);
     PlayerInfo::RenderDisplay();
     MouseStrokes::RenderDisplay(sw, sh);
+    ESP::RenderDisplay(sw, sh);
     
     // Call new centralized ArrayList
     ArrayList::Render();

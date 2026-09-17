@@ -97,6 +97,7 @@ set(SOURCES
     Modules/Combat/Hitbox/Hitbox.cpp
     Modules/Combat/Reach/Reach.cpp
     Modules/Combat/RapidHit/RapidHit.cpp
+    Modules/Combat/AimAssist/AimAssist.cpp
     Modules/Info/Info.cpp
     Modules/Misc/AntiAFK/AntiAFK.cpp
     Modules/Misc/AutoClicker/AutoClicker.cpp
@@ -118,6 +119,7 @@ set(SOURCES
     Modules/Visuals/MotionBlur/MotionBlur.cpp
     Modules/Visuals/PingCounter/PingCounter.cpp
     Modules/Visuals/PlayerInfo/PlayerInfo.cpp
+    Modules/Visuals/ESP/ESP.cpp
     Modules/Visuals/MouseStrokes/MouseStrokes.cpp
     Modules/Visuals/RenderInfo/RenderInfo.cpp
     Modules/Visuals/Watermark/Watermark.cpp
@@ -166,6 +168,7 @@ set(HEADERS
     Modules/Combat/Hitbox/Hitbox.hpp
     Modules/Combat/Reach/Reach.hpp
     Modules/Combat/RapidHit/RapidHit.hpp
+    Modules/Combat/AimAssist/AimAssist.hpp
     Modules/Globals.hpp
     Modules/Info/Info.hpp
     Modules/Misc/AntiAFK/AntiAFK.hpp
@@ -191,6 +194,7 @@ set(HEADERS
     Modules/Visuals/MotionBlur/MotionBlur.hpp
     Modules/Visuals/PingCounter/PingCounter.hpp
     Modules/Visuals/PlayerInfo/PlayerInfo.hpp
+    Modules/Visuals/ESP/ESP.hpp
     Modules/Visuals/MouseStrokes/MouseStrokes.hpp
     Modules/Visuals/RenderInfo/RenderInfo.hpp
     Modules/Visuals/Watermark/Watermark.hpp
