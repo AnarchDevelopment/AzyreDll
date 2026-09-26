@@ -10,18 +10,26 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 include(FetchContent)
-
 FetchContent_Declare(
     imgui
-    URL https://github.com/ocornut/imgui/archive/refs/tags/v1.90.9.tar.gz
+    URL https://github.com/ocornut/imgui/archive/refs/heads/master.tar.gz
     SOURCE_SUBDIR __unused__
 )
+
 FetchContent_Declare(
     minhook
-    URL https://github.com/TsudaKageyu/minhook/archive/refs/tags/v1.3.3.tar.gz
+    URL https://github.com/TsudaKageyu/minhook/archive/refs/heads/master.tar.gz
     SOURCE_SUBDIR __unused__
 )
-FetchContent_MakeAvailable(imgui minhook)
+
+set(JSON_BuildTests OFF CACHE BOOL "" FORCE)
+set(JSON_Install OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(
+    json
+    URL https://github.com/nlohmann/json/archive/refs/heads/develop.tar.gz
+)
+
+FetchContent_MakeAvailable(imgui minhook json)
 
 set(IMGUI_SOURCES
     ${imgui_SOURCE_DIR}/imgui.cpp
@@ -108,7 +116,10 @@ target_link_libraries(AzyreSDK PRIVATE
     d3d11
     dxgi
     user32
+    shell32
+    ole32
     windowsapp
+    nlohmann_json::nlohmann_json
 )
 
 set_target_properties(AzyreSDK PROPERTIES OUTPUT_NAME "AzyreSDK")

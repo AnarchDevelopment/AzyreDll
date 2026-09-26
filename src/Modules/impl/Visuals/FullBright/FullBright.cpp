@@ -8,7 +8,7 @@
 namespace mc {
 
 FullBright::FullBright()
-    : Module("FullBright", "Brillo maximo en zonas oscuras", Category::Visuals, 0)
+    : Module("FullBright", "Maximum brightness in dark areas", Category::Visuals, 0)
 {
     markHasSettings();
 }

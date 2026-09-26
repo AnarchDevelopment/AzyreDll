@@ -26,6 +26,28 @@ public:
     void onTick() override;
     void drawSettings() override;
 
+    nlohmann::json saveSettings() const override
+    {
+        return nlohmann::json{
+            {"strategy", (int)strategy_},
+            {"tower", tower_},
+            {"platform", platform_},
+            {"autoSwap", autoSwap_},
+            {"retryMs", retryMs_},
+            {"bridgeAngle", bridgeAngle_},
+        };
+    }
+
+    void loadSettings(const nlohmann::json& j) override
+    {
+        strategy_ = (Strategy)j.value("strategy", (int)strategy_);
+        tower_ = j.value("tower", tower_);
+        platform_ = j.value("platform", platform_);
+        autoSwap_ = j.value("autoSwap", autoSwap_);
+        retryMs_ = j.value("retryMs", retryMs_);
+        bridgeAngle_ = j.value("bridgeAngle", bridgeAngle_);
+    }
+
 private:
     void startPhys(LocalPlayer& local);
     void advancePhys(LocalPlayer& local);

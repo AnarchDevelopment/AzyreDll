@@ -9,7 +9,7 @@
 namespace mc {
 
 NoSlow::NoSlow()
-    : Module("NoSlow", "Mantiene velocidad al usar items", Category::Movement, 0)
+    : Module("NoSlow", "Keeps speed while using items", Category::Movement, 0)
 {
     markHasSettings();
 }

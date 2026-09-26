@@ -151,7 +151,7 @@ bool installHook()
 }
 
 Velocity::Velocity()
-    : Module("Velocity", "Reduce el knockback del paquete SetEntityMotionPacket",
+    : Module("Velocity", "",
              Category::Combat, 0)
 {
     markHasSettings();

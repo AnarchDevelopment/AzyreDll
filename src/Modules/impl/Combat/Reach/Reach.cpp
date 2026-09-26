@@ -10,7 +10,7 @@
 namespace mc {
 
 Reach::Reach()
-    : Module("Reach", "Alcance de ataque extendido (float global)", Category::Combat, 0)
+    : Module("Reach", "Extended attack reach (global float)", Category::Combat, 0)
 {
     markHasSettings();
 }

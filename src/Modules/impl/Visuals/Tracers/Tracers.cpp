@@ -9,7 +9,7 @@
 namespace mc {
 
 Tracers::Tracers()
-    : Module("Tracers", "Lineas hacia los jugadores", Category::Visuals, 0)
+    : Module("Tracers", "Lines towards players", Category::Visuals, 0)
 {
     markHasSettings();
 }

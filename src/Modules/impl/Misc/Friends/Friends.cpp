@@ -12,7 +12,7 @@
 namespace mc {
 
 Friends::Friends()
-    : Module("Friends", "Clic central agrega/quita al jugador bajo la mira", Category::Misc, 0)
+    : Module("Friends", "Middle click adds/removes the player under your crosshair", Category::Misc, 0)
 {
     markHasSettings();
 }
@@ -84,6 +84,33 @@ void Friends::drawSettings()
     {
         friends::clear();
         ModuleManager::get().notify("Friends cleared", false);
+    }
+}
+
+nlohmann::json Friends::saveSettings() const
+{
+    nlohmann::json j;
+    j["range"] = range_;
+    j["fov"] = fov_;
+    nlohmann::json arr = nlohmann::json::array();
+    for (const std::string& n : friends::list())
+        arr.push_back(n);
+    j["friends"] = arr;
+    return j;
+}
+
+void Friends::loadSettings(const nlohmann::json& j)
+{
+    range_ = j.value("range", range_);
+    fov_ = j.value("fov", fov_);
+    if (j.contains("friends") && j["friends"].is_array())
+    {
+        friends::clear();
+        for (const auto& n : j["friends"])
+        {
+            if (n.is_string())
+                friends::list().insert(n.get<std::string>());
+        }
     }
 }
 

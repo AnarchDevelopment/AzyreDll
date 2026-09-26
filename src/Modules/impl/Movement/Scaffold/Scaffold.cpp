@@ -15,7 +15,7 @@
 namespace mc {
 
 Scaffold::Scaffold()
-    : Module("Scaffold", "Coloca bloques debajo del jugador", Category::Movement, 'V')
+    : Module("Scaffold", "Places blocks under the player", Category::Movement, 'V')
 {
     markHasSettings();
 }
@@ -301,10 +301,10 @@ void Scaffold::drawSettings()
                            "BlockItem::useOn", "LookDown + Input", "Physical RMB"};
     if (widgets::CCombo("Strategy##sc", &strategy, names, 6))
         strategy_ = (Strategy)strategy;
-    ImGui::Checkbox("Tower (place while jumping)", &tower_);
-    ImGui::Checkbox("Platform mode", &platform_);
-    ImGui::Checkbox("Auto swap to block", &autoSwap_);
-    widgets::CSlider("Retry ms", &retryMs_, 50.0f, 1000.0f, "%.0f");
+    ImGui::Checkbox("Tower (place while jumping)##sc", &tower_);
+    ImGui::Checkbox("Platform mode##sc", &platform_);
+    ImGui::Checkbox("Auto swap to block##sc", &autoSwap_);
+    widgets::CSlider("Retry ms##sc", &retryMs_, 50.0f, 1000.0f, "%.0f");
     widgets::CSlider("Bridge angle##sc", &bridgeAngle_, 30.0f, 89.0f, "%.0f");
 }
 

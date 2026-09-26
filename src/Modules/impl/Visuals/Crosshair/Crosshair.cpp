@@ -4,7 +4,7 @@
 namespace mc {
 
 Crosshair::Crosshair()
-    : Module("Crosshair", "Puntero personalizado en el centro", Category::Visuals, 0)
+    : Module("Crosshair", "Custom crosshair at the center", Category::Visuals, 0)
 {
     markHasSettings();
 }

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <nlohmann/json.hpp>
 #include <string>
 
 namespace mc {
@@ -28,12 +29,17 @@ public:
     virtual void drawSettings() {}
     virtual void onShutdown() {}
 
+    virtual nlohmann::json saveSettings() const { return nlohmann::json{}; }
+    virtual void loadSettings(const nlohmann::json& j) { (void)j; }
+
     virtual void onHurt(void* /*actor*/, void* /*source*/, float& /*damage*/, bool& /*cancel*/) {}
     virtual void onGetFriction(float& /*friction*/) {}
     virtual void onMotionPacket(void* /*packet*/, bool& /*cancel*/) {}
 
     void toggle();
     void setEnabled(bool enabled);
+
+    virtual bool holdToActivate() const { return false; }
 
     bool enabled() const { return enabled_; }
     const std::string& name() const { return name_; }

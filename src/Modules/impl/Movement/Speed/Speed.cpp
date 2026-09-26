@@ -9,7 +9,7 @@
 namespace mc {
 
 Speed::Speed()
-    : Module("Speed", "Aumenta la velocidad de movimiento", Category::Movement, 'G')
+    : Module("Speed", "Increases movement speed", Category::Movement, 'G')
 {
     markHasSettings();
 }
@@ -43,7 +43,7 @@ void Speed::onTick()
 
 void Speed::drawSettings()
 {
-    widgets::CSlider("Speed / tick", &speedPerTick_, 0.22f, 1.5f, "%.3f");
+    widgets::CSlider("Speed / tick##sp", &speedPerTick_, 0.22f, 1.5f, "%.3f");
 }
 
 MC_REGISTER_MODULE(Speed);

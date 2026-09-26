@@ -14,6 +14,18 @@ public:
     void onDisable() override;
     void drawSettings() override;
 
+    nlohmann::json saveSettings() const override
+    {
+        return nlohmann::json{
+            {"reach", reach_},
+        };
+    }
+
+    void loadSettings(const nlohmann::json& j) override
+    {
+        reach_ = j.value("reach", reach_);
+    }
+
 private:
     void writeReach();
 

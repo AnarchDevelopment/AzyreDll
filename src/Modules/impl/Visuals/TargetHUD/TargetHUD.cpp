@@ -10,7 +10,7 @@
 namespace mc {
 
 TargetHUD::TargetHUD()
-    : Module("TargetHUD", "Ficha del jugador apuntado", Category::Visuals, 0)
+    : Module("TargetHUD", "Info card of the player you are aiming at", Category::Visuals, 0)
 {
     markHasSettings();
 }

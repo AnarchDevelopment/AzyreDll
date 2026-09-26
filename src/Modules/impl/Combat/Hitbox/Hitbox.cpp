@@ -11,7 +11,7 @@
 namespace mc {
 
 Hitbox::Hitbox()
-    : Module("Hitbox", "Expande la hitbox de ataque", Category::Combat, 0)
+    : Module("Hitbox", "Expands the attack hitbox", Category::Combat, 0)
 {
     markHasSettings();
 }

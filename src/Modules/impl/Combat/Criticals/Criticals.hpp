@@ -13,6 +13,18 @@ public:
     void onDisable() override;
     void drawSettings() override;
 
+    nlohmann::json saveSettings() const override
+    {
+        return nlohmann::json{
+            {"onlyWhileAttacking", onlyWhileAttacking_},
+        };
+    }
+
+    void loadSettings(const nlohmann::json& j) override
+    {
+        onlyWhileAttacking_ = j.value("onlyWhileAttacking", onlyWhileAttacking_);
+    }
+
 private:
     bool onlyWhileAttacking_ = true;
     int phase_ = 0;

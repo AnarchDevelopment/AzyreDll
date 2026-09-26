@@ -8,7 +8,7 @@
 namespace mc {
 
 AutoSprint::AutoSprint()
-    : Module("AutoSprint", "Escribe sprint forzado (estado 6)", Category::Movement, 0)
+    : Module("AutoSprint", "Forces sprint (state 6)", Category::Movement, 0)
 {
     markHasSettings();
 }

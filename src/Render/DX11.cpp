@@ -1,4 +1,4 @@
-#include "DX11.hpp"
+#include "Render/DX11.hpp"
 
 #include "Framework/Log.hpp"
 #include "GUI/Menu.hpp"
@@ -11,6 +11,7 @@
 #include <d3d11.h>
 #include <dxgi.h>
 #include <imgui.h>
+#include <imgui_internal.h>
 #include <imgui_impl_dx11.h>
 
 namespace mc::dx11 {
@@ -106,11 +107,235 @@ static void CreateRenderTarget(IDXGISwapChain* pSwapChain)
     MC_LOG("[DX11] Render target view created: 0x%p", g_mainRenderTargetView);
 }
 
+// ---------------------------------------------------------------------------
+// Backdrop acrilico (WinUI): captura el frame del juego y lo desenfoca con
+// dos pases de downscale bilinear (1/4 y 1/16), reutilizando el renderer de
+// ImGui para dibujar los quads sin escribir shaders propios.
+// ---------------------------------------------------------------------------
+
+static ID3D11Texture2D* g_blurTexA = nullptr;
+static ID3D11RenderTargetView* g_blurRtvA = nullptr;
+static ID3D11ShaderResourceView* g_blurSrvA = nullptr;
+static UINT g_blurWA = 0, g_blurHA = 0;
+
+static ID3D11Texture2D* g_blurTexB = nullptr;
+static ID3D11RenderTargetView* g_blurRtvB = nullptr;
+static ID3D11ShaderResourceView* g_blurSrvB = nullptr;
+static UINT g_blurWB = 0, g_blurHB = 0;
+
+static bool g_backdropBroken = false;
+
+static void releaseBackdrop()
+{
+    if (g_blurSrvA) { g_blurSrvA->Release(); g_blurSrvA = nullptr; }
+    if (g_blurRtvA) { g_blurRtvA->Release(); g_blurRtvA = nullptr; }
+    if (g_blurTexA) { g_blurTexA->Release(); g_blurTexA = nullptr; }
+    g_blurWA = g_blurHA = 0;
+
+    if (g_blurSrvB) { g_blurSrvB->Release(); g_blurSrvB = nullptr; }
+    if (g_blurRtvB) { g_blurRtvB->Release(); g_blurRtvB = nullptr; }
+    if (g_blurTexB) { g_blurTexB->Release(); g_blurTexB = nullptr; }
+    g_blurWB = g_blurHB = 0;
+}
+
+static bool createBlurTex(UINT w, UINT h, DXGI_FORMAT format, ID3D11Texture2D** tex,
+                          ID3D11RenderTargetView** rtv, ID3D11ShaderResourceView** srv)
+{
+    D3D11_TEXTURE2D_DESC desc = {};
+    desc.Width = w;
+    desc.Height = h;
+    desc.MipLevels = 1;
+    desc.ArraySize = 1;
+    desc.Format = format;
+    desc.SampleDesc.Count = 1;
+    desc.SampleDesc.Quality = 0;
+    desc.Usage = D3D11_USAGE_DEFAULT;
+    desc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+
+    if (FAILED(g_pd3dDevice->CreateTexture2D(&desc, nullptr, tex)))
+        return false;
+    if (FAILED(g_pd3dDevice->CreateRenderTargetView(*tex, nullptr, rtv)))
+    {
+        (*tex)->Release();
+        *tex = nullptr;
+        return false;
+    }
+    if (FAILED(g_pd3dDevice->CreateShaderResourceView(*tex, nullptr, srv)))
+    {
+        (*rtv)->Release();
+        *rtv = nullptr;
+        (*tex)->Release();
+        *tex = nullptr;
+        return false;
+    }
+    return true;
+}
+
+static bool ensureBackdrop()
+{
+    if (!g_pd3dDevice || !g_pSwapChain || g_DisplayWidth <= 0.0f || g_DisplayHeight <= 0.0f)
+        return false;
+
+    UINT w = (UINT)g_DisplayWidth;
+    UINT h = (UINT)g_DisplayHeight;
+    UINT wA = (UINT)ImMax(1.0f, g_DisplayWidth * 0.25f);
+    UINT hA = (UINT)ImMax(1.0f, g_DisplayHeight * 0.25f);
+    UINT wB = (UINT)ImMax(1.0f, g_DisplayWidth * 0.125f);
+    UINT hB = (UINT)ImMax(1.0f, g_DisplayHeight * 0.125f);
+
+    if (g_blurTexA && wA == g_blurWA && hA == g_blurHA &&
+        g_blurTexB && wB == g_blurWB && hB == g_blurHB)
+        return true;
+
+    releaseBackdrop();
+
+    // Formato del blur = formato del backbuffer (evita oscurecimiento si el
+    // juego corre HDR con formatos float/10bit).
+    DXGI_FORMAT fmt = DXGI_FORMAT_UNKNOWN;
+    {
+        ID3D11Texture2D* bb = nullptr;
+        if (SUCCEEDED(g_pSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)&bb)))
+        {
+            D3D11_TEXTURE2D_DESC bd = {};
+            bb->GetDesc(&bd);
+            fmt = bd.Format;
+            bb->Release();
+        }
+    }
+    if (fmt == DXGI_FORMAT_UNKNOWN)
+        fmt = DXGI_FORMAT_B8G8R8A8_UNORM;
+
+    if (!createBlurTex(wA, hA, fmt, &g_blurTexA, &g_blurRtvA, &g_blurSrvA))
+        return false;
+    g_blurWA = wA;
+    g_blurHA = hA;
+
+    if (!createBlurTex(wB, hB, fmt, &g_blurTexB, &g_blurRtvB, &g_blurSrvB))
+    {
+        releaseBackdrop();
+        return false;
+    }
+    g_blurWB = wB;
+    g_blurHB = hB;
+    return true;
+}
+
+static void renderQuadToCurrentRT(ID3D11ShaderResourceView* srv, UINT w, UINT h)
+{
+    if (!srv || w == 0 || h == 0)
+        return;
+
+    ImDrawList* dl = IM_NEW(ImDrawList)(ImGui::GetDrawListSharedData());
+    dl->PushClipRectFullScreen();
+    dl->AddImage(ImTextureRef((void*)srv), ImVec2(0.0f, 0.0f), ImVec2((float)w, (float)h));
+    dl->PopClipRect();
+
+    ImDrawData dd;
+    dd.Valid = true;
+    dd.FrameCount = ImGui::GetFrameCount();
+    dd.TotalIdxCount = dl->IdxBuffer.Size;
+    dd.TotalVtxCount = dl->VtxBuffer.Size;
+    dd.CmdLists.push_back(dl);
+    dd.DisplayPos = ImVec2(0.0f, 0.0f);
+    dd.DisplaySize = ImVec2((float)w, (float)h);
+    dd.FramebufferScale = ImVec2(1.0f, 1.0f);
+    dd.OwnerViewport = ImGui::GetMainViewport();
+#ifndef IMGUI_DISABLE_OBSOLETE_FUNCTIONS
+    dd.CmdListsCount = 1;
+#endif
+
+    ImGui_ImplDX11_RenderDrawData(&dd);
+
+    dd.CmdLists.clear();
+    IM_DELETE(dl);
+}
+
+static void backdropPassBody()
+{
+    if (!g_pd3dDeviceContext || !g_pSwapChain)
+        return;
+    if (!ensureBackdrop())
+        return;
+
+    g_pd3dDeviceContext->OMSetRenderTargets(0, nullptr, nullptr);
+
+    // SRV efimero del backbuffer: existe SOLO durante este pase. Asi no queda
+    // ninguna referencia a la swapchain al cerrar el menu (eso congelaba la
+    // camara). CopyResource se evita: crashea con buffers flip-model.
+    ID3D11Texture2D* bb = nullptr;
+    ID3D11ShaderResourceView* bbSrv = nullptr;
+    if (FAILED(g_pSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)&bb)))
+        return;
+    HRESULT hr = g_pd3dDevice->CreateShaderResourceView(bb, nullptr, &bbSrv);
+    bb->Release();
+    if (FAILED(hr) || !bbSrv)
+        return;
+
+    // Paso 1: backbuffer -> A (1/4)
+    g_pd3dDeviceContext->OMSetRenderTargets(1, &g_blurRtvA, nullptr);
+    renderQuadToCurrentRT(bbSrv, g_blurWA, g_blurHA);
+
+    // Paso 2: A -> B (1/16, blur final)
+    g_pd3dDeviceContext->OMSetRenderTargets(1, &g_blurRtvB, nullptr);
+    renderQuadToCurrentRT(g_blurSrvA, g_blurWB, g_blurHB);
+
+    g_pd3dDeviceContext->OMSetRenderTargets(0, nullptr, nullptr);
+
+    ID3D11ShaderResourceView* nullSrv = nullptr;
+    g_pd3dDeviceContext->PSSetShaderResources(0, 1, &nullSrv);
+    bbSrv->Release();
+}
+
+static void runBackdropPass()
+{
+    if (g_backdropBroken)
+        return;
+    __try
+    {
+        backdropPassBody();
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER)
+    {
+        g_backdropBroken = true;
+        g_pd3dDeviceContext->OMSetRenderTargets(0, nullptr, nullptr);
+        MC_LOG_ERROR("[Backdrop] Excepcion durante el pase de blur - blur desactivado");
+    }
+}
+
+bool backdropWanted()
+{
+    if (mc::menu::visible())
+        return true;
+
+    const auto& notifs = mc::ModuleManager::get().notifications();
+    if (!notifs.empty())
+    {
+        ULONGLONG now = GetTickCount64();
+        for (const auto& n : notifs)
+            if (now - n.time < 2600ull)
+                return true;
+    }
+
+    // Modulos con panel acrilico: blur en vivo durante el juego (throttled).
+    auto modOn = [](const char* name) {
+        mc::Module* m = mc::ModuleManager::get().find(name);
+        return m && m->enabled();
+    };
+    return modOn("HUD") || modOn("ArrayList") || modOn("Watermark");
+}
+
+bool backdropReady()
+{
+    return g_Initialized && ensureBackdrop();
+}
+
+void* backdropSrv()
+{
+    return (void*)g_blurSrvB;
+}
+
 static HRESULT __stdcall HookedPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT Flags)
 {
-    static int callCount = 0;
-    callCount++;
-
     if (!g_Initialized)
     {
         MC_LOG("[VTable] ========================================");
@@ -138,6 +363,7 @@ static HRESULT __stdcall HookedPresent(IDXGISwapChain* pSwapChain, UINT SyncInte
             ImGuiIO& io = ImGui::GetIO();
             io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
             io.ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange;
+            io.ConfigDebugHighlightIdConflicts = false;
             io.DisplaySize = ImVec2(g_DisplayWidth, g_DisplayHeight);
 
             ImFont* roboto = LoadRobotoFont(io.Fonts);
@@ -148,7 +374,7 @@ static HRESULT __stdcall HookedPresent(IDXGISwapChain* pSwapChain, UINT SyncInte
 
             g_Initialized = true;
             input::init();
-            ModuleManager::get().notifyInfo("Azyre | 1.1.0 inyectado — INSERT para abrir");
+            ModuleManager::get().notifyInfo("Azyre | 1.1.0 injected - INSERT to open");
             MC_LOG("[SUCCESS] ImGui initialized successfully!");
         }
         else
@@ -190,6 +416,20 @@ static HRESULT __stdcall HookedPresent(IDXGISwapChain* pSwapChain, UINT SyncInte
         ImGui::EndFrame();
         ImGui::Render();
 
+        // Blur del frame del juego cuando algo lo usa. Con el menu abierto va
+        // a full rate; en juego se limita a ~30Hz (el blur es 1/16 de resolucion,
+        // la diferencia es imperceptible y la exposicion con la swapchain minima).
+        if (backdropWanted())
+        {
+            static ULONGLONG lastPassMs = 0;
+            ULONGLONG nowMs = GetTickCount64();
+            if (mc::menu::visible() || nowMs - lastPassMs >= 33ull)
+            {
+                runBackdropPass();
+                lastPassMs = nowMs;
+            }
+        }
+
         g_pd3dDeviceContext->OMSetRenderTargets(1, &g_mainRenderTargetView, nullptr);
         ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
 
@@ -213,6 +453,8 @@ static HRESULT __stdcall HookedResizeBuffers(IDXGISwapChain* pSwapChain, UINT Bu
                                              DXGI_FORMAT NewFormat, UINT SwapChainFlags)
 {
     MC_LOG("[VTable] ResizeBuffers called - Width: %d, Height: %d", Width, Height);
+
+    releaseBackdrop();
 
     if (g_mainRenderTargetView)
     {
@@ -306,6 +548,8 @@ bool install()
 
 void shutdown()
 {
+    releaseBackdrop();
+
     if (g_pSwapChainVTable)
     {
         MC_LOG("[VTable] Restoring original VTable...");

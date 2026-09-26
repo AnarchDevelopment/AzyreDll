@@ -15,6 +15,18 @@ public:
     void onShutdown() override;
     void drawSettings() override;
 
+    nlohmann::json saveSettings() const override
+    {
+        return nlohmann::json{
+            {"speed", speed_},
+        };
+    }
+
+    void loadSettings(const nlohmann::json& j) override
+    {
+        speed_ = j.value("speed", speed_);
+    }
+
 private:
     uintptr_t site_ = 0;
     int caveSpeedOffset_ = -1;

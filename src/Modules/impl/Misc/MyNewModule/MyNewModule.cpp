@@ -10,7 +10,7 @@
 namespace mc {
 
 MyNewModule::MyNewModule()
-    : Module("MyNewModule", "Plantilla: como crear un modulo nuevo", Category::Misc, VK_F6)
+    : Module("MyNewModule", "Template: how to create a new module", Category::Misc, VK_F6)
 {
     markHasSettings();
 }
@@ -50,8 +50,8 @@ void MyNewModule::onRender()
 
 void MyNewModule::drawSettings()
 {
-    widgets::CSlider("Example value", &exampleValue_, 0.0f, 10.0f);
-    ImGui::Checkbox("Example flag", &exampleFlag_);
+    widgets::CSlider("Example value##mnm", &exampleValue_, 0.0f, 10.0f);
+    ImGui::Checkbox("Example flag##mnm", &exampleFlag_);
 }
 
 MC_REGISTER_MODULE(MyNewModule);

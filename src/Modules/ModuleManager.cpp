@@ -1,7 +1,9 @@
 #include "ModuleManager.hpp"
 
+#include "Config/Config.hpp"
 #include "Framework/Log.hpp"
 
+#include <imgui.h>
 #include <windows.h>
 
 namespace mc {
@@ -24,6 +26,9 @@ Module* ModuleManager::add(std::unique_ptr<Module> module)
 
 void ModuleManager::notify(const std::string& text, bool enabled)
 {
+    if (quiet_)
+        return;
+
     Notification n;
     n.text = text;
     n.enabled = enabled;
@@ -84,12 +89,15 @@ void ModuleManager::handleKeybinds()
 {
     static bool wasDown[256] = {};
     bool edge[256] = {};
+    bool up[256] = {};
+    bool down[256] = {};
 
     for (int k = 0; k < 256; ++k)
     {
-        bool down = (GetAsyncKeyState(k) & 0x8000) != 0;
-        edge[k] = down && !wasDown[k];
-        wasDown[k] = down;
+        down[k] = (GetAsyncKeyState(k) & 0x8000) != 0;
+        edge[k] = down[k] && !wasDown[k];
+        up[k] = !down[k] && wasDown[k];
+        wasDown[k] = down[k];
     }
 
     if (binding_)
@@ -109,12 +117,17 @@ void ModuleManager::handleKeybinds()
             if (pressed && k != VK_INSERT)
             {
                 binding_->setKeybind(k == VK_ESCAPE ? 0 : k);
+                std::string boundName = binding_->name();
                 setBinding(nullptr);
+                config::saveModule(boundName);
                 break;
             }
         }
         return;
     }
+
+    if (ImGui::GetIO().WantTextInput)
+        return;
 
     for (auto& m : modules_)
     {
@@ -124,7 +137,12 @@ void ModuleManager::handleKeybinds()
         if (key == VK_LBUTTON || key == VK_RBUTTON || key == VK_MBUTTON ||
             key == VK_XBUTTON1 || key == VK_XBUTTON2)
             continue;
-        if (edge[key])
+        if (m->holdToActivate())
+        {
+            if (edge[key] || up[key])
+                m->setEnabled(down[key]);
+        }
+        else if (edge[key])
             m->toggle();
     }
 }

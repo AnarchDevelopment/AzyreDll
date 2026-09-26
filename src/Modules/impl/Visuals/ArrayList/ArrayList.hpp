@@ -11,6 +11,9 @@ public:
 
     void onRender() override;
     void drawSettings() override;
+
+    nlohmann::json saveSettings() const override;
+    void loadSettings(const nlohmann::json& j) override;
 };
 
 }

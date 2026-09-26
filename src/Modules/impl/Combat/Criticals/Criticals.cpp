@@ -8,7 +8,7 @@
 namespace mc {
 
 Criticals::Criticals()
-    : Module("Criticals", "Golpes criticos alterando OnGround", Category::Combat, 0)
+    : Module("Criticals", "Critical hits by toggling OnGround", Category::Combat, 0)
 {
     markHasSettings();
 }

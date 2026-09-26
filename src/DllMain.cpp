@@ -1,5 +1,6 @@
 #include "PCH.hpp"
 
+#include "Config/Config.hpp"
 #include "Framework/Log.hpp"
 #include "GUI/Window.hpp"
 #include "Input/InputSystem.hpp"
@@ -21,6 +22,7 @@ static DWORD WINAPI Bootstrap(LPVOID)
     }
 
     mc::wheel::install();
+    mc::config::loadAll();
     mc::window::setTitle("Azyre | 1.1.0");
 
     if (mc::dx11::install())
@@ -53,7 +55,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID)
 
         mc::log::init("azyre_sdk.log");
         MC_LOG("=========================================");
-        MC_LOG("Azyre SDK injected!");
+        MC_LOG("Azyre injected!");
         MC_LOG("Process ID: %d", GetCurrentProcessId());
         MC_LOG("=========================================");
 
@@ -62,6 +64,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID)
     else if (ul_reason_for_call == DLL_PROCESS_DETACH)
     {
         MC_LOG("[DX11] DLL Unloading - Cleaning up...");
+        mc::config::saveAll();
         mc::wheel::uninstall();
         mc::ModuleManager::get().shutdownAll();
         mc::Game::get().uninstall();

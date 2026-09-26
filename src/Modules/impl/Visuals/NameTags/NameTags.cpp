@@ -12,7 +12,7 @@
 namespace mc {
 
 NameTags::NameTags()
-    : Module("NameTags", "Nombres con vida flotando sobre jugadores", Category::Visuals, 0)
+    : Module("NameTags", "Floating name tags with health over players", Category::Visuals, 0)
 {
     markHasSettings();
 }

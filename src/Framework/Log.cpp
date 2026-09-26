@@ -24,7 +24,7 @@ void init(const char* file)
 
     freopen_s(&g_out, "CONOUT$", "w", stdout);
     freopen_s(&g_err, "CONOUT$", "w", stderr);
-    SetConsoleTitle(L"Azyre SDK - Debug");
+    SetConsoleTitle(L"Azyre - Debug");
 
     HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
     CONSOLE_CURSOR_INFO cursorInfo{};

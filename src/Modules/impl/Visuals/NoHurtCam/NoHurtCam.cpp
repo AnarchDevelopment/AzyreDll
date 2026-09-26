@@ -7,7 +7,7 @@
 namespace mc {
 
 NoHurtCam::NoHurtCam()
-    : Module("NoHurtCam", "Elimina el temblor de camara al recibir dano", Category::Visuals, 0)
+    : Module("NoHurtCam", "Removes the camera shake when taking damage", Category::Visuals, 0)
 {
     markHasSettings();
 }

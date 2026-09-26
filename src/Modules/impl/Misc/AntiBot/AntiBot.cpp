@@ -8,7 +8,7 @@
 namespace mc {
 
 AntiBot::AntiBot()
-    : Module("AntiBot", "Filtra bots, NPCs y hologramas de ESP/Aim", Category::Misc, 0)
+    : Module("AntiBot", "Filters bots, NPCs and holograms from ESP/Aim", Category::Misc, 0)
 {
     markHasSettings();
     setEnabled(true);
@@ -33,6 +33,20 @@ void AntiBot::drawSettings()
         Game::get().refreshBotFilter();
 
     ImGui::TextDisabled("Applies to ESP, Tracers, NameTags, AimAssist, TargetHUD");
+}
+
+nlohmann::json AntiBot::saveSettings() const
+{
+    return nlohmann::json{
+        {"keywords", botfilter::g_filterKeywords},
+        {"invalidNames", botfilter::g_filterInvalidNames},
+    };
+}
+
+void AntiBot::loadSettings(const nlohmann::json& j)
+{
+    botfilter::g_filterKeywords = j.value("keywords", botfilter::g_filterKeywords);
+    botfilter::g_filterInvalidNames = j.value("invalidNames", botfilter::g_filterInvalidNames);
 }
 
 MC_REGISTER_MODULE(AntiBot);

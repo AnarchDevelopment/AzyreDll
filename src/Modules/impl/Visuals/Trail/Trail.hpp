@@ -19,6 +19,30 @@ public:
     void onRender() override;
     void drawSettings() override;
 
+    nlohmann::json saveSettings() const override
+    {
+        return nlohmann::json{
+            {"lengthSec", lengthSec_},
+            {"thickness", thickness_},
+            {"fov", fov_},
+            {"color", {color_.x, color_.y, color_.z, color_.w}},
+        };
+    }
+
+    void loadSettings(const nlohmann::json& j) override
+    {
+        lengthSec_ = j.value("lengthSec", lengthSec_);
+        thickness_ = j.value("thickness", thickness_);
+        fov_ = j.value("fov", fov_);
+        if (j.contains("color") && j["color"].is_array() && j["color"].size() == 4)
+        {
+            color_.x = j["color"][0].get<float>();
+            color_.y = j["color"][1].get<float>();
+            color_.z = j["color"][2].get<float>();
+            color_.w = j["color"][3].get<float>();
+        }
+    }
+
 private:
     struct Sample
     {

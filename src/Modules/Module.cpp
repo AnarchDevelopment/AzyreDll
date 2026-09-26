@@ -1,5 +1,6 @@
 #include "Module.hpp"
 
+#include "Config/Config.hpp"
 #include "Framework/Log.hpp"
 #include "Modules/ModuleManager.hpp"
 
@@ -42,6 +43,7 @@ void Module::setEnabled(bool enabled)
         MC_LOG("[Module] %s disabled", name_.c_str());
         ModuleManager::get().notify(name_, false);
     }
+    config::saveModule(name_);
 }
 
 void Module::toggle()

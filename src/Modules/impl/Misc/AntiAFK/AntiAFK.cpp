@@ -11,7 +11,7 @@
 namespace mc {
 
 AntiAFK::AntiAFK()
-    : Module("AntiAFK", "Evita la expulsion por inactividad", Category::Misc, 0)
+    : Module("AntiAFK", "Prevents being kicked for inactivity", Category::Misc, 0)
 {
     markHasSettings();
 }

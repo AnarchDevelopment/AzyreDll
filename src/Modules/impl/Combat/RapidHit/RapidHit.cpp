@@ -8,7 +8,7 @@
 namespace mc {
 
 RapidHit::RapidHit()
-    : Module("RapidHit", "Bypass del cooldown de ataque del juego", Category::Combat, 0)
+    : Module("RapidHit", "Bypasses the game attack cooldown", Category::Combat, 0)
 {
     markHasSettings();
 }

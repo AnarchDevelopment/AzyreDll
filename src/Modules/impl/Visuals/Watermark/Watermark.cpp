@@ -1,6 +1,7 @@
 #include "Watermark.hpp"
 
 #include "GUI/Theme.hpp"
+#include "GUI/Widgets.hpp"
 #include "SDK/Game.hpp"
 
 #include <imgui.h>
@@ -11,7 +12,7 @@
 namespace mc {
 
 Watermark::Watermark()
-    : Module("Watermark", "Marca de agua con FPS y jugador", Category::Visuals, 0)
+    : Module("Watermark", "Watermark with FPS and player name", Category::Visuals, 0)
 {
     setEnabled(true);
 }
@@ -46,8 +47,9 @@ void Watermark::onRender()
     float pad = 9.0f;
     ImVec2 p0(12.0f, 12.0f);
     ImVec2 p1(12.0f + ts.x + pad * 2.0f + 5.0f, 12.0f + ts.y + pad * 2.0f);
-    d->AddRectFilled(p0, p1, IM_COL32(10, 12, 15, 225), 7.0f);
-    d->AddRectFilled(p0, ImVec2(p0.x + 4.0f, p1.y), theme::AccentU32(1.0f), 7.0f);
+
+    // Panel acrilico con blur en vivo + sombra.
+    widgets::AcrylicPanel(d, p0, p1, 7.0f, 1.0f, sw, sh);
     d->AddRectFilled(ImVec2(p0.x + 2.0f, p0.y), ImVec2(p0.x + 4.0f, p1.y),
                      theme::AccentU32(1.0f));
     d->AddText(ImVec2(p0.x + pad + 5.0f, p0.y + pad), IM_COL32(240, 242, 245, 255), buf);

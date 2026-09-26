@@ -377,36 +377,43 @@ void updateFrame()
 {
     ImGuiIO& io = ImGui::GetIO();
 
-    static bool s_wheelSubscribed = false;
-    if (!s_wheelSubscribed)
+    // Suscripcion del wheel via WinRT, despachada al UI thread con el
+    // Dispatcher (el patron de window::setTitle). Desde este hilo de render
+    // la suscripcion directa nunca enganchaba.
+    static bool s_wheelDispatched = false;
+    if (!s_wheelDispatched)
     {
         try
         {
-            CoreWindow w = CoreWindow::GetForCurrentThread();
-            if (!w)
+            CoreWindow w = CoreApplication::MainView().CoreWindow();
+            if (w && w.Dispatcher())
             {
-                auto appView = CoreApplication::MainView();
-                if (appView)
-                    w = appView.CoreWindow();
-            }
-            if (!w)
-            {
-                auto curView = CoreApplication::GetCurrentView();
-                if (curView)
-                    w = curView.CoreWindow();
-            }
-            if (w)
-            {
-                g_tokens.pointerWheel = w.PointerWheelChanged(
-                    [&](CoreWindow const&, PointerEventArgs const& args)
+                auto action = w.Dispatcher().RunAsync(
+                    CoreDispatcherPriority::Normal,
+                    []()
                     {
-                        g_wheelEvents++;
-                        int delta = args.CurrentPoint().Properties().MouseWheelDelta();
-                        if (delta != 0)
-                            wheel::addWinrtDelta(delta);
+                        try
+                        {
+                            CoreWindow cw = CoreWindow::GetForCurrentThread();
+                            if (!cw)
+                                return;
+                            g_tokens.pointerWheel = cw.PointerWheelChanged(
+                                [&](CoreWindow const&, PointerEventArgs const& args)
+                                {
+                                    g_wheelEvents++;
+                                    int delta = args.CurrentPoint().Properties().MouseWheelDelta();
+                                    if (delta != 0)
+                                        wheel::addWinrtDelta(delta);
+                                });
+                            MC_LOG("[Wheel] WinRT PointerWheelChanged suscrito en UI thread");
+                        }
+                        catch (...)
+                        {
+                            MC_LOG("[Wheel] Excepcion suscribiendo PointerWheelChanged");
+                        }
                     });
-                s_wheelSubscribed = true;
-                MC_LOG("[Wheel] WinRT subscribed");
+                (void)action;
+                s_wheelDispatched = true;
             }
         }
         catch (...)

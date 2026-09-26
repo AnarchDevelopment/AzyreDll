@@ -24,6 +24,8 @@ public:
     void notify(const std::string& text, bool enabled);
     void notifyInfo(const std::string& text);
     void shutdownAll();
+    void setQuiet(bool quiet) { quiet_ = quiet; }
+    bool isQuiet() const { return quiet_; }
     const std::vector<Notification>& notifications() const { return notifs_; }
 
     void handleKeybinds();
@@ -48,6 +50,7 @@ private:
     std::vector<std::unique_ptr<Module>> modules_;
     std::vector<Notification> notifs_;
     Module* binding_ = nullptr;
+    bool quiet_ = false;
     bool bindPrev_[256] = {};
 };
 

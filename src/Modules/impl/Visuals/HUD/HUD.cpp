@@ -1,6 +1,7 @@
 #include "HUD.hpp"
 
 #include "Framework/Math.hpp"
+#include "GUI/Widgets.hpp"
 #include "SDK/Game.hpp"
 
 #include <imgui.h>
@@ -10,7 +11,7 @@
 namespace mc {
 
 HUD::HUD()
-    : Module("HUD", "Estadisticas del jugador en pantalla", Category::Visuals, 'H')
+    : Module("HUD", "On-screen player stats", Category::Visuals, 'H')
 {
     markHasSettings();
 }
@@ -63,11 +64,21 @@ void HUD::onRender()
              local.hurtTime());
 
     y -= (count - 1) * lineH;
+
+    float maxW = 0.0f;
     for (int i = 0; i < count; ++i)
     {
         ImVec2 ts = ImGui::CalcTextSize(lines[i]);
-        d->AddRectFilled(ImVec2(x - 6.0f, y - 3.0f), ImVec2(x + ts.x + 8.0f, y + ts.y + 4.0f),
-                         IM_COL32(10, 12, 15, 200), 5.0f);
+        if (ts.x > maxW)
+            maxW = ts.x;
+    }
+
+    ImVec2 pMin(x - 10.0f, y - 6.0f);
+    ImVec2 pMax(x + maxW + 10.0f, y + (count - 1) * lineH + 19.0f);
+    widgets::AcrylicPanel(d, pMin, pMax, 6.0f, 1.0f, sw, sh);
+
+    for (int i = 0; i < count; ++i)
+    {
         textShadow(d, ImVec2(x, y), lines[i], IM_COL32(235, 238, 240, 255));
         y += lineH;
     }

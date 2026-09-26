@@ -9,7 +9,7 @@
 namespace mc {
 
 HighJump::HighJump()
-    : Module("HighJump", "Salto mas alto al impulsarse", Category::Movement, 0)
+    : Module("HighJump", "Higher jump when leaping", Category::Movement, 0)
 {
     markHasSettings();
 }

@@ -12,7 +12,7 @@
 namespace mc {
 
 InventoryWalk::InventoryWalk()
-    : Module("InventoryWalk", "Moverse con WASD con el inventario abierto", Category::Movement, 0)
+    : Module("InventoryWalk", "Move with WASD while the inventory is open", Category::Movement, 0)
 {
     markHasSettings();
 }

@@ -9,7 +9,7 @@
 namespace mc {
 
 Trail::Trail()
-    : Module("Trail", "Estela tras el jugador", Category::Visuals, 0)
+    : Module("Trail", "Trail behind the player", Category::Visuals, 0)
 {
     markHasSettings();
 }

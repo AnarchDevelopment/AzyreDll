@@ -11,7 +11,7 @@
 namespace mc {
 
 Glide::Glide()
-    : Module("Glide", "Reduce la velocidad de caida", Category::Movement, 0)
+    : Module("Glide", "Reduces falling speed", Category::Movement, 0)
 {
     markHasSettings();
 }

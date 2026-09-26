@@ -9,7 +9,7 @@
 namespace mc {
 
 NoFall::NoFall()
-    : Module("NoFall", "Previene el dano de caida", Category::Movement, 0)
+    : Module("NoFall", "Prevents fall damage", Category::Movement, 0)
 {
     markHasSettings();
 }
@@ -31,8 +31,8 @@ void NoFall::onTick()
 
 void NoFall::drawSettings()
 {
-    ImGui::Checkbox("Ghost ground while falling", &ghostGround_);
-    widgets::CSlider("Vy threshold", &ghostThreshold_, -4.0f, -0.5f, "%.2f");
+    ImGui::Checkbox("Ghost ground while falling##nf", &ghostGround_);
+    widgets::CSlider("Vy threshold##nf", &ghostThreshold_, -4.0f, -0.5f, "%.2f");
 }
 
 MC_REGISTER_MODULE(NoFall);

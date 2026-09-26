@@ -9,8 +9,135 @@
 
 namespace mc {
 
+namespace {
+
+struct FaceQuad
+{
+    int c[4];
+    Vec3 normal;
+    float shade;
+    bool horizontal;
+};
+
+// Caras en orden [topA, topB, botB, botA] para el degradado vertical.
+const FaceQuad kFaces[6] = {
+    {{5, 7, 3, 1}, { 1.0f, 0.0f, 0.0f}, 0.85f, false}, // +X
+    {{4, 6, 2, 0}, {-1.0f, 0.0f, 0.0f}, 0.85f, false}, // -X
+    {{6, 7, 3, 2}, { 0.0f, 0.0f, 1.0f}, 0.70f, false}, // +Z
+    {{4, 5, 1, 0}, { 0.0f, 0.0f,-1.0f}, 0.70f, false}, // -Z
+    {{4, 5, 7, 6}, { 0.0f, 1.0f, 0.0f}, 1.00f, true},  // +Y
+    {{0, 2, 3, 1}, { 0.0f,-1.0f, 0.0f}, 0.60f, true},  // -Y
+};
+
+void espBaseRgb(bool friendCol, const ImVec4& baseCol, int& r, int& g, int& b)
+{
+    if (friendCol)
+    {
+        ImU32 c = friends::colorU32();
+        r = (int)(c & 0xFF);
+        g = (int)((c >> 8) & 0xFF);
+        b = (int)((c >> 16) & 0xFF);
+    }
+    else
+    {
+        r = (int)(baseCol.x * 255.0f);
+        g = (int)(baseCol.y * 255.0f);
+        b = (int)(baseCol.z * 255.0f);
+    }
+    if (r > 255) r = 255;
+    if (g > 255) g = 255;
+    if (b > 255) b = 255;
+}
+
+void gradientQuad(ImDrawList* d, const ImVec2 pts[4], const ImU32 cols[4])
+{
+    const ImVec2 uv = ImGui::GetFontTexUvWhitePixel();
+    d->PrimReserve(6, 4);
+    ImDrawIdx base = (ImDrawIdx)d->_VtxCurrentIdx;
+    for (int i = 0; i < 4; ++i)
+        d->PrimWriteVtx(pts[i], uv, cols[i]);
+    d->PrimWriteIdx(base);
+    d->PrimWriteIdx((ImDrawIdx)(base + 1));
+    d->PrimWriteIdx((ImDrawIdx)(base + 2));
+    d->PrimWriteIdx(base);
+    d->PrimWriteIdx((ImDrawIdx)(base + 2));
+    d->PrimWriteIdx((ImDrawIdx)(base + 3));
+}
+
+void fillEspBox3D(ImDrawList* d, const Vec3 corners[8], const Vec3 proj[8],
+                  const Vec3& camPos, bool friendCol, const ImVec4& baseCol,
+                  float alpha, bool gradient)
+{
+    int r = 0, g = 0, b = 0;
+    espBaseRgb(friendCol, baseCol, r, g, b);
+
+    int aTop = (int)(alpha * 255.0f);
+    if (aTop < 0) aTop = 0;
+    if (aTop > 255) aTop = 255;
+    int aBot = (int)(alpha * 255.0f * 0.05f);
+    if (aBot < 0) aBot = 0;
+
+    for (const FaceQuad& f : kFaces)
+    {
+        Vec3 center = (corners[f.c[0]] + corners[f.c[1]] + corners[f.c[2]] + corners[f.c[3]]) * 0.25f;
+        Vec3 toCam = camPos - center;
+        if (f.normal.x * toCam.x + f.normal.y * toCam.y + f.normal.z * toCam.z <= 0.0f)
+            continue;
+
+        ImVec2 pts[4] = {
+            ImVec2(proj[f.c[0]].x, proj[f.c[0]].y),
+            ImVec2(proj[f.c[1]].x, proj[f.c[1]].y),
+            ImVec2(proj[f.c[2]].x, proj[f.c[2]].y),
+            ImVec2(proj[f.c[3]].x, proj[f.c[3]].y),
+        };
+
+        int sr = (int)(r * f.shade);
+        int sg = (int)(g * f.shade);
+        int sb = (int)(b * f.shade);
+
+        if (f.horizontal || !gradient)
+        {
+            d->AddConvexPolyFilled(pts, 4, IM_COL32(sr, sg, sb, aTop));
+        }
+        else
+        {
+            ImU32 cols[4] = {
+                IM_COL32(sr, sg, sb, aTop), IM_COL32(sr, sg, sb, aTop),
+                IM_COL32(sr, sg, sb, aBot), IM_COL32(sr, sg, sb, aBot),
+            };
+            gradientQuad(d, pts, cols);
+        }
+    }
+}
+
+void fillEspRect(ImDrawList* d, const ImVec2& a, const ImVec2& b, bool friendCol,
+                 const ImVec4& baseCol, float alpha, bool gradient)
+{
+    int r = 0, g = 0, bl = 0;
+    espBaseRgb(friendCol, baseCol, r, g, bl);
+
+    int aTop = (int)(alpha * 255.0f);
+    if (aTop < 0) aTop = 0;
+    if (aTop > 255) aTop = 255;
+
+    ImU32 top = IM_COL32(r, g, bl, aTop);
+    if (gradient)
+    {
+        int aBot = (int)(alpha * 255.0f * 0.05f);
+        if (aBot < 0) aBot = 0;
+        ImU32 bot = IM_COL32(r, g, bl, aBot);
+        d->AddRectFilledMultiColor(a, b, top, top, bot, bot);
+    }
+    else
+    {
+        d->AddRectFilled(a, b, top);
+    }
+}
+
+}
+
 ESP::ESP()
-    : Module("ESP", "Dibuja cajas sobre los jugadores", Category::Visuals, 'P')
+    : Module("ESP", "Draws boxes over players", Category::Visuals, 'P')
 {
     markHasSettings();
 }
@@ -104,6 +231,9 @@ void ESP::onRender()
             if (!visible)
                 continue;
 
+            if (filled_)
+                fillEspBox3D(d, corners, proj, cam.pos, fr, color_, fillAlpha_, gradient_);
+
             static const int edges[12][2] = {
                 {0, 1}, {0, 2}, {0, 4}, {1, 3}, {1, 5}, {2, 3},
                 {2, 6}, {3, 7}, {4, 5}, {4, 6}, {5, 7}, {6, 7},
@@ -152,6 +282,10 @@ void ESP::onRender()
         if (x2 < -200.0f || x1 > sw + 200.0f)
             continue;
 
+        if (filled_)
+            fillEspRect(d, ImVec2(x1, y1), ImVec2(x2, y2), fr, color_,
+                        fillAlpha_, gradient_);
+
         if (box_)
         {
             d->AddRect(ImVec2(x1 - 1, y1 - 1), ImVec2(x2 + 1, y2 + 1), IM_COL32(0, 0, 0, 220), 0, 0, 2.5f);
@@ -169,6 +303,16 @@ void ESP::drawSettings()
     ImGui::Checkbox("Box##esp", &box_);
     ImGui::Checkbox("Name##esp", &name_);
     ImGui::Checkbox("Distance##esp", &distance_);
+    if (ImGui::Checkbox("Filled##esp", &filled_))
+    {
+    }
+    if (filled_)
+    {
+        ImGui::Indent();
+        ImGui::Checkbox("Gradient##esp", &gradient_);
+        widgets::CSlider("Fill opacity##esp", &fillAlpha_, 0.05f, 0.80f, "%.2f");
+        ImGui::Unindent();
+    }
     widgets::CSlider("FOV##esp", &fov_, 30.0f, 130.0f, "%.0f");
     ImGui::ColorEdit4("Color##esp", (float*)&color_);
 }

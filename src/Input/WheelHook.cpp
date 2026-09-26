@@ -54,7 +54,9 @@ float consume()
 
     float value = 0.0f;
     if (winrtUnits != 0)
+    {
         value = (float)winrtUnits / 120.0f;
+    }
     else if (llUnits != 0)
     {
         value = (float)llUnits / 120.0f;
@@ -178,6 +180,14 @@ static DWORD WINAPI WheelThread(LPVOID)
     return 0;
 }
 
+// ---------------------------------------------------------------------------
+// NOTA: Raw Input (RegisterRawInputDevices) esta PROHIBIDO aqui: el registro
+// por uso de dispositivo es unico por proceso, asi que el nuestro REEMPLAZA el
+// del propio juego (camara muerta) y RIDEV_REMOVE borra el registro de todo el
+// proceso. El scroll del menu llega por WinRT PointerWheelChanged
+// (suscrito en el UI thread desde InputSystem) o por los hooks de mensajes.
+// ---------------------------------------------------------------------------
+
 bool install()
 {
     MC_LOG("[Wheel] installing (module=%p)", g_module);
@@ -195,11 +205,13 @@ bool install()
     {
         MC_LOG_ERROR("[Wheel] CreateThread failed: %lu", GetLastError());
         installMessageHooks();
-        return false;
+    }
+    else
+    {
+        MC_LOG("[Wheel] hook thread started (id=%lu)", g_threadId);
     }
 
-    MC_LOG("[Wheel] hook thread started (id=%lu)", g_threadId);
-    return true;
+    return g_thread != nullptr || g_msgHooked;
 }
 
 void uninstall()
@@ -221,6 +233,7 @@ void uninstall()
         g_thread = nullptr;
         g_threadId = 0;
     }
+
     g_llUnits.store(0);
     g_winrtUnits.store(0);
 }

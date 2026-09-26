@@ -11,7 +11,7 @@
 namespace mc {
 
 AimAssist::AimAssist()
-    : Module("AimAssist", "Suaviza la mirada hacia el jugador mas cercano", Category::Combat, 'R')
+    : Module("AimAssist", "Smooths your aim towards the nearest player", Category::Combat, 'R')
 {
     markHasSettings();
 }
