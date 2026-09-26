@@ -8,6 +8,128 @@
 
 namespace mc {
 
+namespace {
+
+// Armadura SEH para los loops de dispatch: una falta desactiva el modulo
+// culpable en vez de tumbar el juego. try/catch cubre las excepciones C++
+// (json, bad_alloc, winrt) que SEH no atrapa y que terminaban en
+// std::terminate -> 0xC0000409. SEH y try/catch viven en funciones
+// separadas (MSVC no permite ambos en la misma).
+
+static bool sehTick(Module* m)
+{
+    __try
+    {
+        m->onTick();
+        return true;
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER)
+    {
+        MC_LOG_ERROR("[Guard] Exception 0x%08X in %s::onTick",
+                     GetExceptionCode(), m->name().c_str());
+        return false;
+    }
+}
+
+static bool sehFrame(Module* m, float dt)
+{
+    __try
+    {
+        m->onFrame(dt);
+        return true;
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER)
+    {
+        MC_LOG_ERROR("[Guard] Exception 0x%08X in %s::onFrame",
+                     GetExceptionCode(), m->name().c_str());
+        return false;
+    }
+}
+
+static bool sehRender(Module* m)
+{
+    __try
+    {
+        m->onRender();
+        return true;
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER)
+    {
+        MC_LOG_ERROR("[Guard] Exception 0x%08X in %s::onRender",
+                     GetExceptionCode(), m->name().c_str());
+        return false;
+    }
+}
+
+static void cppGuard(const char* fn, Module* m)
+{
+    try
+    {
+        throw;
+    }
+    catch (const std::exception& e)
+    {
+        MC_LOG_ERROR("[Guard] C++ exception in %s::%s: %s - module disabled",
+                     m->name().c_str(), fn, e.what());
+    }
+    catch (...)
+    {
+        MC_LOG_ERROR("[Guard] Unknown C++ exception in %s::%s - module disabled",
+                     m->name().c_str(), fn);
+    }
+    m->setEnabled(false);
+}
+
+void guardedTick(Module* m)
+{
+    try
+    {
+        if (!sehTick(m))
+        {
+            m->setEnabled(false);
+            return;
+        }
+    }
+    catch (...)
+    {
+        cppGuard("onTick", m);
+    }
+}
+
+void guardedFrame(Module* m, float dt)
+{
+    try
+    {
+        if (!sehFrame(m, dt))
+        {
+            m->setEnabled(false);
+            return;
+        }
+    }
+    catch (...)
+    {
+        cppGuard("onFrame", m);
+    }
+}
+
+void guardedRender(Module* m)
+{
+    try
+    {
+        if (!sehRender(m))
+        {
+            m->setEnabled(false);
+            return;
+        }
+    }
+    catch (...)
+    {
+        cppGuard("onRender", m);
+    }
+}
+
+}
+
 ModuleManager& ModuleManager::get()
 {
     static ModuleManager instance;
@@ -152,7 +274,7 @@ void ModuleManager::onTick()
     for (auto& m : modules_)
     {
         if (m->enabled())
-            m->onTick();
+            guardedTick(m.get());
     }
 }
 
@@ -161,7 +283,7 @@ void ModuleManager::onFrame(float dt)
     for (auto& m : modules_)
     {
         if (m->enabled())
-            m->onFrame(dt);
+            guardedFrame(m.get(), dt);
     }
 }
 
@@ -170,7 +292,7 @@ void ModuleManager::onRender()
     for (auto& m : modules_)
     {
         if (m->enabled())
-            m->onRender();
+            guardedRender(m.get());
     }
 }
 

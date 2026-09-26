@@ -45,7 +45,14 @@ static std::string wideToNarrow(const wchar_t* w)
 // cualquier familia de paquete (release, Preview, betas) y esta garantizada
 // como escribible desde el AppContainer. La ruta hardcodeada anterior fallaba
 // silenciosamente si la familia del paquete no coincidia (nada se guardaba).
-static std::string configBaseDir()
+// Base con el LocalState del paquete REAL del juego via WinRT. IMPORTANTE:
+// se computa UNA vez (config::init en el Bootstrap, hilo propio MTA) y se
+// cachea. Llamar a WinRT desde el hilo de Present del juego corrompe su
+// apartment COM y crashea al activar modulos.
+static std::string g_baseDirCache;
+static bool g_baseDirReady = false;
+
+static std::string computeBaseDir()
 {
     try
     {
@@ -74,6 +81,25 @@ static std::string configBaseDir()
         return std::string(local) +
                "\\Packages\\Microsoft.MinecraftUWP_8wekyb3d8bbwe\\RoamingState\\Azyre";
     return {};
+}
+
+static std::string configBaseDir()
+{
+    if (!g_baseDirReady)
+    {
+        g_baseDirCache = computeBaseDir();
+        g_baseDirReady = true;
+    }
+    return g_baseDirCache;
+}
+
+void init()
+{
+    // Precalcular la ruta desde el hilo del Bootstrap (MTA seguro) y crear
+    // la carpeta base.
+    std::string base = configBaseDir();
+    if (!base.empty())
+        CreateDirectoryA(base.c_str(), nullptr);
 }
 
 static std::string configsDir()
@@ -255,6 +281,11 @@ bool deletePreset(const std::string& name)
     return ok != 0;
 }
 
+std::string baseDir()
+{
+    return configBaseDir();
+}
+
 void saveModule(const std::string& moduleName)
 {
     (void)moduleName;
@@ -263,7 +294,7 @@ void saveModule(const std::string& moduleName)
 
 void saveAll()
 {
-    if (g_bootSuppress)
+    if (g_bootSuppress || ModuleManager::get().isQuiet())
         return;
 
     std::string path = defaultConfigPath();

@@ -29,7 +29,23 @@ FetchContent_Declare(
     URL https://github.com/nlohmann/json/archive/refs/heads/develop.tar.gz
 )
 
-FetchContent_MakeAvailable(imgui minhook json)
+FetchContent_Declare(
+    luau
+    URL https://github.com/luau-lang/luau/archive/refs/heads/master.tar.gz
+)
+
+FetchContent_Declare(
+    soloud
+    URL https://github.com/jarikomppa/soloud/archive/refs/heads/master.tar.gz
+)
+
+# Luau: solo librerias (VM + Compiler), sin herramientas de desarrollo.
+set(LUAU_BUILD_CLI OFF CACHE BOOL "" FORCE)
+set(LUAU_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(LUAU_BUILD_FUZZER OFF CACHE BOOL "" FORCE)
+set(LUAU_BUILD_ANALYSIS OFF CACHE BOOL "" FORCE)
+
+FetchContent_MakeAvailable(imgui minhook json luau soloud)
 
 set(IMGUI_SOURCES
     ${imgui_SOURCE_DIR}/imgui.cpp
@@ -46,12 +62,40 @@ set(MINHOOK_SOURCES
     ${minhook_SOURCE_DIR}/src/hde/hde64.c
 )
 
+set(SOLOUD_SOURCES
+    ${soloud_SOURCE_DIR}/src/core/soloud.cpp
+    ${soloud_SOURCE_DIR}/src/core/soloud_audiosource.cpp
+    ${soloud_SOURCE_DIR}/src/core/soloud_bus.cpp
+    ${soloud_SOURCE_DIR}/src/core/soloud_core_3d.cpp
+    ${soloud_SOURCE_DIR}/src/core/soloud_core_basicops.cpp
+    ${soloud_SOURCE_DIR}/src/core/soloud_core_faderops.cpp
+    ${soloud_SOURCE_DIR}/src/core/soloud_core_filterops.cpp
+    ${soloud_SOURCE_DIR}/src/core/soloud_core_getters.cpp
+    ${soloud_SOURCE_DIR}/src/core/soloud_core_setters.cpp
+    ${soloud_SOURCE_DIR}/src/core/soloud_core_voicegroup.cpp
+    ${soloud_SOURCE_DIR}/src/core/soloud_core_voiceops.cpp
+    ${soloud_SOURCE_DIR}/src/core/soloud_fader.cpp
+    ${soloud_SOURCE_DIR}/src/core/soloud_fft.cpp
+    ${soloud_SOURCE_DIR}/src/core/soloud_fft_lut.cpp
+    ${soloud_SOURCE_DIR}/src/core/soloud_file.cpp
+    ${soloud_SOURCE_DIR}/src/core/soloud_filter.cpp
+    ${soloud_SOURCE_DIR}/src/core/soloud_misc.cpp
+    ${soloud_SOURCE_DIR}/src/core/soloud_queue.cpp
+    ${soloud_SOURCE_DIR}/src/core/soloud_thread.cpp
+    ${soloud_SOURCE_DIR}/src/audiosource/wav/soloud_wav.cpp
+    ${soloud_SOURCE_DIR}/src/audiosource/wav/soloud_wavstream.cpp
+    ${soloud_SOURCE_DIR}/src/audiosource/wav/dr_impl.cpp
+    ${soloud_SOURCE_DIR}/src/audiosource/wav/stb_vorbis.c
+    ${soloud_SOURCE_DIR}/src/backend/winmm/soloud_winmm.cpp
+)
+
 file(GLOB_RECURSE AZYRE_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
 
 add_library(AzyreSDK SHARED
     ${AZYRE_SOURCES}
     ${IMGUI_SOURCES}
     ${MINHOOK_SOURCES}
+    ${SOLOUD_SOURCES}
 )
 
 target_sources(AzyreSDK PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/resources/resource.rc")
@@ -91,6 +135,9 @@ target_include_directories(AzyreSDK PRIVATE
     ${minhook_SOURCE_DIR}/include
     ${minhook_SOURCE_DIR}/src
     ${minhook_SOURCE_DIR}/src/hde
+    ${luau_SOURCE_DIR}/VM/include
+    ${luau_SOURCE_DIR}/Compiler/include
+    ${soloud_SOURCE_DIR}/include
 )
 if(_kits_include)
     target_include_directories(AzyreSDK PRIVATE "${_kits_include}")
@@ -104,6 +151,7 @@ target_compile_definitions(AzyreSDK PRIVATE
     UNICODE
     _UNICODE
     _USE_MATH_DEFINES
+    WITH_WINMM
 )
 
 target_compile_options(AzyreSDK PRIVATE /utf-8 /MP /W3)
@@ -118,8 +166,11 @@ target_link_libraries(AzyreSDK PRIVATE
     user32
     shell32
     ole32
+    winmm
     windowsapp
     nlohmann_json::nlohmann_json
+    Luau.Compiler
+    Luau.VM
 )
 
 set_target_properties(AzyreSDK PROPERTIES OUTPUT_NAME "AzyreSDK")

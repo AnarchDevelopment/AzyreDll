@@ -218,7 +218,7 @@ size_t scanMulti(const std::vector<VtableQuery>& queries, std::vector<std::vecto
     for (size_t i = 0; i < queries.size(); ++i)
         targets[i] = resolve(queries[i].rva);
 
-    constexpr size_t kChunk = 1 << 20;
+    constexpr size_t kChunk = 4 << 20;
     std::vector<uint8_t> buffer(kChunk);
 
     MEMORY_BASIC_INFORMATION mbi{};
@@ -252,11 +252,15 @@ size_t scanMulti(const std::vector<VtableQuery>& queries, std::vector<std::vecto
                 if (chunkLen < sizeof(uintptr_t))
                     break;
 
-                if (rawRead(buffer.data(), start, chunkLen))
+                // La region ya se valido como committed RW (regionScannable):
+                // lectura directa via SEH, sin VirtualQuery por chunk.
+                if (safeMemcpy(buffer.data(), reinterpret_cast<void*>(start), chunkLen))
                 {
                     const uintptr_t* words = reinterpret_cast<const uintptr_t*>(buffer.data());
                     size_t count = chunkLen / sizeof(uintptr_t);
-                    for (size_t i = 0; i < count; ++i)
+                    // Los candidatos validos son direcciones 16-alineadas: los
+                    // vtable-slots viven en indices pares (region >= 64K-aligned).
+                    for (size_t i = 0; i < count; i += 2)
                     {
                         uintptr_t value = words[i];
                         for (size_t q = 0; q < queries.size(); ++q)

@@ -11,6 +11,7 @@ enum class Category
     Movement,
     Visuals,
     Misc,
+    Scripting,
 };
 
 const char* categoryName(Category cat);

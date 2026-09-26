@@ -82,33 +82,52 @@ struct ScannerState
     bool stop = false;
     bool pending = false;
     bool running = false;
+    bool localOnly = false;
     bool resultReady = false;
     ScanPacket result;
 };
 
 ScannerState g_scan;
 
-ScanPacket runScanJob()
+ScanPacket runScanJob(bool localOnly)
 {
     ScanPacket packet;
 
+    // Los validadores DEBEN vivir en el scope de la funcion: queries guarda
+    // punteros a ellos, y si se declaran dentro del else quedan destruidos
+    // antes de que scanMulti los use (std::bad_function_call -> crash).
     mem::ValidateFn validateLocal = actorValidator(vt::LocalPlayer, false);
     mem::ValidateFn validateRemote = actorValidator(vt::RemotePlayer, true);
     mem::ValidateFn validateRemoteAlt = actorValidator(vt::RemotePlayerAlt, true);
 
-    std::vector<mem::VtableQuery> queries = {
-        {vt::LocalPlayer, &validateLocal, 1},
-        {vt::RemotePlayer, &validateRemote, 24},
-        {vt::RemotePlayerAlt, &validateRemoteAlt, 24},
-    };
+    std::vector<mem::VtableQuery> queries;
+    if (localOnly)
+    {
+        // Busqueda rapida: solo el LocalPlayer (maxCount 1 + early-exit del
+        // scanner al encontrarlo).
+        queries = {
+            {vt::LocalPlayer, &validateLocal, 1},
+        };
+    }
+    else
+    {
+        queries = {
+            {vt::LocalPlayer, &validateLocal, 1},
+            {vt::RemotePlayer, &validateRemote, 64},
+            {vt::RemotePlayerAlt, &validateRemoteAlt, 64},
+        };
+    }
 
     std::vector<std::vector<uintptr_t>> out;
     mem::scanMulti(queries, out);
 
-    if (!out[0].empty())
+    if (!out.empty() && !out[0].empty())
         packet.local = out[0][0];
-    packet.remotes = std::move(out[1]);
-    packet.remotesAlt = std::move(out[2]);
+    if (out.size() > 2)
+    {
+        packet.remotes = std::move(out[1]);
+        packet.remotesAlt = std::move(out[2]);
+    }
     return packet;
 }
 
@@ -121,15 +140,33 @@ void scanThreadMain()
         if (g_scan.stop)
             break;
 
+        bool localOnly = g_scan.localOnly;
         g_scan.pending = false;
         g_scan.running = true;
         lock.unlock();
 
-        ScanPacket packet = runScanJob();
+        ScanPacket packet;
+        bool ok = false;
+        try
+        {
+            packet = runScanJob(localOnly);
+            ok = true;
+        }
+        catch (const std::exception& e)
+        {
+            MC_LOG_ERROR("[Scan] C++ exception in scan job: %s", e.what());
+        }
+        catch (...)
+        {
+            MC_LOG_ERROR("[Scan] Unknown C++ exception in scan job");
+        }
 
         lock.lock();
-        g_scan.result = std::move(packet);
-        g_scan.resultReady = true;
+        if (ok)
+        {
+            g_scan.result = std::move(packet);
+            g_scan.resultReady = true;
+        }
         g_scan.running = false;
     }
 }
@@ -140,12 +177,13 @@ bool workerIdle()
     return !g_scan.pending && !g_scan.running;
 }
 
-void requestScan()
+void requestScan(bool localOnly)
 {
     std::lock_guard<std::mutex> lock(g_scan.mutex);
     if (g_scan.pending || g_scan.running)
         return;
     g_scan.pending = true;
+    g_scan.localOnly = localOnly;
     g_scan.cv.notify_one();
 }
 
@@ -250,6 +288,7 @@ void Game::update()
 {
     auto now = std::chrono::steady_clock::now();
 
+    bool scanOnLocalFound = false;
     {
         std::lock_guard<std::mutex> lock(g_scan.mutex);
         if (g_scan.resultReady)
@@ -261,7 +300,14 @@ void Game::update()
             {
                 if (local_ != packet.local)
                     MC_LOG("[Game] LocalPlayer found: 0x%p", (void*)packet.local);
+                bool wasMissing = (local_ == 0);
                 local_ = packet.local;
+
+                // Entrada al mundo: scan completo inmediato. Se difiere a
+                // despues del unlock: requestScan toma el mismo mutex y
+                // std::mutex no es recursivo (deadlock si se llama dentro).
+                if (wasMissing)
+                    scanOnLocalFound = true;
             }
 
             remotesRaw_.clear();
@@ -279,10 +325,49 @@ void Game::update()
                 addUnique(p);
             for (uintptr_t p : packet.remotesAlt)
                 addUnique(p);
+
+            // Anti-parpadeo: actores previos validos que el scan no vio se
+            // conservan hasta 2 ciclos (reubicaciones temporales del heap).
+            {
+                std::unordered_map<uintptr_t, int> newStreak;
+                for (const Actor& a : remotes_)
+                {
+                    if (!a.valid())
+                        continue;
+                    bool inScan = false;
+                    for (const Actor& r : remotesRaw_)
+                    {
+                        if (r.address() == a.address())
+                        {
+                            inScan = true;
+                            break;
+                        }
+                    }
+                    if (inScan)
+                        continue;
+
+                    auto it = missStreak_.find(a.address());
+                    int misses = (it != missStreak_.end() ? it->second : 0) + 1;
+                    if (misses <= 2)
+                    {
+                        newStreak[a.address()] = misses;
+                        remotesRaw_.emplace_back(a.address());
+                    }
+                }
+                missStreak_ = std::move(newStreak);
+            }
+
             applyBotFilter();
 
             lastRemotes_ = now;
         }
+    }
+
+    // Fuera del lock: el scan de entrada al mundo.
+    if (scanOnLocalFound)
+    {
+        lastSubmit_ = now;
+        requestScan(false);
     }
 
     if (local_ && !isValidLocal(local_))
@@ -302,25 +387,42 @@ void Game::update()
             client_ = client;
     }
 
+    // Poda continua por frame: actores que dejaron de ser validos (objeto
+    // liberado/reubicado) desaparecen al instante, sin esperar al scan.
+    if (!remotes_.empty())
+    {
+        size_t w = 0;
+        for (size_t i = 0; i < remotes_.size(); ++i)
+        {
+            if (remotes_[i].valid())
+                remotes_[w++] = remotes_[i];
+            else
+                missStreak_.erase(remotes_[i].address());
+        }
+        remotes_.resize(w);
+        shownCount_ = remotes_.size();
+    }
+
     if (!workerIdle())
         return;
 
     if (!local_)
     {
-        if (now - lastSubmit_ > std::chrono::seconds(2))
+        // Reintento frecuente en modo local-only (rapido, con early-exit).
+        if (now - lastSubmit_ > std::chrono::milliseconds(750))
         {
             lastSubmit_ = now;
-            requestScan();
+            requestScan(true);
         }
         return;
     }
 
-    if (now - lastRemotes_ > std::chrono::milliseconds(600) &&
-        now - lastSubmit_ > std::chrono::milliseconds(600) &&
+    if (now - lastRemotes_ > std::chrono::milliseconds(300) &&
+        now - lastSubmit_ > std::chrono::milliseconds(300) &&
         remotesWanted_.exchange(false))
     {
         lastSubmit_ = now;
-        requestScan();
+        requestScan(false);
     }
 }
 

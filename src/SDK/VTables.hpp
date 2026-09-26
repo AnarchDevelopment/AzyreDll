@@ -74,6 +74,7 @@ constexpr uintptr_t EnchantingScreen = 0xE58EE0;
 constexpr uintptr_t AnvilScreen = 0xE4B0F0;
 constexpr uintptr_t GuiComponent = 0xE48BE0;
 constexpr uintptr_t GuiElement = 0xE455E0;
+constexpr uintptr_t ChatScreen = 0xE4BB48;
 constexpr uintptr_t OptionsItem = 0xE46190;
 constexpr uintptr_t OptionsCustomLabelItem = 0xE5C830;
 

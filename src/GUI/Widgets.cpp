@@ -323,8 +323,41 @@ static bool SliderWinUI(const char* label, float* v, float v_min, float v_max,
     bool held = false;
     ImGui::ButtonBehavior(bb, id, &hovered, &held);
 
+    char buf[96];
+    if (is_int)
+        snprintf(buf, sizeof(buf), format, (int)*v);
+    else
+        snprintf(buf, sizeof(buf), format, *v);
+    ImVec2 ts = ImGui::CalcTextSize(buf);
+
+    // El valor es un InputBox siempre editable (click directo sobre el).
+    // CTRL+click / doble click en la pista lo enfoca como atajo.
+    struct ValBox
+    {
+        char buf[32] = {};
+        bool focused = false;
+        bool wantFocus = false;
+    };
+    static std::map<ImGuiID, ValBox> val_boxes;
+    ValBox& vb = val_boxes[id];
+
+    float fieldW = ImMax(ts.x + 22.0f, 58.0f);
+    ImRect valRect(right_edge - fieldW, bb.Min.y, right_edge, bb.Max.y);
+
+    if (!vb.focused && !vb.wantFocus)
+        snprintf(vb.buf, sizeof(vb.buf), is_int ? "%d" : "%.4g", is_int ? (int)*v : *v);
+
+    if (!vb.focused && hovered && !valRect.Contains(g.IO.MousePos) &&
+        (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) ||
+         (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && g.IO.KeyCtrl)))
+    {
+        snprintf(vb.buf, sizeof(vb.buf), is_int ? "%d" : "%.4g", is_int ? (int)*v : *v);
+        vb.wantFocus = true;
+    }
+
     bool value_changed = false;
-    if (held)
+    // Drag solo si el click no cayo sobre el input del valor.
+    if (!vb.focused && held && !valRect.Contains(g.IO.MousePos))
     {
         float t = (g.IO.MousePos.x - bb.Min.x) / (bb.Max.x - bb.Min.x);
         if (t < 0.0f)
@@ -360,16 +393,11 @@ static bool SliderWinUI(const char* label, float* v, float v_min, float v_max,
     const float thumb_r = 6.5f + ha * 1.5f + (held ? 0.8f : 0.0f);
     const float track_min = bb.Min.x + thumb_r + 2.0f;
     const float track_max = bb.Max.x - thumb_r - 2.0f;
-    const float thumb_x = track_min + t * (track_max - track_min);
 
     // Pista inactiva: blanco 11%.
     dl->AddRectFilled(ImVec2(track_min, cy - 2.5f), ImVec2(track_max, cy + 2.5f),
                       IM_COL32(255, 255, 255, 28), 2.5f);
-    // Pista activa: acento WinUI.
-    dl->AddRectFilled(ImVec2(track_min, cy - 2.5f), ImVec2(thumb_x, cy + 2.5f),
-                      accentU32(0.80f + 0.20f * ha), 2.5f);
-    // Thumb blanco.
-    dl->AddCircleFilled(ImVec2(thumb_x, cy), thumb_r, IM_COL32(244, 245, 247, 255), 16);
+    // Pista activa y thumb se dibujan tras aplicar el InputBox del valor.
 
     // Etiqueta via drawlist, valor alineado a la derecha (estilo settings de WinUI).
     if (label && *label)
@@ -384,14 +412,69 @@ static bool SliderWinUI(const char* label, float* v, float v_min, float v_max,
         }
     }
 
-    char buf[96];
-    if (is_int)
-        snprintf(buf, sizeof(buf), format, (int)*v);
-    else
-        snprintf(buf, sizeof(buf), format, *v);
-    ImVec2 ts = ImGui::CalcTextSize(buf);
-    dl->AddText(ImVec2(right_edge - ts.x, bb.Min.y + std::floor((h - ts.y) * 0.5f)),
-                IM_COL32(242, 243, 246, 255), buf);
+    // InputBox del valor (siempre presente).
+    {
+        ImVec2 savedPos = ImGui::GetCursorScreenPos();
+
+        if (vb.wantFocus)
+            ImGui::SetKeyboardFocusHere(0);
+        ImGui::SetNextItemWidth(fieldW);
+        ImGui::SetCursorScreenPos(ImVec2(right_edge - fieldW, bb.Min.y - 1.0f));
+        ImGui::PushID((int)id);
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0f, 3.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
+        bool done = ImGui::InputText(
+            "##slider_val", vb.buf, sizeof(vb.buf),
+            ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_CharsDecimal |
+                ImGuiInputTextFlags_EnterReturnsTrue);
+        bool focused = ImGui::IsItemFocused();
+        bool escaped = focused && ImGui::IsKeyPressed(ImGuiKey_Escape, false);
+        ImGui::PopStyleVar(2);
+        ImGui::PopID();
+        ImGui::SetCursorScreenPos(savedPos);
+
+        if (vb.wantFocus)
+            vb.focused = true;
+        vb.wantFocus = false;
+
+        if (done || escaped || (vb.focused && !focused))
+        {
+            if (!escaped)
+            {
+                // Sin clamp superior: se admiten valores por encima del maximo
+                // del slider (solo se limita por abajo, para no romper modulos).
+                float nv = (float)atof(vb.buf);
+                if (is_int)
+                    nv = (float)(int)nv;
+                if (nv < v_min)
+                    nv = v_min;
+                if (nv != *v)
+                {
+                    *v = nv;
+                    value_changed = true;
+                }
+            }
+            vb.focused = false;
+            snprintf(vb.buf, sizeof(vb.buf), is_int ? "%d" : "%.4g", is_int ? (int)*v : *v);
+        }
+        else
+        {
+            vb.focused = focused;
+        }
+    }
+
+    // Thumb: si el valor excede el maximo, se clava al final de la pista
+    // (visual), pero el valor real sigue siendo el escrito.
+    t = (range > 0.0f) ? (*v - v_min) / range : 0.0f;
+    if (t < 0.0f)
+        t = 0.0f;
+    if (t > 1.0f)
+        t = 1.0f;
+    const float thumb_x = track_min + t * (track_max - track_min);
+    dl->AddRectFilled(ImVec2(track_min, cy - 2.5f), ImVec2(ImMin(thumb_x, track_max), cy + 2.5f),
+                      accentU32(0.80f + 0.20f * ha), 2.5f);
+    dl->AddCircleFilled(ImVec2(ImMin(thumb_x, track_max), cy), thumb_r,
+                       IM_COL32(244, 245, 247, 255), 16);
 
     return value_changed;
 }

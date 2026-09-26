@@ -9,6 +9,7 @@
 #include "Input/WheelHook.hpp"
 #include "Modules/ModuleManager.hpp"
 #include "Render/DX11.hpp"
+#include "Scripting/Scripting.hpp"
 #include "SDK/Game.hpp"
 
 #include <imgui.h>
@@ -237,8 +238,8 @@ void render()
         float totalW = ImGui::GetContentRegionAvail().x;
         float contentW = totalW - sideW - 6.0f;
 
-        bool searching = (g_tab != 4) && g_search[0] != '\0';
-        float searchRowH = (g_tab != 4) ? 32.0f : 0.0f;
+        bool searching = (g_tab != 5) && g_search[0] != '\0';
+        float searchRowH = (g_tab != 5) ? 32.0f : 0.0f;
 
         float debugH = g_debugOpen ? 92.0f : 0.0f;
         float footerH = 74.0f + debugH;
@@ -256,7 +257,7 @@ void render()
         ImGui::PushStyleVar(ImGuiStyleVar_Alpha, winAlpha * (0.40f + 0.60f * tabEase));
 
         // ================= Search bar =================
-        if (g_tab != 4)
+        if (g_tab != 5)
         {
             ImGui::SetNextItemWidth(totalW * 0.45f);
             ImGui::InputTextWithHint("##search", "Search module...", g_search, sizeof(g_search));
@@ -275,11 +276,11 @@ void render()
         if (ImGui::BeginChild("##side", ImVec2(sideW, colsH), false,
                               ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse))
         {
-            const char* tabs[] = {"Combat", "Movement", "Visuals", "Misc", "Configs"};
+            const char* tabs[] = {"Combat", "Movement", "Visuals", "Misc", "Scripting", "Configs"};
             ImGuiWindow* sideWnd = ImGui::GetCurrentWindow();
             float bbW = ImGui::GetContentRegionAvail().x;
 
-            for (int i = 0; i < 5; ++i)
+            for (int i = 0; i < 6; ++i)
             {
                 ImGui::SetCursorPos(ImVec2(0.0f, i * (tabH + tabGap)));
                 if (sideWnd->SkipItems)
@@ -320,7 +321,7 @@ void render()
                                     : ImGui::GetColorU32(ImGuiCol_Text);
                 d->AddText(textPos, textCol, text);
 
-                if (i < 4)
+                if (i < 5)
                 {
                     int n = (int)mgr.byCategory((Category)i).size();
                     if (n > 0)
@@ -349,7 +350,7 @@ void render()
         ImGui::SameLine(0.0f, 6.0f);
 
         // ================= Contenido =================
-        if (g_tab == 4)
+        if (g_tab == 5)
         {
             if (ImGui::BeginChild("##configs", ImVec2(contentW, colsH), false))
             {
@@ -466,6 +467,19 @@ void render()
                     ImGui::TextDisabled("Select a config");
                 else
                     ImGui::TextDisabled("Selected: %s", selectedName.c_str());
+
+                // ---- Scripts ----
+                ImGui::Separator();
+                if (ImGui::Button("Reload scripts##cfg_scr"))
+                {
+                    scripts::reload();
+                    snprintf(toast, sizeof(toast), "Scripts reloaded (%d)", scripts::count());
+                    lastToast = GetTickCount64();
+                }
+                ImGui::SameLine();
+                ImGui::TextDisabled("Scripts loaded: %d", scripts::count());
+                if (scripts::errorCount() > 0)
+                    ImGui::TextDisabled("Script error: %s", scripts::lastError());
             }
             ImGui::EndChild();
         }

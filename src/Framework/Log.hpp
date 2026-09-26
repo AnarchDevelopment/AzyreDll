@@ -5,6 +5,8 @@
 namespace mc::log {
 
 void init(const char* file = "azyre_sdk.log");
+void setFile(const char* file);
+void installCrashHandler();
 void shutdown();
 void write(const char* fmt, ...);
 

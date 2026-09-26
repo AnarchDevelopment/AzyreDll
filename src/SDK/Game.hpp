@@ -12,6 +12,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <unordered_map>
 #include <vector>
 
 namespace mc {
@@ -69,6 +70,7 @@ private:
     size_t shownCount_ = 0;
     std::vector<Actor> remotes_;
     std::vector<Actor> remotesRaw_;
+    std::unordered_map<uintptr_t, int> missStreak_;
     std::atomic<bool> remotesWanted_{false};
     std::chrono::steady_clock::time_point lastSubmit_{};
     std::chrono::steady_clock::time_point lastRemotes_{};

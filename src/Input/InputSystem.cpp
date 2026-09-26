@@ -374,8 +374,7 @@ void init()
 }
 
 void updateFrame()
-{
-    ImGuiIO& io = ImGui::GetIO();
+{    ImGuiIO& io = ImGui::GetIO();
 
     // Suscripcion del wheel via WinRT, despachada al UI thread con el
     // Dispatcher (el patron de window::setTitle). Desde este hilo de render

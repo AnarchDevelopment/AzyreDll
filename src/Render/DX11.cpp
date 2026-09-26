@@ -23,6 +23,11 @@ void setModule(void* moduleHandle)
     g_module = static_cast<HMODULE>(moduleHandle);
 }
 
+void* moduleHandle()
+{
+    return g_module;
+}
+
 static ImFont* LoadRobotoFont(ImFontAtlas* fonts)
 {
     if (!g_module)

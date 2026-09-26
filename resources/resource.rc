@@ -1,3 +1,5 @@
 #include "resource.h"
 
 IDR_ROBOTO RCDATA "Font/Roboto-Regular.ttf"
+IDR_CELESTIAL_ON RCDATA "Sounds/Module/celestial_on.wav"
+IDR_CELESTIAL_OFF RCDATA "Sounds/Module/celestial_off.wav"

@@ -4,6 +4,8 @@
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
+#include <eh.h>
+#include <exception>
 #include <fstream>
 
 namespace mc::log {
@@ -33,6 +35,94 @@ void init(const char* file)
     SetConsoleCursorInfo(hConsole, &cursorInfo);
 
     g_ready = true;
+}
+
+void setFile(const char* file)
+{
+    if (file && *file)
+    {
+        strncpy_s(g_fileBuf, file, _TRUNCATE);
+    }
+}
+
+// =====================================================================
+// Diagnostico de crashes: 0xC0000409 (abort/fastfail del CRT) casi siempre
+// es una excepcion C++ sin capturar que dispara std::terminate. Estos
+// handlers la nombran en el log ANTES de morir, con escritura Win32
+// directa (sin depender del CRT en punto de muerte).
+// =====================================================================
+
+static void rawFatalWrite(const char* text)
+{
+    HANDLE f = CreateFileA(g_fileBuf, FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                           nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (f == INVALID_HANDLE_VALUE)
+        return;
+    DWORD written = 0;
+    WriteFile(f, text, (DWORD)strlen(text), &written, nullptr);
+    CloseHandle(f);
+}
+
+static LONG WINAPI unhandledLogger(EXCEPTION_POINTERS* ep)
+{
+    if (ep && ep->ExceptionRecord)
+    {
+        char buf[256];
+        snprintf(buf, sizeof(buf),
+                 "[FATAL] Unhandled exception 0x%08X @ %p (thread %lu)\n",
+                 ep->ExceptionRecord->ExceptionCode, ep->ExceptionRecord->ExceptionAddress,
+                 GetCurrentThreadId());
+        rawFatalWrite(buf);
+    }
+    return EXCEPTION_CONTINUE_SEARCH;
+}
+
+static void __cdecl invalidParamLogger(const wchar_t*, const wchar_t*, const wchar_t*, unsigned,
+                                        uintptr_t)
+{
+    char buf[160];
+    snprintf(buf, sizeof(buf), "[FATAL] CRT invalid parameter (thread %lu)\n",
+             GetCurrentThreadId());
+    rawFatalWrite(buf);
+}
+
+static void terminateLogger()
+{
+    char buf[512];
+    int n = snprintf(buf, sizeof(buf), "[FATAL] std::terminate on thread %lu: ",
+                     GetCurrentThreadId());
+
+    std::exception_ptr ptr = std::current_exception();
+    if (ptr)
+    {
+        try
+        {
+            std::rethrow_exception(ptr);
+        }
+        catch (const std::exception& e)
+        {
+            n += snprintf(buf + n, sizeof(buf) - n, "%s", e.what());
+        }
+        catch (...)
+        {
+            n += snprintf(buf + n, sizeof(buf) - n, "unknown non-standard exception");
+        }
+    }
+    else
+    {
+        n += snprintf(buf + n, sizeof(buf) - n, "no active exception (explicit terminate/abort)");
+    }
+    snprintf(buf + n, sizeof(buf) - n, "\n");
+    rawFatalWrite(buf);
+
+    abort();
+}
+
+void installCrashHandler()
+{
+    std::set_terminate(terminateLogger);
+    _set_invalid_parameter_handler(invalidParamLogger);
+    SetUnhandledExceptionFilter(unhandledLogger);
 }
 
 void shutdown()
