@@ -1,10 +1,14 @@
 #include "ModuleManager.hpp"
 
+#include "Commands/CommandManager.hpp"
 #include "Config/Config.hpp"
 #include "Framework/Log.hpp"
 
 #include <imgui.h>
 #include <windows.h>
+
+#include <deque>
+#include <mutex>
 
 namespace mc {
 
@@ -56,6 +60,21 @@ static bool sehRender(Module* m)
     __except (EXCEPTION_EXECUTE_HANDLER)
     {
         MC_LOG_ERROR("[Guard] Exception 0x%08X in %s::onRender",
+                     GetExceptionCode(), m->name().c_str());
+        return false;
+    }
+}
+
+static bool sehCommand(Module* m, const std::string& cmd)
+{
+    __try
+    {
+        m->onCommand(cmd);
+        return true;
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER)
+    {
+        MC_LOG_ERROR("[Guard] Exception 0x%08X in %s::onCommand",
                      GetExceptionCode(), m->name().c_str());
         return false;
     }
@@ -128,6 +147,25 @@ void guardedRender(Module* m)
     }
 }
 
+void guardedCommand(Module* m, const std::string& cmd)
+{
+    try
+    {
+        if (!sehCommand(m, cmd))
+        {
+            m->setEnabled(false);
+            return;
+        }
+    }
+    catch (...)
+    {
+        cppGuard("onCommand", m);
+    }
+}
+
+std::mutex g_cmdMutex;
+std::deque<std::string> g_cmdQueue;
+
 }
 
 ModuleManager& ModuleManager::get()
@@ -146,7 +184,7 @@ Module* ModuleManager::add(std::unique_ptr<Module> module)
     return raw;
 }
 
-void ModuleManager::notify(const std::string& text, bool enabled)
+void ModuleManager::notify(const std::string& text, bool enabled, float duration)
 {
     if (quiet_)
         return;
@@ -155,28 +193,53 @@ void ModuleManager::notify(const std::string& text, bool enabled)
     n.text = text;
     n.enabled = enabled;
     n.hasState = true;
-    n.time = GetTickCount64();
+    n.duration = duration;
     notifs_.push_back(std::move(n));
     if (notifs_.size() > 8)
         notifs_.erase(notifs_.begin());
 }
 
-void ModuleManager::notifyInfo(const std::string& text)
+void ModuleManager::notifyInfo(const std::string& text, float duration)
 {
     Notification n;
     n.text = text;
     n.enabled = true;
     n.hasState = false;
-    n.time = GetTickCount64();
+    n.duration = duration;
     notifs_.push_back(std::move(n));
     if (notifs_.size() > 8)
         notifs_.erase(notifs_.begin());
+}
+
+void ModuleManager::tickNotifications(float dt)
+{
+    if (notifs_.empty())
+        return;
+
+    for (auto& n : notifs_)
+    {
+        n.timeShown += dt;
+        n.isTimeUp = n.timeShown >= n.duration;
+
+        // Easing exponencial hacia el estado objetivo: entra mientras vive,
+        // sale al vencer (mismo feel que el estilo Solstice).
+        float target = n.isTimeUp ? 0.0f : 1.0f;
+        float t = dt * 5.0f;
+        if (t > 1.0f)
+            t = 1.0f;
+        n.slide += (target - n.slide) * t;
+    }
+
+    std::erase_if(notifs_, [](const Notification& n) {
+        return n.isTimeUp && n.timeShown > n.duration + 3.0f;
+    });
 }
 
 void ModuleManager::shutdownAll()
 {
     for (auto& m : modules_)
         m->onShutdown();
+    graveyard_.clear();
 }
 
 std::vector<Module*> ModuleManager::byCategory(Category cat)
@@ -271,11 +334,39 @@ void ModuleManager::handleKeybinds()
 
 void ModuleManager::onTick()
 {
+    std::vector<std::string> pendingCommands;
+    {
+        std::lock_guard<std::mutex> lock(g_cmdMutex);
+        pendingCommands.assign(g_cmdQueue.begin(), g_cmdQueue.end());
+        g_cmdQueue.clear();
+    }
+
+    if (!pendingCommands.empty())
+    {
+        // Snapshot: los comandos nativos pueden remover/modular la lista
+        // (ej. .script remove) y el dispatch debe seguir valido.
+        std::vector<Module*> active;
+        for (auto& m : modules_)
+        {
+            if (m->enabled())
+                active.push_back(m.get());
+        }
+
+        for (const std::string& cmd : pendingCommands)
+        {
+            mc::commands::handle(cmd);
+            for (Module* m : active)
+                guardedCommand(m, cmd);
+        }
+    }
+
     for (auto& m : modules_)
     {
         if (m->enabled())
             guardedTick(m.get());
     }
+
+    sweepRemoved();
 }
 
 void ModuleManager::onFrame(float dt)
@@ -321,6 +412,42 @@ void ModuleManager::onMotionPacket(void* packet, bool& cancel)
         if (m->enabled())
             m->onMotionPacket(packet, cancel);
     }
+}
+
+void ModuleManager::queueCommand(const std::string& cmd)
+{
+    std::lock_guard<std::mutex> lock(g_cmdMutex);
+    g_cmdQueue.push_back(cmd);
+    if (g_cmdQueue.size() > 32)
+        g_cmdQueue.pop_front();
+}
+
+bool ModuleManager::remove(const std::string& name)
+{
+    for (size_t i = 0; i < modules_.size(); ++i)
+    {
+        if (modules_[i]->name() != name)
+            continue;
+        Module* m = modules_[i].get();
+
+        bool wasQuiet = quiet_;
+        quiet_ = true;
+        m->setEnabled(false);
+        quiet_ = wasQuiet;
+        m->onShutdown();
+
+        graveyard_.push_back(std::move(modules_[i]));
+        modules_.erase(modules_.begin() + i);
+        MC_LOG("[Module] Removed: %s", name.c_str());
+        return true;
+    }
+    return false;
+}
+
+void ModuleManager::sweepRemoved()
+{
+    if (!graveyard_.empty())
+        graveyard_.clear();
 }
 
 }

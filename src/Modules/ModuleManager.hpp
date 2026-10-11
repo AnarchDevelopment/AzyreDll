@@ -15,14 +15,22 @@ public:
         std::string text;
         bool enabled = false;
         bool hasState = true;
-        unsigned long long time = 0;
+        float duration = 3.0f;
+        float timeShown = 0.0f;
+        // 0 = fuera de pantalla, 1 = asentada. Anima la entrada diagonal
+        // desde la esquina inferior derecha y la salida al vencer.
+        float slide = 0.0f;
+        bool isTimeUp = false;
     };
 
     static ModuleManager& get();
 
     Module* add(std::unique_ptr<Module> module);
-    void notify(const std::string& text, bool enabled);
-    void notifyInfo(const std::string& text);
+    void notify(const std::string& text, bool enabled, float duration = 3.0f);
+    void notifyInfo(const std::string& text, float duration = 3.0f);
+    // Avanza la animacion (entrada/salida) con el dt del frame y poda las
+    // notificaciones vencidas hace mas de 3s (cuando ya salieron de pantalla).
+    void tickNotifications(float dt);
     void shutdownAll();
     void setQuiet(bool quiet) { quiet_ = quiet; }
     bool isQuiet() const { return quiet_; }
@@ -37,9 +45,18 @@ public:
     void onGetFriction(float& friction);
     void onMotionPacket(void* packet, bool& cancel);
 
+    // Thread-safe: el hook de chat encola comandos desde el hilo de red y
+    // onTick los drena en el hilo de Present.
+    void queueCommand(const std::string& cmd);
+
     const std::vector<std::unique_ptr<Module>>& all() const { return modules_; }
     std::vector<Module*> byCategory(Category cat);
     Module* find(const std::string& name);
+
+    // Mueve el modulo a un "graveyard" (queda vivo hasta el sweep de onTick):
+    // permite remover durante el dispatch de comandos sin invalidar
+    // iteradores. El modulo no vuelve a aparecer en la GUI ni en busquedas.
+    bool remove(const std::string& name);
 
     Module* binding() const { return binding_; }
     void setBinding(Module* m);
@@ -47,7 +64,10 @@ public:
 private:
     ModuleManager() = default;
 
+    void sweepRemoved();
+
     std::vector<std::unique_ptr<Module>> modules_;
+    std::vector<std::unique_ptr<Module>> graveyard_;
     std::vector<Notification> notifs_;
     Module* binding_ = nullptr;
     bool quiet_ = false;

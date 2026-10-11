@@ -12,6 +12,7 @@ enum class Category
     Visuals,
     Misc,
     Scripting,
+    Interface,
 };
 
 const char* categoryName(Category cat);
@@ -36,6 +37,7 @@ public:
     virtual void onHurt(void* /*actor*/, void* /*source*/, float& /*damage*/, bool& /*cancel*/) {}
     virtual void onGetFriction(float& /*friction*/) {}
     virtual void onMotionPacket(void* /*packet*/, bool& /*cancel*/) {}
+    virtual void onCommand(const std::string& /*cmd*/) {}
 
     void toggle();
     void setEnabled(bool enabled);

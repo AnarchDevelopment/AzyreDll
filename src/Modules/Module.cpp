@@ -95,6 +95,7 @@ const char* categoryName(Category cat)
     case Category::Visuals: return "Visuals";
     case Category::Misc: return "Misc";
     case Category::Scripting: return "Scripting";
+    case Category::Interface: return "Interface";
     }
     return "Unknown";
 }
