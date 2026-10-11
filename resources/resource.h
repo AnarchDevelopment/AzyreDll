@@ -3,3 +3,49 @@
 #define IDR_ROBOTO 101
 #define IDR_CELESTIAL_ON 102
 #define IDR_CELESTIAL_OFF 103
+#define IDR_ALERT 145
+
+#define IDR_COMFORTAA 104
+#define IDR_COMFORTAA_BOLD 105
+#define IDR_MOJANGLES 106
+#define IDR_MOJANGLES_BOLD 107
+#define IDR_OPEN_SANS 108
+#define IDR_OPEN_SANS_BOLD 109
+#define IDR_PRODUCT_SANS 110
+#define IDR_PRODUCT_SANS_BOLD 111
+#define IDR_SF_PRO 112
+#define IDR_SF_PRO_BOLD 113
+#define IDR_SARABUN 114
+
+// Sprites de efectos de pocion (ids 1..30, ver PotionHUD).
+// Secuenciales: IDR_EFFECT_1 + (id - 1).
+#define IDR_EFFECT_1 115
+#define IDR_EFFECT_2 116
+#define IDR_EFFECT_3 117
+#define IDR_EFFECT_4 118
+#define IDR_EFFECT_5 119
+#define IDR_EFFECT_6 120
+#define IDR_EFFECT_7 121
+#define IDR_EFFECT_8 122
+#define IDR_EFFECT_9 123
+#define IDR_EFFECT_10 124
+#define IDR_EFFECT_11 125
+#define IDR_EFFECT_12 126
+#define IDR_EFFECT_13 127
+#define IDR_EFFECT_14 128
+#define IDR_EFFECT_15 129
+#define IDR_EFFECT_16 130
+#define IDR_EFFECT_17 131
+#define IDR_EFFECT_18 132
+#define IDR_EFFECT_19 133
+#define IDR_EFFECT_20 134
+#define IDR_EFFECT_21 135
+#define IDR_EFFECT_22 136
+#define IDR_EFFECT_23 137
+#define IDR_EFFECT_24 138
+#define IDR_EFFECT_25 139
+#define IDR_EFFECT_26 140
+#define IDR_EFFECT_27 141
+#define IDR_EFFECT_28 142
+#define IDR_EFFECT_29 143
+#define IDR_EFFECT_30 144
