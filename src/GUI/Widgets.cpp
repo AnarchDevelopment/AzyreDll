@@ -1,7 +1,11 @@
 #include "Widgets.hpp"
 
+#include "Framework/ColorUtils.hpp"
+#include "Framework/SolsticeWidgets.hpp"
 #include "GUI/Theme.hpp"
+#include "Modules/impl/Interface/Interface.hpp"
 #include "Render/DX11.hpp"
+#include "Render/BlurHelper/BlurHelper.hpp"
 
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -36,35 +40,79 @@ void SoftShadow(ImDrawList* d, const ImVec2& min, const ImVec2& max,
     }
 }
 
-// Panel acrilico: blur local (sub-rect del backdrop global) + tarjeta
-// translucida + borde sutil, con sombra por debajo.
+// Glow negro solo en los bordes EXTERIORES de una pila de rects (staircase ArrayList).
+// Cada borde se dibuja de forma independiente para evitar sangrado en seams interiores:
+//   - Lado izquierdo de cada rect: tiras verticales clippeadas a [rMin.y, rMax.y].
+//   - Tope del primer rect y base del ultimo rect: tiras horizontales.
+// rects: ordenados de arriba a abajo, cada elemento es {min, max}.
+void GlowBorder(ImDrawList* d,
+                const std::vector<std::pair<ImVec2, ImVec2>>& rects,
+                float strength, float spread)
+{
+    if (rects.empty() || strength <= 0.f || spread <= 0.f)
+        return;
+
+    const int layers = 9;
+    for (int i = 0; i < layers; ++i)
+    {
+        float t   = (float)i / (float)(layers - 1);
+        float pad = spread * t;
+        float f   = 1.f - t;
+        f = f * f * f;
+        int a = (int)(strength * f);
+        if (a <= 0)
+            continue;
+        ImU32 col = IM_COL32(0, 0, 0, a);
+
+        // Lado izquierdo de cada fila: tira vertical clippeada a la altura de ESA fila.
+        // pad=0 en i=0 → el rect tiene ancho 0 (invisible), y crece hacia la izquierda.
+        // Esto garantiza que NO hay sangrado vertical entre filas adyacentes.
+        for (const auto& [rMin, rMax] : rects)
+            d->AddRectFilled(ImVec2(rMin.x - pad, rMin.y),
+                             ImVec2(rMin.x,       rMax.y), col);
+
+        // Borde superior del bloque completo (encima del primer rect).
+        {
+            const ImVec2& fMin = rects.front().first;
+            const ImVec2& fMax = rects.front().second;
+            d->AddRectFilled(ImVec2(fMin.x - pad, fMin.y - pad),
+                             ImVec2(fMax.x,       fMin.y), col);
+        }
+
+        // Borde inferior del bloque completo (debajo del ultimo rect).
+        {
+            const ImVec2& lMin = rects.back().first;
+            const ImVec2& lMax = rects.back().second;
+            d->AddRectFilled(ImVec2(lMin.x - pad, lMax.y),
+                             ImVec2(lMax.x,       lMax.y + pad), col);
+        }
+    }
+}
+
+
+// Panel acrilico: el vidrio lo compone el BlurHelper en el backbuffer con el
+// shader Glass (rounded-rect SDF + refraccion + luz de borde), igual que el
+// menu. Aqui solo se registra el rect para el pase de blur y se pinta el
+// scrim tenue + borde por encima. Sin blur disponible: tarjeta solida.
 void AcrylicPanel(ImDrawList* d, const ImVec2& min, const ImVec2& max,
                   float rounding, float alpha, float sw, float sh,
-                  float shadowStrength, float shadowSpread)
+                  float shadowStrength, float shadowSpread, bool drawBorder)
 {
     if (alpha <= 0.01f)
         return;
 
     SoftShadow(d, min, max, rounding, shadowStrength * alpha, shadowSpread);
 
-    // Blur solo cuando hay captura fresca (menu abierto); en juego la tarjeta
-    // solida translucida evita tocar la swapchain del juego.
-    bool haveBlur = dx11::backdropWanted() && dx11::backdropReady();
-    if (haveBlur)
-    {
-        ImVec2 uv0(min.x / sw, min.y / sh);
-        ImVec2 uv1(max.x / sw, max.y / sh);
-        d->AddImageRounded(ImTextureRef((void*)dx11::backdropSrv()),
-                           min, max, uv0, uv1,
-                           IM_COL32(255, 255, 255, (int)(255.0f * alpha)), rounding);
-    }
-
-    // Scrim minimo (acrilico autentico): el blur manda, la tarjeta apenas tinta.
-    if (haveBlur)
-        d->AddRectFilled(min, max, IM_COL32(16, 20, 28, (int)(78.0f * alpha)), rounding);
+    const bool haveGlass = blur::ready() && blur::srv();
+    if (haveGlass)
+        blur::addAcrylicRect(min.x, min.y, max.x, max.y, rounding, alpha);
     else
         d->AddRectFilled(min, max, IM_COL32(31, 31, 33, (int)(200.0f * alpha)), rounding);
-    d->AddRect(min, max, IM_COL32(255, 255, 255, (int)(22.0f * alpha)), rounding, 0, 1.0f);
+
+    // Scrim sobre el vidrio compuesto (blur a la vista, tarjeta apenas tinta).
+    d->AddRectFilled(min, max, IM_COL32(16, 20, 28, (int)(66.0f * alpha)), rounding);
+    if (drawBorder)
+        d->AddRect(min, max, IM_COL32(255, 255, 255, (int)(22.0f * alpha)), rounding, 0, 1.0f);
 }
 
 static float EaseInExpo(float t)
@@ -88,6 +136,16 @@ static ImU32 accentU32(float alpha)
 
 bool CCombo(const char* label, int* current_item, const std::vector<std::string>& items)
 {
+    // Estilo Solstice: combo custom (sw::Combo). Se reconstruye el array
+    // de const char* para la version custom.
+    if (gui::style() == 1)
+    {
+        std::vector<const char*> raw;
+        raw.reserve(items.size());
+        for (const std::string& s : items)
+            raw.push_back(s.c_str());
+        return sw::Combo(label, current_item, raw.data(), (int)raw.size());
+    }
     ImGuiWindow* window = ImGui::GetCurrentWindow();
     if (window->SkipItems)
         return false;
@@ -347,24 +405,30 @@ static bool SliderWinUI(const char* label, float* v, float v_min, float v_max,
     if (!vb.focused && !vb.wantFocus)
         snprintf(vb.buf, sizeof(vb.buf), is_int ? "%d" : "%.4g", is_int ? (int)*v : *v);
 
-    if (!vb.focused && hovered && !valRect.Contains(g.IO.MousePos) &&
-        (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) ||
-         (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && g.IO.KeyCtrl)))
-    {
-        snprintf(vb.buf, sizeof(vb.buf), is_int ? "%d" : "%.4g", is_int ? (int)*v : *v);
-        vb.wantFocus = true;
-    }
+    // Animacion de hover.
+    static std::map<ImGuiID, float> hover_anim;
+    float& ha = hover_anim[id];
+    ha += (((hovered || held) ? 1.0f : 0.0f) - ha) * ImMin(g.IO.DeltaTime * 12.0f, 1.0f);
+    if (ha < 0.001f && !(hovered || held))
+        hover_anim.erase(id);
+
+    // Coordenadas de la pista (necesarias para el drag).
+    const float range = v_max - v_min;
+    ImDrawList* dl = window->DrawList;
+    const float cy = (bb.Min.y + bb.Max.y) * 0.5f;
+    const float thumb_r = 6.5f + ha * 1.5f + (held ? 0.8f : 0.0f);
+    const float track_min = bb.Min.x + thumb_r + 2.0f;
+    const float track_max = valRect.Min.x - thumb_r - 4.0f;
 
     bool value_changed = false;
-    // Drag solo si el click no cayo sobre el input del valor.
-    if (!vb.focused && held && !valRect.Contains(g.IO.MousePos))
+    // Drag: calcula t sobre el rango REAL de la pista, no todo el bb.
+    // Solo activo cuando el inputbox no tiene el foco.
+    if (!vb.focused && held)
     {
-        float t = (g.IO.MousePos.x - bb.Min.x) / (bb.Max.x - bb.Min.x);
-        if (t < 0.0f)
-            t = 0.0f;
-        if (t > 1.0f)
-            t = 1.0f;
-        float nv = v_min + t * (v_max - v_min);
+        float rawT = (g.IO.MousePos.x - track_min) / (track_max - track_min);
+        if (rawT < 0.0f) rawT = 0.0f;
+        if (rawT > 1.0f) rawT = 1.0f;
+        float nv = v_min + rawT * (v_max - v_min);
         if (is_int)
             nv = ImTrunc(nv + 0.5f);
         if (nv != *v)
@@ -374,32 +438,25 @@ static bool SliderWinUI(const char* label, float* v, float v_min, float v_max,
         }
     }
 
-    // Animacion de hover: el thumb crece suavemente.
-    static std::map<ImGuiID, float> hover_anim;
-    float& ha = hover_anim[id];
-    ha += (((hovered || held) ? 1.0f : 0.0f) - ha) * ImMin(g.IO.DeltaTime * 12.0f, 1.0f);
-    if (ha < 0.001f && !(hovered || held))
-        hover_anim.erase(id);
+    // Activar inputbox con CTRL+click o doble-click fuera del inputbox.
+    if (!vb.focused && !vb.wantFocus && hovered &&
+        !valRect.Contains(g.IO.MousePos) &&
+        (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) ||
+         (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && g.IO.KeyCtrl)))
+    {
+        snprintf(vb.buf, sizeof(vb.buf), is_int ? "%d" : "%.4g", is_int ? (int)*v : *v);
+        vb.wantFocus = true;
+    }
 
-    const float range = v_max - v_min;
     float t = (range > 0.0f) ? (*v - v_min) / range : 0.0f;
-    if (t < 0.0f)
-        t = 0.0f;
-    if (t > 1.0f)
-        t = 1.0f;
+    if (t < 0.0f) t = 0.0f;
+    if (t > 1.0f) t = 1.0f;
 
-    ImDrawList* dl = window->DrawList;
-    const float cy = (bb.Min.y + bb.Max.y) * 0.5f;
-    const float thumb_r = 6.5f + ha * 1.5f + (held ? 0.8f : 0.0f);
-    const float track_min = bb.Min.x + thumb_r + 2.0f;
-    const float track_max = bb.Max.x - thumb_r - 2.0f;
-
-    // Pista inactiva: blanco 11%.
+    // Pista inactiva.
     dl->AddRectFilled(ImVec2(track_min, cy - 2.5f), ImVec2(track_max, cy + 2.5f),
                       IM_COL32(255, 255, 255, 28), 2.5f);
-    // Pista activa y thumb se dibujan tras aplicar el InputBox del valor.
 
-    // Etiqueta via drawlist, valor alineado a la derecha (estilo settings de WinUI).
+    // Etiqueta.
     if (label && *label)
     {
         const char* end = labelEnd(label);
@@ -412,7 +469,7 @@ static bool SliderWinUI(const char* label, float* v, float v_min, float v_max,
         }
     }
 
-    // InputBox del valor (siempre presente).
+    // InputBox del valor.
     {
         ImVec2 savedPos = ImGui::GetCursorScreenPos();
 
@@ -423,12 +480,27 @@ static bool SliderWinUI(const char* label, float* v, float v_min, float v_max,
         ImGui::PushID((int)id);
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0f, 3.0f));
         ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
+
+        // Cuando no esta enfocado, el input box es invisible para no
+        // robar los eventos del slider (hover/click del drag).
+        if (!vb.focused && !vb.wantFocus)
+        {
+            ImGui::PushStyleColor(ImGuiCol_FrameBg,        ImVec4(0,0,0,0));
+            ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(0,0,0,0));
+            ImGui::PushStyleColor(ImGuiCol_FrameBgActive,  ImVec4(0,0,0,0));
+            ImGui::PushStyleColor(ImGuiCol_Text,           ImVec4(0,0,0,0));
+        }
+
         bool done = ImGui::InputText(
             "##slider_val", vb.buf, sizeof(vb.buf),
             ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_CharsDecimal |
                 ImGuiInputTextFlags_EnterReturnsTrue);
-        bool focused = ImGui::IsItemFocused();
-        bool escaped = focused && ImGui::IsKeyPressed(ImGuiKey_Escape, false);
+        bool focused_now = ImGui::IsItemFocused();
+        bool escaped = focused_now && ImGui::IsKeyPressed(ImGuiKey_Escape, false);
+
+        if (!vb.focused && !vb.wantFocus)
+            ImGui::PopStyleColor(4);
+
         ImGui::PopStyleVar(2);
         ImGui::PopID();
         ImGui::SetCursorScreenPos(savedPos);
@@ -437,17 +509,13 @@ static bool SliderWinUI(const char* label, float* v, float v_min, float v_max,
             vb.focused = true;
         vb.wantFocus = false;
 
-        if (done || escaped || (vb.focused && !focused))
+        if (done || escaped || (vb.focused && !focused_now))
         {
             if (!escaped)
             {
-                // Sin clamp superior: se admiten valores por encima del maximo
-                // del slider (solo se limita por abajo, para no romper modulos).
                 float nv = (float)atof(vb.buf);
-                if (is_int)
-                    nv = (float)(int)nv;
-                if (nv < v_min)
-                    nv = v_min;
+                if (is_int) nv = (float)(int)nv;
+                if (nv < v_min) nv = v_min;
                 if (nv != *v)
                 {
                     *v = nv;
@@ -459,17 +527,26 @@ static bool SliderWinUI(const char* label, float* v, float v_min, float v_max,
         }
         else
         {
-            vb.focused = focused;
+            vb.focused = focused_now;
         }
     }
 
-    // Thumb: si el valor excede el maximo, se clava al final de la pista
-    // (visual), pero el valor real sigue siendo el escrito.
+    // Dibujar el valor visible cuando el inputbox no esta activo.
+    if (!vb.focused)
+    {
+        char disp[64];
+        if (is_int) snprintf(disp, sizeof(disp), format, (int)*v);
+        else        snprintf(disp, sizeof(disp), format, *v);
+        ImVec2 tsz = ImGui::CalcTextSize(disp);
+        float vx = valRect.Min.x + (valRect.GetWidth() - tsz.x) * 0.5f;
+        float vy = bb.Min.y + (h - tsz.y) * 0.5f;
+        dl->AddText(ImVec2(vx, vy), ImGui::GetColorU32(ImGuiCol_TextDisabled), disp);
+    }
+
+    // Thumb y pista activa.
     t = (range > 0.0f) ? (*v - v_min) / range : 0.0f;
-    if (t < 0.0f)
-        t = 0.0f;
-    if (t > 1.0f)
-        t = 1.0f;
+    if (t < 0.0f) t = 0.0f;
+    if (t > 1.0f) t = 1.0f;
     const float thumb_x = track_min + t * (track_max - track_min);
     dl->AddRectFilled(ImVec2(track_min, cy - 2.5f), ImVec2(ImMin(thumb_x, track_max), cy + 2.5f),
                       accentU32(0.80f + 0.20f * ha), 2.5f);
@@ -479,13 +556,45 @@ static bool SliderWinUI(const char* label, float* v, float v_min, float v_max,
     return value_changed;
 }
 
+bool Checkbox(const char* label, bool* v)
+{
+    if (gui::style() == 1)
+        return sw::Toggle(label, v);
+    return ImGui::Checkbox(label, v);
+}
+
+bool InputText(const char* label, char* buf, size_t size)
+{
+    if (gui::style() == 1)
+        return sw::TextInput(label, buf, size);
+    return ImGui::InputText(label, buf, size);
+}
+
+bool ColorEdit3(const char* label, float* col3, ImGuiColorEditFlags flags)
+{
+    if (gui::style() == 1)
+        return sw::Color(label, col3, 3);
+    return ImGui::ColorEdit3(label, col3, flags);
+}
+
+bool ColorEdit4(const char* label, float* col4, ImGuiColorEditFlags flags)
+{
+    if (gui::style() == 1)
+        return sw::Color(label, col4, 4);
+    return ImGui::ColorEdit4(label, col4, flags);
+}
+
 bool CSlider(const char* label, float* v, float v_min, float v_max, const char* format)
 {
+    if (gui::style() == 1)
+        return sw::Slider(label, v, v_min, v_max, format);
     return SliderWinUI(label, v, v_min, v_max, format, false);
 }
 
 bool CSlider(const char* label, int* v, int v_min, int v_max, const char* format)
 {
+    if (gui::style() == 1)
+        return sw::SliderInt(label, v, v_min, v_max, format);
     float fv = (float)*v;
     if (!SliderWinUI(label, &fv, (float)v_min, (float)v_max, format, true))
         return false;

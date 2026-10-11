@@ -4,9 +4,12 @@
 
 namespace mc::theme {
 
-// WinUI 3 Dark: SystemAccentColorLight (#4CC2FF) y accent base (#0078D4).
 inline ImVec4 Accent(0.298f, 0.761f, 1.000f, 1.0f);
 inline ImVec4 AccentDeep(0.000f, 0.471f, 0.831f, 1.0f);
+
+inline float WindowRounding = 8.0f;
+inline float ItemSpacingY = 6.0f;
+inline int FontIndex = 0;
 
 inline ImU32 AccentU32(float alpha = 1.0f)
 {
@@ -21,16 +24,16 @@ inline ImU32 AccentDeepU32(float alpha = 1.0f)
 inline void apply()
 {
     ImGuiStyle& s = ImGui::GetStyle();
-    s.WindowRounding = 8.0f;
-    s.ChildRounding = 4.0f;
-    s.FrameRounding = 4.0f;
+    s.WindowRounding = WindowRounding;
+    s.ChildRounding = WindowRounding * 0.5f;
+    s.FrameRounding = WindowRounding * 0.5f;
     s.GrabRounding = 4.0f;
     s.ScrollbarRounding = 3.0f;
-    s.PopupRounding = 8.0f;
+    s.PopupRounding = WindowRounding;
     s.TabRounding = 4.0f;
     s.WindowPadding = ImVec2(12.0f, 10.0f);
     s.FramePadding = ImVec2(9.0f, 5.0f);
-    s.ItemSpacing = ImVec2(9.0f, 6.0f);
+    s.ItemSpacing = ImVec2(9.0f, ItemSpacingY);
     s.ItemInnerSpacing = ImVec2(7.0f, 4.0f);
     s.ScrollbarSize = 6.0f;
     s.WindowBorderSize = 1.0f;

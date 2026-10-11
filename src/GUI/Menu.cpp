@@ -1,6 +1,7 @@
 #include "Menu.hpp"
 
 #include "Config/Config.hpp"
+#include "Features/HudRegistry.hpp"
 #include "Features/PlaceStats.hpp"
 #include "Framework/Log.hpp"
 #include "Framework/Math.hpp"
@@ -8,7 +9,11 @@
 #include "GUI/Widgets.hpp"
 #include "Input/WheelHook.hpp"
 #include "Modules/ModuleManager.hpp"
+#include "Modules/impl/Interface/Interface.hpp"
+#include "Modules/impl/Interface/Style/sAzyre/sAzyre.hpp"
+#include "Modules/impl/Interface/Style/sSolstice/sSolstice.hpp"
 #include "Render/DX11.hpp"
+#include "Render/BlurHelper/BlurHelper.hpp"
 #include "Scripting/Scripting.hpp"
 #include "SDK/Game.hpp"
 
@@ -25,10 +30,15 @@
 namespace mc::menu {
 
 static bool g_visible = false;
+static bool g_debugRaw = false;
+static bool g_debugBlur = false;
+static bool g_debugCompRaw = false;
+static bool g_hudEditing = false;
 static int g_tab = 0;
 static float g_anim = 0.0f;
 static ImVec2 g_menuMin = ImVec2(0, 0);
 static ImVec2 g_menuMax = ImVec2(0, 0);
+static float g_glassRounding = 8.0f;
 
 static bool g_debugOpen = false;
 static char g_search[64] = "";
@@ -48,6 +58,27 @@ float animationAlpha()
     return g_anim;
 }
 
+void windowRect(ImVec2& outMin, ImVec2& outMax)
+{
+    outMin = g_menuMin;
+    outMax = g_menuMax;
+}
+
+float glassRadius()
+{
+    return g_glassRounding;
+}
+
+bool hudEditing()
+{
+    return g_hudEditing;
+}
+
+void setHudEditing(bool v)
+{
+    g_hudEditing = v;
+}
+
 void handleInput()
 {
     static bool wasDown = false;
@@ -59,6 +90,29 @@ void handleInput()
             config::saveAll();
     }
     wasDown = isDown;
+
+    // Debug: F9 muestra la captura RAW fullscreen (sin blur ni scrim).
+    static bool dbgWasDown = false;
+    bool dbgDown = (GetAsyncKeyState(VK_F9) & 0x8000) != 0;
+    if (dbgDown && !dbgWasDown)
+        g_debugRaw = !g_debugRaw;
+    dbgWasDown = dbgDown;
+
+    // Debug: F10 muestra la textura BLUREADA fullscreen (sin scrim ni alpha
+    // parcial) — verificacion directa del contenido del pipeline de blur.
+    static bool dbg2WasDown = false;
+    bool dbg2Down = (GetAsyncKeyState(VK_F10) & 0x8000) != 0;
+    if (dbg2Down && !dbg2WasDown)
+        g_debugBlur = !g_debugBlur;
+    dbg2WasDown = dbg2Down;
+
+    // Debug: F11 hace que el composite Mica pinte la captura RAW (sin blur)
+    // — aisla "el composite dibuja" de "la cadena de blur produce contenido".
+    static bool dbg3WasDown = false;
+    bool dbg3Down = (GetAsyncKeyState(VK_F11) & 0x8000) != 0;
+    if (dbg3Down && !dbg3WasDown)
+        blur::setDebugCompositeRaw(!g_debugCompRaw);
+    dbg3WasDown = dbg3Down;
 }
 
 static const char* keyName(int key)
@@ -115,10 +169,215 @@ static void drawStatusPill(ImDrawList* d, const ImVec2& linePos, float winRight)
     d->AddText(ImVec2(pMin.x + 18.0f, pMin.y + 4.0f), txt, st);
 }
 
+namespace {
+
+// easeExpoOut a 0.85x: exponencial con exponente suavizado (menos agresivo
+// que el 10x original — se asienta sin sentirse cortado).
+float easeExpoOut(float t)
+{
+    return t >= 1.0f ? 1.0f : 1.0f - std::pow(2.0f, -8.5f * t);
+}
+
+} // namespace
+
+// Boton center-bottom para entrar/salir del HUD editor
+// Solo visible con el menu abierto
+static void drawHudEditorButton()
+{
+    // El boton solo aparece con el menu abierto
+    if (g_anim <= 0.01f)
+        return;
+
+    // Asegurar que el registry tenga el path del config (para que las
+    // posiciones carguen correctamente incluso tras reinyectar)
+    hud::Registry::get().setConfigPath(config::baseDir() + "\\hud.json");
+
+    ImVec2 disp = ImGui::GetIO().DisplaySize;
+    ImDrawList* d = ImGui::GetForegroundDrawList();
+    ImVec2 mouse = ImGui::GetIO().MousePos;
+
+    float bw = 90.0f;
+    float bh = 24.0f;
+    ImVec2 bMin(disp.x * 0.5f - bw * 0.5f, disp.y - bh - 8.0f);
+    ImVec2 bMax(bMin.x + bw, bMin.y + bh);
+
+    bool hovered = mouse.x >= bMin.x && mouse.x <= bMax.x && mouse.y >= bMin.y && mouse.y <= bMax.y;
+    bool clicked = hovered && ImGui::IsMouseClicked(0);
+
+    if (clicked)
+    {
+        g_hudEditing = !g_hudEditing;
+        if (!g_hudEditing)
+            hud::Registry::get().save();
+    }
+
+    ImU32 bg = g_hudEditing ? IM_COL32(60, 200, 120, 200) : IM_COL32(20, 22, 28, 180);
+    ImU32 tx = g_hudEditing ? IM_COL32(255, 255, 255, 255) : IM_COL32(180, 185, 192, 220);
+    if (hovered)
+    {
+        bg = g_hudEditing ? IM_COL32(80, 220, 140, 220) : IM_COL32(30, 32, 40, 200);
+        tx = IM_COL32(255, 255, 255, 255);
+    }
+
+    d->AddRectFilled(bMin, bMax, bg, bh * 0.5f);
+    const char* label = g_hudEditing ? "Exit Editor" : "Edit HUD";
+    ImVec2 ts = ImGui::CalcTextSize(label);
+    d->AddText(ImVec2(bMin.x + (bw - ts.x) * 0.5f, bMin.y + (bh - ts.y) * 0.5f), tx, label);
+}
+
+// HUD Editor: arrastrar elementos, botones Save / Reset en center-top
+static int s_hudSnap = 0; // 0 = sin snap
+static bool s_hudTabWasDown = false;
+
+static void renderHudEditor()
+{
+    if (!g_hudEditing)
+        return;
+
+    auto& reg = hud::Registry::get();
+    ImDrawList* d = ImGui::GetForegroundDrawList();
+    ImVec2 disp = ImGui::GetIO().DisplaySize;
+    ImVec2 mouse = ImGui::GetIO().MousePos;
+
+    // TAB: ciclar snap distance
+    bool tabDown = (GetAsyncKeyState(VK_TAB) & 0x8000) != 0;
+    if (tabDown && !s_hudTabWasDown)
+    {
+        s_hudSnap += 5;
+        if (s_hudSnap > 100)
+            s_hudSnap = 0;
+    }
+    s_hudTabWasDown = tabDown;
+
+    // Grid de snap
+    if (s_hudSnap > 0)
+    {
+        for (float x = 0; x < disp.x; x += s_hudSnap)
+            d->AddLine(ImVec2(x, 0), ImVec2(x, disp.y), IM_COL32(255, 255, 255, 15));
+        for (float y = 0; y < disp.y; y += s_hudSnap)
+            d->AddLine(ImVec2(0, y), ImVec2(disp.x, y), IM_COL32(255, 255, 255, 15));
+    }
+
+    // Overlay oscurecido
+    d->AddRectFilled(ImVec2(0, 0), disp, IM_COL32(0, 0, 0, 50));
+
+    static bool dragging = false;
+    static hud::Element* dragged = nullptr;
+    static ImVec2 dragOffset(0, 0);
+
+    // Iniciar drag
+    if (ImGui::IsMouseClicked(0) && !dragging)
+    {
+        hud::Element* hit = reg.hitTest(mouse);
+        if (hit)
+        {
+            dragging = true;
+            dragged = hit;
+            dragOffset = ImVec2(mouse.x - hit->pos.x, mouse.y - hit->pos.y);
+        }
+    }
+
+    // Durante el drag
+    if (dragging && dragged)
+    {
+        ImVec2 newPos(mouse.x - dragOffset.x, mouse.y - dragOffset.y);
+
+        // Snap a grid
+        if (s_hudSnap > 0)
+        {
+            newPos.x = std::round(newPos.x / s_hudSnap) * s_hudSnap;
+            newPos.y = std::round(newPos.y / s_hudSnap) * s_hudSnap;
+        }
+
+        if (newPos.x < 0) newPos.x = 0;
+        if (newPos.y < 0) newPos.y = 0;
+        if (newPos.x + dragged->size.x > disp.x) newPos.x = disp.x - dragged->size.x;
+        if (newPos.y + dragged->size.y > disp.y) newPos.y = disp.y - dragged->size.y;
+
+        dragged->pos = newPos;
+
+        if (!ImGui::IsMouseDown(0))
+        {
+            dragging = false;
+            dragged = nullptr;
+        }
+    }
+
+    // Outlines + labels de todos los elementos
+    for (auto& e : reg.all())
+    {
+        if (!e.visible || e.size.x <= 0)
+            continue;
+
+        ImU32 outline = (&e == dragged) ? theme::AccentU32(0.9f) : IM_COL32(255, 255, 255, 100);
+        d->AddRect(e.pos, ImVec2(e.pos.x + e.size.x, e.pos.y + e.size.y), outline, 4.0f, 0, 2.0f);
+
+        ImVec2 ts = ImGui::CalcTextSize(e.id.c_str());
+        d->AddRectFilled(ImVec2(e.pos.x, e.pos.y - ts.y - 4),
+                        ImVec2(e.pos.x + ts.x + 8, e.pos.y), IM_COL32(0, 0, 0, 160), 3.0f);
+        d->AddText(ImVec2(e.pos.x + 4, e.pos.y - ts.y - 2),
+                   IM_COL32(255, 255, 255, 200), e.id.c_str());
+    }
+
+    // Botones Save / Reset en center-top
+    float btnW = 90.0f;
+    float btnH = 28.0f;
+    float gap = 10.0f;
+    float totalW = btnW * 2 + gap;
+    ImVec2 sMin(disp.x * 0.5f - totalW * 0.5f, 12.0f);
+    ImVec2 rMin(sMin.x + btnW + gap, sMin.y);
+
+    auto drawBtn = [&](const ImVec2& bMin, const char* label, bool& clickedOut, ImU32 accent)
+    {
+        ImVec2 bMax(bMin.x + btnW, bMin.y + btnH);
+        bool hov = mouse.x >= bMin.x && mouse.x <= bMax.x && mouse.y >= bMin.y && mouse.y <= bMax.y;
+        clickedOut = hov && ImGui::IsMouseClicked(0);
+
+        ImU32 bg = hov ? accent : IM_COL32(20, 22, 28, 200);
+        d->AddRectFilled(bMin, bMax, bg, btnH * 0.35f);
+        ImVec2 ts = ImGui::CalcTextSize(label);
+        d->AddText(ImVec2(bMin.x + (btnW - ts.x) * 0.5f, bMin.y + (btnH - ts.y) * 0.5f),
+                   IM_COL32(255, 255, 255, 240), label);
+    };
+
+    bool saveClicked = false;
+    bool resetClicked = false;
+    drawBtn(sMin, "Save", saveClicked, IM_COL32(60, 200, 120, 220));
+    drawBtn(rMin, "Reset positions", resetClicked, IM_COL32(200, 80, 80, 220));
+
+    if (saveClicked)
+    {
+        reg.save();
+        g_hudEditing = false;
+    }
+    if (resetClicked)
+    {
+        reg.reset();
+    }
+
+    // Info de snap en la esquina inferior derecha
+    if (s_hudSnap > 0)
+    {
+        char snapText[32];
+        snprintf(snapText, sizeof(snapText), "Snap: %d px", s_hudSnap);
+        ImVec2 ts = ImGui::CalcTextSize(snapText);
+        d->AddText(ImVec2(disp.x - ts.x - 12, disp.y - ts.y - 12),
+                   IM_COL32(255, 255, 255, 160), snapText);
+    }
+
+    // ESC: salir del editor
+    static bool escWasDown = false;
+    bool escDown = (GetAsyncKeyState(VK_ESCAPE) & 0x8000) != 0;
+    if (escDown && !escWasDown)
+    {
+        reg.save();
+        g_hudEditing = false;
+    }
+    escWasDown = escDown;
+}
+
 void render()
 {
-    ModuleManager& mgr = ModuleManager::get();
-
     theme::apply();
 
     float dt = ImGui::GetIO().DeltaTime;
@@ -135,28 +394,113 @@ void render()
     if (!g_visible && g_anim <= 0.0f)
         return;
 
-    float t = g_anim;
-    if (t < 0.0f) t = 0.0f;
-    if (t > 1.0f) t = 1.0f;
-    float ease = (t >= 0.9999f) ? 1.0f : (1.0f - std::pow(2.0f, -10.0f * t));
+    // Dispatch por estilo de GUI (modulo Interface): el fade g_anim se
+    // comparte; cada estilo maneja su propio backdrop y layout.
+    if (gui::style() == 1)
+        gui::sSolstice::render(g_anim);
+    else
+        gui::sAzyre::render(g_anim);
+}
+
+namespace {
+
+// ---- Glass Fluent surface --------------------------------------------------
+// El vidrio en si lo compone el BlurHelper en el backbuffer (rounded-rect SDF
+// con refraccion + luz de borde, ver BlurShaders kGlassPS). Aqui solo:
+//   - fallback solido translucido si el blur no pudo correr este frame,
+//   - un scrim leve para fijar el contraste del contenido,
+//   - strokes Fluent (hairline + luz superior).
+void drawGlassSurface(ImDrawList* d, const ImVec2& mn, const ImVec2& mx,
+                      float rounding, float alpha, const ImVec2& disp)
+{
+    if (alpha <= 0.01f || disp.x <= 0.0f || disp.y <= 0.0f)
+        return;
+
+    // Elevacion: sombra suave bajo el panel (Fluent "elevated surface").
+    widgets::SoftShadow(ImGui::GetBackgroundDrawList(), mn, mx, rounding,
+                        46.0f * alpha, 26.0f);
+
+    const bool haveGlass = blur::ready() && blur::srv();
+    if (haveGlass)
+    {
+        // Vidrio activo: scrim minimo para no duplicar el frost del shader.
+        d->AddRectFilled(mn, mx, IM_COL32(24, 28, 36, (int)(40.0f * alpha)), rounding);
+    }
+    else
+    {
+        // Sin captura: tarjeta solida para no perder legibilidad.
+        d->AddRectFilled(mn, mx, IM_COL32(30, 31, 35, (int)(238.0f * alpha)), rounding);
+    }
+
+    // Strokes: borde exterior sutil + highlight interior superior (luz Fluent).
+    d->AddRect(mn, mx, IM_COL32(255, 255, 255, (int)(30.0f * alpha)),
+               rounding, 0, 1.0f);
+    {
+        float inset = rounding + 0.5f;
+        d->AddLine(ImVec2(mn.x + inset, mn.y + 0.5f),
+                   ImVec2(mx.x - inset, mn.y + 0.5f),
+                   IM_COL32(255, 255, 255, (int)(54.0f * alpha)), 1.0f);
+    }
+}
+
+} // namespace
+
+void renderAzyre(float t)
+{
+    ModuleManager& mgr = ModuleManager::get();
+    float dt = ImGui::GetIO().DeltaTime;
+
+    // EaseExpoOut 0.85x para todo: arranque fuerte, settle suave.
+    float ease = easeExpoOut(t);
     float scale = 0.15f + 0.85f * ease;
 
     ImVec2 disp = ImGui::GetIO().DisplaySize;
 
+    // Radio glass Fluent del panel (respeta el ajuste del usuario en Interface).
+    // Se publica por menu::glassRadius() para que el composite Glass HLSL
+    // (BlurHelper) pinte el frost con el mismo redondeo.
+    g_glassRounding = theme::WindowRounding;
+    float glassRounding = g_glassRounding;
+
     if (ease > 0.01f)
     {
         ImGui::GetBackgroundDrawList()->AddRectFilled(
-            ImVec2(0.0f, 0.0f), disp, IM_COL32(6, 8, 10, (int)(175.0f * ease)));
+            ImVec2(0.0f, 0.0f), disp, IM_COL32(6, 8, 10, (int)(25.0f * ease)));
+
+        // Debug: captura RAW (F9). Si se ve el frame del juego aqui, la
+        // captura y el path de texturas funcionan; si se ve negro/basura,
+        // el problema esta en la cadena de blur.
+        if (g_debugRaw && blur::captureSrv())
+        {
+            ImGui::GetForegroundDrawList()->AddImage(
+                ImTextureRef((void*)blur::captureSrv()),
+                ImVec2(0.0f, 0.0f), disp, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f));
+            ImGui::GetForegroundDrawList()->AddText(ImVec2(12.0f, 12.0f),
+                                                   IM_COL32(255, 80, 80, 255),
+                                                   "RAW CAPTURE - F9 para ocultar");
+        }
+
+        // Debug: textura BLUREADA (F10) a alpha completa, sin scrim.
+        if (g_debugBlur && blur::srv())
+        {
+            ImGui::GetForegroundDrawList()->AddImage(
+                ImTextureRef((void*)blur::srv()),
+                ImVec2(0.0f, 0.0f), disp, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f));
+            ImGui::GetForegroundDrawList()->AddText(ImVec2(12.0f, 12.0f),
+                                                   IM_COL32(80, 255, 80, 255),
+                                                   "BLURRED TEXTURE - F10 para ocultar");
+        }
     }
 
     ImGui::SetNextWindowPos(ImVec2(disp.x * 0.5f, disp.y * 0.5f), ImGuiCond_Always,
                             ImVec2(0.5f, 0.5f));
     ImGui::SetNextWindowSize(ImVec2(760.0f * scale, 540.0f * scale), ImGuiCond_Always);
 
-    float bgAlpha = ease * 1.4f;
-    if (bgAlpha > 1.0f)
-        bgAlpha = 1.0f;
-    ImGui::SetNextWindowBgAlpha(0.97f * bgAlpha);
+    // Glass Fluent: la ventana no pinta su propio fondo ni borde; el panel
+    // acrilico se dibuja a mano con esquinas redondeadas (drawGlassSurface)
+    // para que el blur y el redondeo queden limpios.
+    ImGui::SetNextWindowBgAlpha(0.0f);
+    ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
 
     float winAlpha = 0.10f + 0.90f * ease;
     if (winAlpha > 1.0f)
@@ -165,7 +509,7 @@ void render()
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12.0f * scale, 10.0f * scale));
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(9.0f * scale, 5.0f * scale));
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(9.0f * scale, 6.0f * scale));
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 4.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, glassRounding);
 
     bool open = g_visible;
     ImGuiWindowFlags flags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize |
@@ -180,26 +524,9 @@ void render()
         g_menuMin = winPos;
         g_menuMax = ImVec2(winPos.x + winW, winPos.y + ImGui::GetWindowSize().y);
 
-        // Gradiente tipo Mica: leve brillo superior que se desvanece.
-        ImGui::GetWindowDrawList()->AddRectFilledMultiColor(
-            winPos, ImVec2(g_menuMax.x, winPos.y + 90.0f),
-            IM_COL32(255, 255, 255, 11), IM_COL32(255, 255, 255, 11),
-            IM_COL32(255, 255, 255, 0), IM_COL32(255, 255, 255, 0));
-
-        // Sombra elevacion + backdrop acrilico (blur del frame) bajo la ventana.
-        {
-            ImDrawList* bg = ImGui::GetBackgroundDrawList();
-            ImVec2 bMin(winPos.x, winPos.y);
-            ImVec2 bMax(g_menuMax.x, g_menuMax.y);
-            widgets::SoftShadow(bg, bMin, bMax, 8.0f, 46.0f * ease, 22.0f);
-            if (ease > 0.01f && dx11::backdropWanted() && dx11::backdropReady())
-            {
-                bg->AddImageRounded(ImTextureRef((void*)dx11::backdropSrv()),
-                                    bMin, bMax,
-                                    ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f),
-                                    IM_COL32(255, 255, 255, (int)(238.0f * ease)), 8.0f);
-            }
-        }
+        // Panel Glass Fluent: backdrop acrilico + scrim + strokes Fluent.
+        drawGlassSurface(ImGui::GetWindowDrawList(), winPos,
+                         ImVec2(g_menuMax.x, g_menuMax.y), glassRounding, ease, disp);
 
         // ================= Header =================
         ImGui::PushStyleColor(ImGuiCol_Text, theme::Accent);
@@ -207,8 +534,6 @@ void render()
         ImGui::PopStyleColor();
         ImGui::SameLine();
         ImGui::TextDisabled("1.1.0  Bedrock Win10 DX11");
-
-        drawStatusPill(ImGui::GetWindowDrawList(), ImGui::GetCursorScreenPos(), winPos.x + winW);
 
         ImGui::SameLine(winW - 36.0f);
         if (ImGui::SmallButton("X##close_menu"))
@@ -238,8 +563,8 @@ void render()
         float totalW = ImGui::GetContentRegionAvail().x;
         float contentW = totalW - sideW - 6.0f;
 
-        bool searching = (g_tab != 5) && g_search[0] != '\0';
-        float searchRowH = (g_tab != 5) ? 32.0f : 0.0f;
+        bool searching = (g_tab != 6) && g_search[0] != '\0';
+        float searchRowH = (g_tab != 6) ? 32.0f : 0.0f;
 
         float debugH = g_debugOpen ? 92.0f : 0.0f;
         float footerH = 74.0f + debugH;
@@ -257,7 +582,7 @@ void render()
         ImGui::PushStyleVar(ImGuiStyleVar_Alpha, winAlpha * (0.40f + 0.60f * tabEase));
 
         // ================= Search bar =================
-        if (g_tab != 5)
+        if (g_tab != 6)
         {
             ImGui::SetNextItemWidth(totalW * 0.45f);
             ImGui::InputTextWithHint("##search", "Search module...", g_search, sizeof(g_search));
@@ -276,11 +601,11 @@ void render()
         if (ImGui::BeginChild("##side", ImVec2(sideW, colsH), false,
                               ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse))
         {
-            const char* tabs[] = {"Combat", "Movement", "Visuals", "Misc", "Scripting", "Configs"};
+            const char* tabs[] = {"Combat", "Movement", "Visuals", "Misc", "Scripting", "Interface", "Configs"};
             ImGuiWindow* sideWnd = ImGui::GetCurrentWindow();
             float bbW = ImGui::GetContentRegionAvail().x;
 
-            for (int i = 0; i < 6; ++i)
+            for (int i = 0; i < 7; ++i)
             {
                 ImGui::SetCursorPos(ImVec2(0.0f, i * (tabH + tabGap)));
                 if (sideWnd->SkipItems)
@@ -303,15 +628,22 @@ void render()
                 ImDrawList* d = sideWnd->DrawList;
 
                 // Fade de hover estilo Fluent.
-                static float tabHoverA[5] = {};
+                static float tabHoverA[7] = {};
                 tabHoverA[i] += (((hovered && !act) ? 1.0f : 0.0f) - tabHoverA[i]) *
                                 clampf(dt * 12.0f, 0.0f, 1.0f);
 
                 if (act)
-                    d->AddRectFilled(bb.Min, bb.Max, theme::AccentU32(0.14f), 4.0f);
+                {
+                    d->AddRectFilled(bb.Min, bb.Max, theme::AccentU32(0.14f), 6.0f);
+                    d->AddRect(bb.Min, bb.Max, theme::AccentU32(0.28f), 6.0f, 0, 1.0f);
+                }
                 else if (tabHoverA[i] > 0.01f)
+                {
                     d->AddRectFilled(bb.Min, bb.Max,
-                                    IM_COL32(255, 255, 255, (int)(20.0f * tabHoverA[i])), 4.0f);
+                                    IM_COL32(255, 255, 255, (int)(18.0f * tabHoverA[i])), 6.0f);
+                    d->AddRect(bb.Min, bb.Max,
+                               IM_COL32(255, 255, 255, (int)(26.0f * tabHoverA[i])), 6.0f, 0, 1.0f);
+                }
 
                 const char* text = tabs[i];
                 ImVec2 ts = ImGui::CalcTextSize(text);
@@ -321,7 +653,7 @@ void render()
                                     : ImGui::GetColorU32(ImGuiCol_Text);
                 d->AddText(textPos, textCol, text);
 
-                if (i < 5)
+                if (i < 6)
                 {
                     int n = (int)mgr.byCategory((Category)i).size();
                     if (n > 0)
@@ -350,7 +682,7 @@ void render()
         ImGui::SameLine(0.0f, 6.0f);
 
         // ================= Contenido =================
-        if (g_tab == 5)
+        if (g_tab == 6)
         {
             if (ImGui::BeginChild("##configs", ImVec2(contentW, colsH), false))
             {
@@ -557,14 +889,22 @@ void render()
                     ha += ((rowHov ? 1.0f : 0.0f) - ha) * clampf(dt * 14.0f, 0.0f, 1.0f);
                     g_rowHoverAnim[m] = ha;
                     if (ha > 0.01f)
-                        dl->AddRectFilled(sMin, sMax, IM_COL32(255, 255, 255, (int)(13.0f * ha)), 3.0f);
+                    {
+                        dl->AddRectFilled(sMin, sMax,
+                                          IM_COL32(255, 255, 255, (int)(12.0f * ha)), 6.0f);
+                        dl->AddRect(sMin, sMax,
+                                    IM_COL32(255, 255, 255, (int)(26.0f * ha)), 6.0f, 0, 1.0f);
+                    }
 
                     bool on = m->enabled();
 
-                    // Barra de acento a la izquierda cuando esta activo
+                    // Fila activa: fill acrilico tenue + barra de acento (Fluent).
                     if (on)
+                    {
+                        dl->AddRectFilled(sMin, sMax, theme::AccentU32(0.07f), 6.0f);
                         dl->AddRectFilled(sMin, ImVec2(sMin.x + 3.0f, sMax.y),
                                           theme::AccentU32(0.85f), 1.5f);
+                    }
 
                     // Toggle estilo WinUI dark: track azul claro con perilla negra.
                     float& sw = g_switchAnim[m];
@@ -739,6 +1079,7 @@ void render()
 
     ImGui::End();
     ImGui::PopStyleVar(5);
+    ImGui::PopStyleColor();
 
     if (!open)
     {
@@ -747,6 +1088,41 @@ void render()
     }
 }
 
+void renderHudChrome()
+{
+    drawHudEditorButton();
+    renderHudEditor();
+}
+
+namespace {
+
+// Glow coloreado: mismo falloff cubico por capas que widgets::SoftShadow,
+// pero con el color pasado (el acento de la notificacion).
+void toastGlow(ImDrawList* d, const ImVec2& min, const ImVec2& max,
+               ImU32 col, float strength, float spread, float rounding)
+{
+    const int layers = 9;
+    for (int i = 0; i < layers; ++i)
+    {
+        float t = (float)i / (float)(layers - 1);
+        float pad = spread * t;
+        float f = 1.0f - t;
+        f = f * f * f;
+        int a = (int)(strength * f);
+        if (a <= 0)
+            continue;
+        d->AddRectFilled(ImVec2(min.x - pad, min.y - pad),
+                         ImVec2(max.x + pad, max.y + pad),
+                         (col & 0x00FFFFFFu) | ((unsigned)a << 24), rounding + pad);
+    }
+}
+
+}
+
+// Estilo Solstice: la notificacion entra en diagonal desde la esquina
+// inferior derecha. La caja se divide en dos sectores: uno de color (accent)
+// que crece de izquierda a derecha con el progreso del tiempo y otro negro
+// con el tiempo restante, con un glow suave alrededor del sector de color.
 void renderToasts()
 {
     ImGuiIO& io = ImGui::GetIO();
@@ -755,62 +1131,83 @@ void renderToasts()
     if (sw <= 0.0f || sh <= 0.0f)
         return;
 
-    const auto& notifs = ModuleManager::get().notifications();
-    ULONGLONG now = GetTickCount64();
-    ImDrawList* d = ImGui::GetForegroundDrawList();
-    float y = sh - 44.0f;
+    ModuleManager& mgr = ModuleManager::get();
+    mgr.tickNotifications(io.DeltaTime);
+    const auto& notifs = mgr.notifications();
 
-    for (auto it = notifs.rbegin(); it != notifs.rend(); ++it)
+    ImDrawList* d = ImGui::GetForegroundDrawList();
+    ImFont* font = ImGui::GetFont();
+    const float fontSize = 20.0f;
+    float y = sh - 10.0f;
+
+    // Orden natural: la mas vieja queda en el slot inferior, la mas nueva
+    // entra por encima. El slot "sube" a medida que la notificacion se asienta,
+    // y las demas bajan en cascada cuando una sale.
+    for (const auto& n : notifs)
     {
-        ULONGLONG age = now - it->time;
-        if (age > 2500)
+        char buf[128];
+        if (n.hasState)
+            snprintf(buf, sizeof(buf), "%s  [%s]", n.text.c_str(), n.enabled ? "ON" : "OFF");
+        else
+            snprintf(buf, sizeof(buf), "%s", n.text.c_str());
+
+        ImVec2 ts = font->CalcTextSizeA(fontSize, FLT_MAX, 0.0f, buf);
+        float w = ts.x + 50.0f;
+        if (w < 200.0f)
+            w = 200.0f;
+        // La altura incluye 10px de separacion con la notificacion de arriba.
+        float h = ts.y + 30.0f;
+
+        float beginX = sw - w - 10.0f;
+        float endX = sw + w;
+        float x = endX + (beginX - endX) * n.slide;
+        y -= h * n.slide;
+        if (x > sw + w && y > sh + h)
             continue;
 
-        float a = 1.0f;
-        if (age < 150)
-            a = (float)age / 150.0f;
-        else if (age > 2000)
-            a = 1.0f - (float)(age - 2000) / 500.0f;
-        if (a < 0.0f)
-            a = 0.0f;
+        float percentDone = n.timeShown / n.duration;
+        if (percentDone < 0.0f)
+            percentDone = 0.0f;
+        if (percentDone > 1.0f)
+            percentDone = 1.0f;
 
-        char buf[128];
-        if (it->hasState)
-            snprintf(buf, sizeof(buf), "%s  [%s]", it->text.c_str(), it->enabled ? "ON" : "OFF");
-        else
-            snprintf(buf, sizeof(buf), "%s", it->text.c_str());
+        // Accent para ON y avisos sin estado, gris para OFF.
+        ImVec4 themeCol = theme::Accent;
+        if (n.hasState && !n.enabled)
+            themeCol = ImVec4(150.0f / 255.0f, 155.0f / 255.0f, 160.0f / 255.0f, 1.0f);
+        ImU32 accentCol = ImGui::ColorConvertFloat4ToU32(
+            ImVec4(themeCol.x, themeCol.y, themeCol.z, 1.0f));
 
-        ImVec2 ts = ImGui::CalcTextSize(buf);
-        float w = ts.x + 24.0f;
-        float h = ts.y + 12.0f;
-        float slide = (1.0f - a) * 30.0f;
-        float x0 = sw - 14.0f - w + slide;
+        float max = x + w;
+        ImVec2 progMax(x + w * percentDone + 6.0f, y + h - 10.0f);
+        if (progMax.x > max)
+            progMax.x = max;
+        if (progMax.x < x)
+            progMax.x = x;
+        ImVec2 bgMin(x + w * percentDone, y);
+        ImVec2 bgMax(x + w, y + h - 10.0f);
 
-        ImVec2 tMin(x0, y - h);
-        ImVec2 tMax(x0 + w, y);
-        bool haveBlur = dx11::backdropWanted() && dx11::backdropReady();
+        // Glow alrededor del sector de color, bajo los rellenos.
+        toastGlow(d, ImVec2(x, y), progMax, accentCol, 50.0f, 22.0f, 5.0f);
 
-        // Sombra suave + acrilico local (sub-rect del blur global).
-        widgets::SoftShadow(d, tMin, tMax, 8.0f, 34.0f * a, 14.0f);
-        if (haveBlur)
-        {
-            ImVec2 uv0(tMin.x / sw, tMin.y / sh);
-            ImVec2 uv1(tMax.x / sw, tMax.y / sh);
-            d->AddImageRounded(ImTextureRef((void*)dx11::backdropSrv()),
-                               tMin, tMax, uv0, uv1,
-                               IM_COL32(255, 255, 255, (int)(255.0f * a)), 8.0f);
-        }
+        // Sector de color: crece con el progreso (clip evita redondear el borde
+        // derecho mientras avanza).
+        d->PushClipRect(ImVec2(x, y), ImVec2(x + w * percentDone, y + h - 10.0f), true);
+        d->AddRectFilled(ImVec2(x, y), progMax,
+                         ImGui::ColorConvertFloat4ToU32(
+                             ImVec4(themeCol.x, themeCol.y, themeCol.z, 0.7f)),
+                         5.0f);
+        d->PopClipRect();
 
-        int cardA = haveBlur ? 80 : 235;
-        d->AddRectFilled(tMin, tMax, IM_COL32(16, 20, 28, (int)(cardA * a)), 8.0f);
-        d->AddRect(tMin, tMax, IM_COL32(255, 255, 255, (int)(18 * a)), 8.0f, 0, 1.0f);
-        d->AddRectFilled(ImVec2(x0, y - h), ImVec2(x0 + 3.5f, y),
-                         it->enabled ? theme::AccentU32(a)
-                                     : IM_COL32(150, 155, 160, (int)(255 * a)),
-                         8.0f);
-        d->AddText(ImVec2(x0 + 12.0f, y - h + 6.0f),
-                   IM_COL32(240, 242, 245, (int)(255 * a)), buf);
-        y -= h + 6.0f;
+        // Sector negro: tiempo restante (solapa 6px sobre el color para
+        // transicion suave).
+        d->PushClipRect(bgMin, bgMax, true);
+        d->AddRectFilled(ImVec2(x + w * percentDone - 6.0f, y), bgMax,
+                         IM_COL32(0, 0, 0, 179), 5.0f);
+        d->PopClipRect();
+
+        d->AddText(font, fontSize, ImVec2(x + 10.0f, y + 10.0f),
+                   IM_COL32(255, 255, 255, 255), buf);
     }
 }
 

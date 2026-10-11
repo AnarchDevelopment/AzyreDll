@@ -2,15 +2,18 @@
 
 #include <string>
 
+#ifdef _MSC_VER
 #include <winrt/Windows.Foundation.h>
 #include <winrt/Windows.ApplicationModel.Core.h>
 #include <winrt/Windows.UI.Core.h>
 #include <winrt/Windows.UI.ViewManagement.h>
+#endif
 
 namespace mc::window {
 
 inline void setTitle(const std::string& title)
 {
+#ifdef _MSC_VER
     try
     {
         winrt::init_apartment(winrt::apartment_type::multi_threaded);
@@ -34,6 +37,10 @@ inline void setTitle(const std::string& title)
     catch (...)
     {
     }
+#else
+    // WinRT no esta disponible en toolchains no-MSVC (build de CI).
+    (void)title;
+#endif
 }
 
 }
