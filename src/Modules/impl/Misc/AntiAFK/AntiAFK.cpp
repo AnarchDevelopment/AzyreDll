@@ -48,8 +48,8 @@ void AntiAFK::onTick()
 void AntiAFK::drawSettings()
 {
     widgets::CSlider("Interval##afk", &intervalSec_, 5.0f, 60.0f, "%.0f s");
-    ImGui::Checkbox("Rotate##afk", &rotate_);
-    ImGui::Checkbox("Jump##afk", &jump_);
+    widgets::Checkbox("Rotate##afk", &rotate_);
+    widgets::Checkbox("Jump##afk", &jump_);
     widgets::CSlider("Angle##afk", &angle_, 5.0f, 90.0f, "%.0f");
 }
 

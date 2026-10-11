@@ -2,6 +2,8 @@
 #include "GUI/Widgets.hpp"
 
 #include "Framework/Math.hpp"
+#include "Render/DX11.hpp"
+#include "Render/BlurHelper/BlurHelper.hpp"
 #include "SDK/Camera.hpp"
 #include "Features/Friends.hpp"
 #include "SDK/Game.hpp"
@@ -86,7 +88,24 @@ void NameTags::onRender()
         ImVec2 p0(c.x - ts.x * 0.5f - padX, c.y - ts.y * 0.5f - padY);
         ImVec2 p1(c.x + ts.x * 0.5f + padX, c.y + ts.y * 0.5f + padY);
 
-        d->AddRectFilled(p0, p1, IM_COL32(8, 10, 12, 195), 4.0f);
+        // Fondo: blur del backdrop (mecanismo probado) o oscuro tradicional.
+        // Siempre con glow negro estilo Fluent (como ArrayList y Watermark).
+        widgets::SoftShadow(d, p0, p1, 4.0f, 34.0f, 14.0f);
+        if (blur_ && blur::wanted() && blur::ready())
+        {
+            // Muestrear la sub-region del blur global para este rect.
+            ImVec2 uv0(p0.x / sw, p0.y / sh);
+            ImVec2 uv1(p1.x / sw, p1.y / sh);
+            d->AddImageRounded(ImTextureRef((void*)blur::srv()),
+                               p0, p1, uv0, uv1,
+                               IM_COL32(255, 255, 255, 235), 4.0f);
+            // Scrim ligero para legibilidad.
+            d->AddRectFilled(p0, p1, IM_COL32(10, 14, 20, 70), 4.0f);
+        }
+        else
+        {
+            d->AddRectFilled(p0, p1, IM_COL32(8, 10, 12, 195), 4.0f);
+        }
         if (fr)
             d->AddRectFilled(p0, ImVec2(p0.x + 3.0f, p1.y), friends::colorU32(), 4.0f);
 
@@ -108,8 +127,9 @@ void NameTags::onRender()
 
 void NameTags::drawSettings()
 {
-    ImGui::Checkbox("Health##nt", &showHealth_);
-    ImGui::Checkbox("Scale with distance##nt", &scaleDistance_);
+    widgets::Checkbox("Health##nt", &showHealth_);
+    widgets::Checkbox("Scale with distance##nt", &scaleDistance_);
+    widgets::Checkbox("Blur background##nt", &blur_);
     widgets::CSlider("Font size##nt", &fontSize_, 10.0f, 24.0f, "%.0f");
     widgets::CSlider("Max distance##nt", &maxDistance_, 8.0f, 128.0f, "%.0f");
     widgets::CSlider("FOV##nt", &fov_, 30.0f, 130.0f, "%.0f");

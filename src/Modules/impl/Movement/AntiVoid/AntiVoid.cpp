@@ -10,7 +10,7 @@
 namespace mc {
 
 AntiVoid::AntiVoid()
-    : Module("AntiVoid", "Returns you to the last safe position before falling into the void.", Category::Movement, 0)
+    : Module("AntiVoid", "Boosts you back up to the last safe Y before falling into the void.", Category::Movement, 0)
 {
     markHasSettings();
 }
@@ -59,8 +59,19 @@ void AntiVoid::onTick()
     bool belowSafe = pos.y < safePos_.y - (float)distance_;
     if (falling && belowSafe)
     {
-        local.setPos(safePos_);
-        local.setVelocity({0.0f, rescueVel_, 0.0f});
+        // NO hacer setPos (crashea: VirtualProtect en pagina activa + el
+        // engine puede no tener datos de chunk en la posicion nueva).
+        // En su lugar: calcular la velocidad necesaria para volver a la
+        // altura segura (fisica: v = sqrt(2*g*h) con margen por drag) y
+        // dejar que el propio engine resuelva el arco.
+        float heightNeeded = safePos_.y - pos.y;
+        float dynamicVel = std::sqrt(2.0f * off::gameconst::Gravity *
+                                     std::fabs(heightNeeded)) * 1.15f;
+        // rescueVel_ actua como suelo minimo; cap para no lanzar al cielo.
+        float boostVel = std::max(rescueVel_, dynamicVel);
+        if (boostVel > 3.0f)
+            boostVel = 3.0f;
+        local.setVelocity({vel.x, boostVel, vel.z});
         ++rescues_;
         nextRescue_ = now + (ULONGLONG)cooldown_;
     }
@@ -69,7 +80,7 @@ void AntiVoid::onTick()
 void AntiVoid::drawSettings()
 {
     widgets::CSlider("Trigger distance (blocks)##av", &distance_, 3, 30);
-    widgets::CSlider("Rescue velocity##av", &rescueVel_, 0.0f, 1.5f, "%.2f");
+    widgets::CSlider("Min rescue velocity##av", &rescueVel_, 0.0f, 1.5f, "%.2f");
     widgets::CSlider("Cooldown (ms)##av", &cooldown_, 100, 2000, "%d ms");
     ImGui::TextDisabled("Rescues: %u%s", rescues_, hasSafe_ ? "" : "   (no safe position yet)");
 }

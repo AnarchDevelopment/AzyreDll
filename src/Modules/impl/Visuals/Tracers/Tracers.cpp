@@ -59,7 +59,7 @@ void Tracers::drawSettings()
 {
     widgets::CSlider("FOV##tr", &fov_, 30.0f, 130.0f, "%.0f");
     widgets::CSlider("Thickness##tr", &thickness_, 0.5f, 4.0f, "%.1f");
-    ImGui::ColorEdit4("Color##tr", (float*)&color_);
+    widgets::ColorEdit4("Color##tr", (float*)&color_);
 }
 
 MC_REGISTER_MODULE(Tracers);

@@ -52,7 +52,7 @@ void LongJump::onTick()
 void LongJump::drawSettings()
 {
     widgets::CSlider("Multiplier##lj", &multiplier_, 1.1f, 3.0f, "%.2f");
-    ImGui::Checkbox("Only sprinting##lj", &onlySprint_);
+    widgets::Checkbox("Only sprinting##lj", &onlySprint_);
 }
 
 MC_REGISTER_MODULE(LongJump);

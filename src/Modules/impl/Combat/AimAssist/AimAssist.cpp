@@ -66,10 +66,27 @@ void AimAssist::onFrame(float dt)
     if (!found)
         return;
 
-    float tH = clampf(speedH_ * dt * 60.0f, 0.0f, 1.0f);
-    float tV = clampf(speedV_ * dt * 60.0f, 0.0f, 1.0f);
-    float newYaw = myYaw + angleDiff(myYaw, targetYaw) * tH;
-    float newPitch = myPitch + (targetPitch - myPitch) * tV;
+    // Exponential smoothing: newAngle = target - diff * exp(-speed*dt*60)
+    // Esto garantiza convergencia suave sin overshoot ni micro-360,
+    // porque el delta NUNCA cruza cero, se acerca asintoticamente.
+    float yawDelta   = angleDiff(myYaw,   targetYaw);
+    float pitchDelta = targetPitch - myPitch;
+
+    // Dead-zone: ignorar correcciones menores a 0.01 grados para
+    // evitar que precision flotante genere micro-rotaciones.
+    const float kDeadZone = 0.01f;
+
+    float decayH = std::exp(-speedH_ * dt * 60.0f);
+    float decayV = std::exp(-speedV_ * dt * 60.0f);
+
+    float newYaw   = myYaw;
+    float newPitch = myPitch;
+
+    if (std::fabs(yawDelta) > kDeadZone)
+        newYaw = myYaw + yawDelta * (1.0f - decayH);
+    if (std::fabs(pitchDelta) > kDeadZone)
+        newPitch = myPitch + pitchDelta * (1.0f - decayV);
+
     local.setYaw(wrapDegrees(newYaw));
     local.setPitch(clampf(newPitch, -90.0f, 90.0f));
 }
@@ -80,7 +97,7 @@ void AimAssist::drawSettings()
     widgets::CSlider("FOV##aa", &fov_, 0.0f, 360.0f, "%.0f");
     widgets::CSlider("Horizontal Speed##aa", &speedH_, 0.02f, 1.0f, "%.2f");
     widgets::CSlider("Vertical Speed##aa", &speedV_, 0.02f, 1.0f, "%.2f");
-    ImGui::Checkbox("Only while attacking##aa", &onlyWeapons_);
+    widgets::Checkbox("Only while attacking##aa", &onlyWeapons_);
 }
 
 MC_REGISTER_MODULE(AimAssist);

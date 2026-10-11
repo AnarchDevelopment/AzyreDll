@@ -1,6 +1,7 @@
 #include "AntiBot.hpp"
 
 #include "Features/BotFilter.hpp"
+#include "GUI/Widgets.hpp"
 #include "SDK/Game.hpp"
 
 #include <imgui.h>
@@ -27,8 +28,8 @@ void AntiBot::onDisable()
 void AntiBot::drawSettings()
 {
     bool changed = false;
-    changed = ImGui::Checkbox("Filter name keywords##ab", &botfilter::g_filterKeywords) || changed;
-    changed = ImGui::Checkbox("Filter invalid names##ab", &botfilter::g_filterInvalidNames) || changed;
+    changed = widgets::Checkbox("Filter name keywords##ab", &botfilter::g_filterKeywords) || changed;
+    changed = widgets::Checkbox("Filter invalid names##ab", &botfilter::g_filterInvalidNames) || changed;
     if (changed)
         Game::get().refreshBotFilter();
 

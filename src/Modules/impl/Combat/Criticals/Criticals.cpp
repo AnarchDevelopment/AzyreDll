@@ -1,5 +1,6 @@
 #include "Criticals.hpp"
 
+#include "GUI/Widgets.hpp"
 #include "SDK/Game.hpp"
 
 #include <imgui.h>
@@ -70,7 +71,7 @@ void Criticals::onTick()
 
 void Criticals::drawSettings()
 {
-    ImGui::Checkbox("Only while attacking##cr", &onlyWhileAttacking_);
+    widgets::Checkbox("Only while attacking##cr", &onlyWhileAttacking_);
 }
 
 MC_REGISTER_MODULE(Criticals);

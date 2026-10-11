@@ -31,7 +31,7 @@ void NoFall::onTick()
 
 void NoFall::drawSettings()
 {
-    ImGui::Checkbox("Ghost ground while falling##nf", &ghostGround_);
+    widgets::Checkbox("Ghost ground while falling##nf", &ghostGround_);
     widgets::CSlider("Vy threshold##nf", &ghostThreshold_, -4.0f, -0.5f, "%.2f");
 }
 

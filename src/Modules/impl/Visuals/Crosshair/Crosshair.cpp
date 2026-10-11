@@ -49,9 +49,9 @@ void Crosshair::drawSettings()
     widgets::CSlider("Size##ch", &size_, 2.0f, 20.0f, "%.0f");
     widgets::CSlider("Gap##ch", &gap_, 0.0f, 12.0f, "%.0f");
     widgets::CSlider("Thickness##ch", &thickness_, 1.0f, 5.0f, "%.0f");
-    ImGui::Checkbox("Dot##ch", &dot_);
-    ImGui::Checkbox("Outline##ch", &outline_);
-    ImGui::ColorEdit4("Color##ch", (float*)&color_);
+    widgets::Checkbox("Dot##ch", &dot_);
+    widgets::Checkbox("Outline##ch", &outline_);
+    widgets::ColorEdit4("Color##ch", (float*)&color_);
 }
 
 MC_REGISTER_MODULE(Crosshair);

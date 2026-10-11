@@ -64,6 +64,27 @@ void gradientQuad(ImDrawList* d, const ImVec2 pts[4], const ImU32 cols[4])
     d->PrimWriteIdx((ImDrawIdx)(base + 3));
 }
 
+// Glow de borde: mismo falloff cubico por capas que widgets::SoftShadow,
+// pero aplicado a LINEAS. La capa 0 abrazca el trazo y las siguientes se
+// expanden hacia afuera desvaneciendose — el glow emana del borde.
+void glowLine(ImDrawList* d, const ImVec2& p1, const ImVec2& p2, ImU32 color,
+              float strength, float spread, float baseWidth)
+{
+    const int layers = 9;
+    const ImU32 rgb = color & 0x00FFFFFF;
+    for (int i = 0; i < layers; ++i)
+    {
+        float t = (float)i / (float)(layers - 1);
+        float w = baseWidth + spread * t;
+        float f = 1.0f - t;
+        f = f * f * f;
+        int a = (int)(strength * f);
+        if (a <= 0)
+            continue;
+        d->AddLine(p1, p2, rgb | ((ImU32)a << 24), w);
+    }
+}
+
 void fillEspBox3D(ImDrawList* d, const Vec3 corners[8], const Vec3 proj[8],
                   const Vec3& camPos, bool friendCol, const ImVec4& baseCol,
                   float alpha, bool gradient)
@@ -241,6 +262,22 @@ void ESP::onRender()
 
             if (box_)
             {
+                if (shadow_)
+                {
+                    float minY = proj[0].y, maxY = proj[0].y;
+                    for (int i = 1; i < 8; ++i)
+                    {
+                        if (proj[i].y < minY) minY = proj[i].y;
+                        if (proj[i].y > maxY) maxY = proj[i].y;
+                    }
+                    float spread = clampf((maxY - minY) * 0.05f, 2.0f, 8.0f);
+                    for (auto& e : edges)
+                    {
+                        glowLine(d, ImVec2(proj[e[0]].x, proj[e[0]].y),
+                                 ImVec2(proj[e[1]].x, proj[e[1]].y), bC,
+                                 shadowStrength_, spread, 1.5f);
+                    }
+                }
                 for (auto& e : edges)
                 {
                     d->AddLine(ImVec2(proj[e[0]].x, proj[e[0]].y),
@@ -288,6 +325,14 @@ void ESP::onRender()
 
         if (box_)
         {
+            if (shadow_)
+            {
+                float spread = clampf(bH * 0.05f, 2.0f, 8.0f);
+                glowLine(d, ImVec2(x1, y1), ImVec2(x2, y1), bC, shadowStrength_, spread, 1.5f);
+                glowLine(d, ImVec2(x2, y1), ImVec2(x2, y2), bC, shadowStrength_, spread, 1.5f);
+                glowLine(d, ImVec2(x2, y2), ImVec2(x1, y2), bC, shadowStrength_, spread, 1.5f);
+                glowLine(d, ImVec2(x1, y2), ImVec2(x1, y1), bC, shadowStrength_, spread, 1.5f);
+            }
             d->AddRect(ImVec2(x1 - 1, y1 - 1), ImVec2(x2 + 1, y2 + 1), IM_COL32(0, 0, 0, 220), 0, 0, 2.5f);
             d->AddRect(ImVec2(x1, y1), ImVec2(x2, y2), bC, 0, 0, 1.5f);
         }
@@ -300,21 +345,28 @@ void ESP::drawSettings()
 {
     const char* styles[] = {"2D", "3D"};
     widgets::CCombo("Style##esp", &style_, styles, 2);
-    ImGui::Checkbox("Box##esp", &box_);
-    ImGui::Checkbox("Name##esp", &name_);
-    ImGui::Checkbox("Distance##esp", &distance_);
-    if (ImGui::Checkbox("Filled##esp", &filled_))
+    widgets::Checkbox("Box##esp", &box_);
+    widgets::Checkbox("Name##esp", &name_);
+    widgets::Checkbox("Distance##esp", &distance_);
+    if (widgets::Checkbox("Filled##esp", &filled_))
     {
     }
     if (filled_)
     {
         ImGui::Indent();
-        ImGui::Checkbox("Gradient##esp", &gradient_);
+        widgets::Checkbox("Gradient##esp", &gradient_);
         widgets::CSlider("Fill opacity##esp", &fillAlpha_, 0.05f, 0.80f, "%.2f");
         ImGui::Unindent();
     }
+    widgets::Checkbox("Border glow##esp", &shadow_);
+    if (shadow_)
+    {
+        ImGui::Indent();
+        widgets::CSlider("Glow strength##esp", &shadowStrength_, 10.0f, 120.0f, "%.0f");
+        ImGui::Unindent();
+    }
     widgets::CSlider("FOV##esp", &fov_, 30.0f, 130.0f, "%.0f");
-    ImGui::ColorEdit4("Color##esp", (float*)&color_);
+    widgets::ColorEdit4("Color##esp", (float*)&color_);
 }
 
 MC_REGISTER_MODULE(ESP);

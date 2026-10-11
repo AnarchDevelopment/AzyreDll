@@ -90,7 +90,7 @@ void Trail::drawSettings()
     widgets::CSlider("Length##trl", &lengthSec_, 0.5f, 4.0f, "%.1f s");
     widgets::CSlider("Thickness##trl", &thickness_, 0.5f, 4.0f, "%.1f");
     widgets::CSlider("FOV##trl", &fov_, 30.0f, 130.0f, "%.0f");
-    ImGui::ColorEdit4("Color##trl", (float*)&color_);
+    widgets::ColorEdit4("Color##trl", (float*)&color_);
 }
 
 MC_REGISTER_MODULE(Trail);

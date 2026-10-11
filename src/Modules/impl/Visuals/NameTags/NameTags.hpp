@@ -22,6 +22,7 @@ public:
             {"fontSize", fontSize_},
             {"maxDistance", maxDistance_},
             {"fov", fov_},
+            {"blur", blur_},
         };
     }
 
@@ -32,11 +33,15 @@ public:
         fontSize_ = j.value("fontSize", fontSize_);
         maxDistance_ = j.value("maxDistance", maxDistance_);
         fov_ = j.value("fov", fov_);
+        blur_ = j.value("blur", blur_);
     }
+
+    bool blurEnabled() const { return blur_ && enabled(); }
 
 private:
     bool showHealth_ = true;
     bool scaleDistance_ = true;
+    bool blur_ = false;
     float maxDistance_ = 64.0f;
     float fontSize_ = 14.0f;
     float fov_ = 110.0f;

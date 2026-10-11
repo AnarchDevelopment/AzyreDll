@@ -39,7 +39,7 @@ void NoSlow::onTick()
 void NoSlow::drawSettings()
 {
     widgets::CSlider("Walk speed##ns", &restoreSpeed_, 0.15f, 0.50f, "%.3f");
-    ImGui::Checkbox("Only on ground##ns", &onlyGround_);
+    widgets::Checkbox("Only on ground##ns", &onlyGround_);
 }
 
 MC_REGISTER_MODULE(NoSlow);

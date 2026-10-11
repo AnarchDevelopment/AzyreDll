@@ -86,13 +86,13 @@ void HUD::onRender()
 
 void HUD::drawSettings()
 {
-    ImGui::Checkbox("Stats##hud", &stats_);
+    widgets::Checkbox("Stats##hud", &stats_);
     if (stats_)
     {
         ImGui::Indent(14.0f);
-        ImGui::Checkbox("Speed##hud", &speed_);
+        widgets::Checkbox("Speed##hud", &speed_);
         ImGui::SameLine();
-        ImGui::Checkbox("Direction##hud", &direction_);
+        widgets::Checkbox("Direction##hud", &direction_);
         ImGui::Unindent(14.0f);
     }
 }

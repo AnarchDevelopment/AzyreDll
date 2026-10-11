@@ -74,7 +74,7 @@ void InventoryWalk::onTick()
 void InventoryWalk::drawSettings()
 {
     widgets::CSlider("Speed mult##iw", &speedMult_, 1.0f, 2.0f, "%.1f");
-    ImGui::Checkbox("Jump with space##iw", &jumpWithSpace_);
+    widgets::Checkbox("Jump with space##iw", &jumpWithSpace_);
 }
 
 MC_REGISTER_MODULE(InventoryWalk);
