@@ -3,8 +3,10 @@
 #include "Framework/Log.hpp"
 #include "Modules/ModuleManager.hpp"
 
+#ifdef _MSC_VER
 #include <winrt/Windows.Foundation.h>
 #include <winrt/Windows.Storage.h>
+#endif
 
 #include <nlohmann/json.hpp>
 #include <windows.h>
@@ -54,6 +56,7 @@ static bool g_baseDirReady = false;
 
 static std::string computeBaseDir()
 {
+#ifdef _MSC_VER
     try
     {
         try
@@ -75,6 +78,7 @@ static std::string computeBaseDir()
     {
         MC_LOG_ERROR("[Config] ApplicationData::LocalFolder is not available, using fallback...");
     }
+#endif
 
     char local[512] = {};
     if (localAppDataPath(local, sizeof(local)))
@@ -151,30 +155,66 @@ static nlohmann::json captureAllModules()
     return root;
 }
 
+// SEH por módulo: aisla el crash de UN modulo para que los demas
+// sigan cargando sus settings. Sin esto, un solo onEnable/loadSettings
+// que explota tumba TODO el config.
+static bool sehLoadModuleSettings(Module* m, const nlohmann::json& e)
+{
+    __try
+    {
+        m->setKeybind(e.value("keybind", m->keybind()));
+        if (e.contains("settings") && e["settings"].is_object())
+            m->loadSettings(e["settings"]);
+        return true;
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER)
+    {
+        MC_LOG_ERROR("[Config] CRASHED loading settings for %s - skipped", m->name().c_str());
+        return false;
+    }
+}
+
+static bool sehEnableModule(Module* m, const nlohmann::json& e)
+{
+    __try
+    {
+        bool en = e.value("enabled", false);
+        if (en != m->enabled())
+            m->setEnabled(en);
+        return true;
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER)
+    {
+        MC_LOG_ERROR("[Config] CRASHED enabling %s - skipped", m->name().c_str());
+        return false;
+    }
+}
+
 static size_t applyAllModules(const nlohmann::json& root)
 {
     ModuleManager& mgr = ModuleManager::get();
     mgr.setQuiet(true);
     size_t applied = 0;
+
+    // PASADA 1: settings de todos (aislado por modulo)
     for (auto& m : mgr.all())
     {
         if (!root.contains(m->name()))
             continue;
-        try
-        {
-            const auto& e = root[m->name()];
-            m->setKeybind(e.value("keybind", m->keybind()));
-            if (e.contains("settings") && e["settings"].is_object())
-                m->loadSettings(e["settings"]);
-            bool en = e.value("enabled", false);
-            if (en != m->enabled())
-                m->setEnabled(en);
+        const auto& e = root[m->name()];
+        if (sehLoadModuleSettings(m.get(), e))
             ++applied;
-        }
-        catch (...)
-        {
-        }
     }
+
+    // PASADA 2: habilitar (aislado por modulo)
+    for (auto& m : mgr.all())
+    {
+        if (!root.contains(m->name()))
+            continue;
+        const auto& e = root[m->name()];
+        sehEnableModule(m.get(), e);
+    }
+
     mgr.setQuiet(false);
     return applied;
 }
@@ -284,6 +324,41 @@ bool deletePreset(const std::string& name)
 std::string baseDir()
 {
     return configBaseDir();
+}
+
+static std::string settingsFilePath()
+{
+    std::string dir = configsDir();
+    if (dir.empty())
+        return {};
+    return dir + "\\settings.json";
+}
+
+std::string globalSetting(const std::string& key, const std::string& fallback)
+{
+    std::string path = settingsFilePath();
+    if (path.empty())
+        return fallback;
+
+    bool ok = false;
+    nlohmann::json root = readJsonFile(path, ok);
+    if (!ok || !root.contains(key) || !root[key].is_string())
+        return fallback;
+    return root[key].get<std::string>();
+}
+
+void setGlobalSetting(const std::string& key, const std::string& value)
+{
+    std::string path = settingsFilePath();
+    if (path.empty())
+        return;
+
+    bool ok = false;
+    nlohmann::json root = readJsonFile(path, ok);
+    if (!ok)
+        root = nlohmann::json::object();
+    root[key] = value;
+    writeJsonFile(path, root);
 }
 
 void saveModule(const std::string& moduleName)
