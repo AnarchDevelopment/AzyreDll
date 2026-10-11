@@ -5,6 +5,7 @@
 #include "Input/WheelHook.hpp"
 #include "SDK/Game.hpp"
 
+#ifdef _MSC_VER
 #include <winrt/Windows.Foundation.h>
 #include <winrt/Windows.UI.Core.h>
 #include <winrt/Windows.System.h>
@@ -18,17 +19,23 @@ using namespace Windows::UI::Core;
 using namespace Windows::System;
 using namespace Windows::ApplicationModel::Core;
 using namespace Windows::UI::ViewManagement;
+#endif
 
 namespace mc::input {
 
+#ifdef _MSC_VER
 static CoreWindow g_coreWindow = nullptr;
+#endif
 static std::atomic<bool> g_ready{false};
+#ifdef _MSC_VER
 static std::atomic<int> g_keyEvents{0};
 static std::atomic<int> g_pointerEvents{0};
 static std::atomic<int> g_wheelEvents{0};
 static std::atomic<int> g_charEvents{0};
+#endif
 static bool g_cursorForcedVisible = false;
 
+#ifdef _MSC_VER
 struct WinRTTokens
 {
     event_token keyDown{};
@@ -44,6 +51,7 @@ struct WinRTTokens
     bool valid = false;
 };
 static WinRTTokens g_tokens{};
+#endif
 
 static bool IsSystemCursorShowing()
 {
@@ -56,6 +64,7 @@ static bool IsSystemCursorShowing()
 
 static void ApplyCursorForMenu(bool menuOpen)
 {
+#ifdef _MSC_VER
     try
     {
         CoreWindow win = g_coreWindow;
@@ -92,6 +101,10 @@ static void ApplyCursorForMenu(bool menuOpen)
     {
         g_cursorForcedVisible = false;
     }
+#else
+    (void)menuOpen;
+    g_cursorForcedVisible = false;
+#endif
 }
 
 static ImGuiKey MapVkToImGuiKey(int vk)
@@ -210,6 +223,7 @@ static unsigned short VKToAsciiFallback(int vk, const BYTE keyboardState[256])
     return 0;
 }
 
+#ifdef _MSC_VER
 static CoreWindow GetCoreWindowInfo(float& width, float& height)
 {
     MC_LOG("[WinRT] Attempting to get CoreWindow...");
@@ -260,11 +274,13 @@ static CoreWindow GetCoreWindowInfo(float& width, float& height)
         return nullptr;
     }
 }
+#endif
 
 void shutdown()
 {
     g_ready = false;
 
+#ifdef _MSC_VER
     if (!g_coreWindow || !g_tokens.valid)
         return;
 
@@ -302,6 +318,7 @@ void shutdown()
     }
 
     g_coreWindow = nullptr;
+#endif
 }
 
 void init()
@@ -310,6 +327,7 @@ void init()
     MC_LOG("[WinRT] Initializing WinRT Input System");
     MC_LOG("[WinRT] ========================================");
 
+#ifdef _MSC_VER
     try
     {
         float w = 0.0f, h = 0.0f;
@@ -371,6 +389,12 @@ void init()
         MC_LOG("[WinRT] Unknown error initializing WinRT");
         g_ready = false;
     }
+#else
+    // Toolchain no-MSVC (CI): la captura real de input va por polling en
+    // updateFrame(); la suscripcion WinRT no existe en este build.
+    MC_LOG("[WinRT] WinRT input unavailable in this toolchain (CI build)");
+    g_ready = false;
+#endif
 }
 
 void updateFrame()
@@ -379,6 +403,7 @@ void updateFrame()
     // Suscripcion del wheel via WinRT, despachada al UI thread con el
     // Dispatcher (el patron de window::setTitle). Desde este hilo de render
     // la suscripcion directa nunca enganchaba.
+#ifdef _MSC_VER
     static bool s_wheelDispatched = false;
     if (!s_wheelDispatched)
     {
@@ -405,10 +430,15 @@ void updateFrame()
                                         wheel::addWinrtDelta(delta);
                                 });
                             MC_LOG("[Wheel] WinRT PointerWheelChanged suscrito en UI thread");
+                            // NOTA: el juego lee el wheel via
+                            // MouseDevice::MouseWheelChanged (Windows.Devices.
+                            // Input, contrato que ya no esta en el cppwinrt del
+                            // kit 26100). La captura real del juego va por el
+                            // hook a MouseDevice::feed (Input/MouseHook).
                         }
                         catch (...)
                         {
-                            MC_LOG("[Wheel] Excepcion suscribiendo PointerWheelChanged");
+                            MC_LOG("[Wheel] Excepcion suscribiendo PointerWheelChanged/MouseDevice");
                         }
                     });
                 (void)action;
@@ -419,6 +449,7 @@ void updateFrame()
         {
         }
     }
+#endif
 
     static bool lastMenuVisible = false;
     bool menuOpenNow = mc::menu::visible();
@@ -466,7 +497,23 @@ void updateFrame()
     io.MouseDown[3] = (GetAsyncKeyState(VK_XBUTTON1) & 0x8000) != 0;
     io.MouseDown[4] = (GetAsyncKeyState(VK_XBUTTON2) & 0x8000) != 0;
 
-    io.MouseWheel = wheel::consume();
+    // ImGui >= 1.87: la escritura directa de io.MouseWheel es obsoleta
+    // (EndFrame la zeroea y solo los EVENTOS la repueblan en NewFrame).
+    // Hay que inyectar via AddMouseWheelEvent o el scroll de todas las
+    // ventanas queda muerto.
+    float wheelDelta = wheel::consume();
+    if (wheelDelta != 0.0f)
+    {
+        io.AddMouseWheelEvent(0.0f, wheelDelta);
+        // Diagnostico del pipeline (ver tambien [WheelDBG] tras NewFrame).
+        static ULONGLONG lastWheelDbg = 0;
+        ULONGLONG nowDbg = GetTickCount64();
+        if (nowDbg - lastWheelDbg > 200ull)
+        {
+            lastWheelDbg = nowDbg;
+            MC_LOG("[WheelDBG] consume=%.2f -> evento encolado", wheelDelta);
+        }
+    }
 
     io.MouseDrawCursor = menuOpenNow && !IsSystemCursorShowing();
 

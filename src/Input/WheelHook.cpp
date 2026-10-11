@@ -14,9 +14,11 @@ static HHOOK g_hook = nullptr;
 static HANDLE g_thread = nullptr;
 static DWORD g_threadId = 0;
 static std::atomic<int> g_llUnits{0};
+static std::atomic<int> g_gameUnits{0};
 static std::atomic<int> g_winrtUnits{0};
 static bool g_loggedWinrt = false;
 static bool g_loggedLL = false;
+static bool g_loggedGame = false;
 static float g_lastValue = 0.0f;
 
 static bool g_msgHooked = false;
@@ -24,6 +26,207 @@ static LPVOID g_peekTarget = nullptr;
 static LPVOID g_getTarget = nullptr;
 static decltype(&PeekMessageW) oPeek = nullptr;
 static decltype(&GetMessageW) oGet = nullptr;
+
+// --- Raw input: la via del juego ACTIVO ---
+// El juego registra Raw Input para el mouse (por eso WH_MOUSE_LL no ve
+// nada con la ventana activa) y llama GetRawInputData/GetRawInputBuffer
+// para procesar sus WM_INPUT. Hookeamos las DOS y observamos el RAWINPUT
+// que el propio juego trae: el wheel (RI_MOUSE_WHEEL) viaja ahi aunque el
+// juego internamente use el evento WinRT de MouseDevice.
+//
+// Nota: WIN32_LEAN_AND_MEAN del PCH excluye la seccion de raw input de
+// winuser.h, asi que las definiciones minimas viven aqui (layout estable
+// del contrato RAWINPUT de x64).
+namespace rawx {
+
+constexpr UINT kRidInput = 0x10000002;
+constexpr DWORD kRimTypeMouse = 0;
+constexpr DWORD kRimTypeKeyboard = 1;
+constexpr USHORT kRiMouseWheel = 0x0400;
+
+#pragma pack(push, 8)
+struct Header
+{
+    DWORD dwType;
+    DWORD dwSize;
+    HANDLE hDevice;
+    WPARAM wParam;
+};
+struct Mouse
+{
+    USHORT usFlags;
+    union
+    {
+        ULONG ulButtons;
+        struct
+        {
+            USHORT usButtonFlags;
+            USHORT usButtonData;
+        };
+    };
+    ULONG ulRawButtons;
+    LONG lLastX;
+    LONG lLastY;
+    ULONG ulExtraInformation;
+};
+struct Keyboard
+{
+    USHORT UnitId;
+    USHORT MakeCode;
+    USHORT Flags;
+    USHORT Reserved;
+    USHORT VKey;
+    USHORT Message;
+    USHORT ExtraInformation;
+};
+struct RawInput
+{
+    Header header;
+    union
+    {
+        Mouse mouse;
+        Keyboard keyboard;
+    } data;
+};
+#pragma pack(pop)
+
+inline const RawInput* nextBlock(const RawInput* cur)
+{
+    ULONG_PTR p = (ULONG_PTR)cur + cur->header.dwSize;
+    return (const RawInput*)((p + 7) & ~(ULONG_PTR)7);
+}
+
+} // namespace rawx
+
+static LPVOID g_rawTarget = nullptr;
+static LPVOID g_rawBufTarget = nullptr;
+using GetRawInputDataFn = UINT(WINAPI*)(HRAWINPUT, UINT, LPVOID, PUINT, UINT);
+using GetRawInputBufferFn = UINT(WINAPI*)(LPVOID, PUINT);
+static GetRawInputDataFn oGetRawInputData = nullptr;
+static GetRawInputBufferFn oGetRawInputBuffer = nullptr;
+static std::atomic<bool> g_loggedRaw{false};
+static std::atomic<bool> g_loggedRawKbd{false};
+
+static void feedWheelRaw(int delta)
+{
+    if (delta == 0)
+        return;
+    g_gameUnits.fetch_add(delta);
+    bool expected = false;
+    if (g_loggedRaw.compare_exchange_strong(expected, true))
+        MC_LOG("[Wheel] raw input (GetRawInputData) source active");
+}
+
+static void parseRawMouse(const rawx::RawInput* raw)
+{
+    if (!raw || raw->header.dwType != rawx::kRimTypeMouse)
+    {
+        // Diagnostics: is keyboard raw input flowing through here at all?
+        if (raw && raw->header.dwType == rawx::kRimTypeKeyboard)
+        {
+            bool expected = false;
+            if (g_loggedRawKbd.compare_exchange_strong(expected, true))
+                MC_LOG("[Wheel] raw KEYBOARD input seen (game uses raw input for keys)");
+        }
+        return;
+    }
+    if (raw->data.mouse.usButtonFlags & rawx::kRiMouseWheel)
+    {
+        short delta = (short)raw->data.mouse.usButtonData;
+        feedWheelRaw(delta);
+    }
+}
+
+// Input gate: while the menu (or the HUD editor) is open, neutralize the
+// raw input the game is about to read so clicks/movement/keys never reach
+// the gameplay — the GUI must not attack, place or walk the player. Our
+// own ImGui polls GetAsyncKeyState, so the menu itself is unaffected. The
+// wheel accumulator is fed by parseRawMouse BEFORE this runs, so menu
+// scrolling keeps working while the game gets nothing.
+static void gateRawInput(rawx::RawInput* raw)
+{
+    if (!raw)
+        return;
+    if (!mc::menu::visible() && !mc::menu::hudEditing())
+        return;
+
+    if (raw->header.dwType == rawx::kRimTypeMouse)
+    {
+        raw->data.mouse.usButtonFlags = 0;
+        raw->data.mouse.usButtonData = 0;
+        raw->data.mouse.ulRawButtons = 0;
+        raw->data.mouse.lLastX = 0;
+        raw->data.mouse.lLastY = 0;
+    }
+    else if (raw->header.dwType == rawx::kRimTypeKeyboard)
+    {
+        // Inert key event: valid structure, no key. The game reads a
+        // keypress with VKey 0 and ignores it.
+        raw->data.keyboard.MakeCode = 0;
+        raw->data.keyboard.VKey = 0;
+        raw->data.keyboard.Message = 0;
+    }
+}
+
+static UINT WINAPI hkGetRawInputData(HRAWINPUT hRawInput, UINT uiCommand, LPVOID pData,
+                                     PUINT pcbSize, UINT cbSizeHeader)
+{
+    UINT r = oGetRawInputData(hRawInput, uiCommand, pData, pcbSize, cbSizeHeader);
+    if (r != (UINT)-1 && pData && uiCommand == rawx::kRidInput)
+    {
+        parseRawMouse((const rawx::RawInput*)pData);
+        gateRawInput((rawx::RawInput*)pData);
+    }
+    return r;
+}
+
+static UINT WINAPI hkGetRawInputBuffer(LPVOID pData, PUINT pcbSize)
+{
+    UINT r = oGetRawInputBuffer(pData, pcbSize);
+    if (r != (UINT)-1 && r > 0 && pData && pcbSize && *pcbSize > 0)
+    {
+        // El buffer trae varios RAWINPUT empaquetados.
+        rawx::RawInput* raw = (rawx::RawInput*)pData;
+        const BYTE* end = (const BYTE*)pData + *pcbSize;
+        while ((const BYTE*)raw < end)
+        {
+            parseRawMouse(raw);
+            gateRawInput(raw);
+            raw = (rawx::RawInput*)rawx::nextBlock(raw);
+        }
+    }
+    return r;
+}
+
+static bool installRawInputHooks()
+{
+    if (g_rawTarget)
+        return true;
+    if (!hook::initialize())
+    {
+        MC_LOG_ERROR("[Wheel] MinHook init failed (raw input)");
+        return false;
+    }
+
+    MH_STATUS s1 = MH_CreateHookApiEx(L"user32.dll", "GetRawInputData",
+                                      reinterpret_cast<LPVOID>(&hkGetRawInputData),
+                                      reinterpret_cast<LPVOID*>(&oGetRawInputData), &g_rawTarget);
+    MH_STATUS s2 = MH_CreateHookApiEx(L"user32.dll", "GetRawInputBuffer",
+                                      reinterpret_cast<LPVOID>(&hkGetRawInputBuffer),
+                                      reinterpret_cast<LPVOID*>(&oGetRawInputBuffer), &g_rawBufTarget);
+    if (s1 == MH_OK && g_rawTarget)
+        MH_EnableHook(g_rawTarget);
+    if (s2 == MH_OK && g_rawBufTarget)
+        MH_EnableHook(g_rawBufTarget);
+
+    bool ok = (s1 == MH_OK) || (s2 == MH_OK);
+    if (ok)
+        MC_LOG("[Wheel] GetRawInputData/Buffer hooks active (Data=%d Buffer=%d)",
+               (int)s1, (int)s2);
+    else
+        MC_LOG_ERROR("[Wheel] Raw input hooks failed (Data=%d Buffer=%d)", (int)s1, (int)s2);
+    return ok;
+}
 
 void setModule(void* moduleHandle)
 {
@@ -47,13 +250,29 @@ void addWinrtDelta(int wheelDelta)
     }
 }
 
+void addGameDelta(int wheelDelta)
+{
+    if (wheelDelta == 0)
+        return;
+    g_gameUnits.fetch_add(wheelDelta);
+    if (!g_loggedGame)
+    {
+        g_loggedGame = true;
+        MC_LOG("[Wheel] MouseDevice::feed source active");
+    }
+}
 float consume()
 {
+    int gameUnits = g_gameUnits.exchange(0);
     int winrtUnits = g_winrtUnits.exchange(0);
     int llUnits = g_llUnits.exchange(0);
 
     float value = 0.0f;
-    if (winrtUnits != 0)
+    if (gameUnits != 0)
+    {
+        value = (float)gameUnits / 120.0f;
+    }
+    else if (winrtUnits != 0)
     {
         value = (float)winrtUnits / 120.0f;
     }
@@ -200,6 +419,10 @@ bool install()
         return false;
     }
 
+    // La via del juego ACTIVO: siempre activa (no interfiere: solo observa
+    // el RAWINPUT que el propio juego va a leer).
+    installRawInputHooks();
+
     g_thread = CreateThread(nullptr, 0, WheelThread, nullptr, 0, &g_threadId);
     if (!g_thread)
     {
@@ -223,6 +446,16 @@ void uninstall()
         if (g_getTarget)
             MH_DisableHook(g_getTarget);
         g_msgHooked = false;
+    }
+
+    if (g_rawTarget || g_rawBufTarget)
+    {
+        if (g_rawTarget)
+            MH_DisableHook(g_rawTarget);
+        if (g_rawBufTarget)
+            MH_DisableHook(g_rawBufTarget);
+        g_rawTarget = nullptr;
+        g_rawBufTarget = nullptr;
     }
 
     if (g_thread)
