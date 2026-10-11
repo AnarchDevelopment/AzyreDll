@@ -1,5 +1,5 @@
 // ==========================================
-// Aegle Client SCSS Mixins
+// Azyre Client — SCSS Mixins
 // ==========================================
 
 @use 'variables' as *;
@@ -12,9 +12,16 @@
   border: 1px solid $border;
 }
 
-// Gradient text mixin
-@mixin gradient-text($gradient: $gradient-primary) {
+// Animated moving gradient background
+@mixin gradient-anim($gradient: $gradient-primary, $duration: $gradient-duration) {
   background: $gradient;
+  background-size: 200% 200%;
+  animation: gradientFlow $duration ease infinite;
+}
+
+// Animated gradient text
+@mixin gradient-text($gradient: $gradient-primary, $duration: $gradient-duration) {
+  @include gradient-anim($gradient, $duration);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -52,12 +59,12 @@
   }
 }
 
-// Hover glow effect
+// Hover lift + soft rainbow glow
 @mixin hover-glow($glow: $glow-primary) {
   transition: transform $transition-normal, box-shadow $transition-normal, border-color $transition-normal;
   &:hover {
     transform: translateY(-3px);
     box-shadow: $glow;
-    border-color: rgba(232, 121, 249, 0.4);
+    border-color: rgba($accent, 0.45);
   }
 }

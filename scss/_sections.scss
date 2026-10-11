@@ -1,22 +1,32 @@
 // ==========================================
-// Aegleseeker Client SCSS Page Sections
-// Pink-Purple Gradient Aesthetic
+// Azyre Client — SCSS Page Sections
 // ==========================================
 
 @use 'variables' as *;
 @use 'mixins' as *;
 
-// Hero Section
+// ─── Hero ───────────────────────────────────────────────────────────────────
 .hero {
   padding: 9rem 0 5rem;
   position: relative;
   overflow: hidden;
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(circle at 20% 20%, rgba($rb-violet, 0.08) 0%, transparent 45%),
+      radial-gradient(circle at 80% 30%, rgba($rb-cyan, 0.08) 0%, transparent 45%);
+    pointer-events: none;
+  }
 
   .hero-grid {
     display: grid;
     grid-template-columns: 1fr;
     gap: 3.5rem;
     align-items: center;
+    position: relative;
 
     @include desktop {
       grid-template-columns: 1.1fr 0.9fr;
@@ -25,9 +35,9 @@
 
   .hero-content {
     .hero-title {
-      font-size: 2.75rem;
+      font-size: 2.85rem;
       font-weight: 900;
-      line-height: 1.15;
+      line-height: 1.12;
       letter-spacing: -0.02em;
       margin: 1.25rem 0;
       color: $text-bright;
@@ -38,10 +48,10 @@
     }
 
     .hero-subtitle {
-      font-size: 1.1rem;
-      color: #e2d9f3;
+      font-size: 1.08rem;
+      color: #cbd5e1;
       margin-bottom: 2rem;
-      max-width: 580px;
+      max-width: 600px;
     }
 
     .hero-cta {
@@ -51,14 +61,15 @@
     }
   }
 
-  // Interactive Live Client Window Preview
+  // Interactive live client window preview
   .hero-preview {
     position: relative;
+    animation: floatY 7s ease-in-out infinite;
 
     .hud-window {
-      @include glass-panel($bg: rgba(14, 10, 22, 0.88), $blur: 24px, $border: rgba(232, 121, 249, 0.35));
+      @include glass-panel($bg: rgba(15, 14, 24, 0.9), $blur: 24px, $border: rgba($rb-sky, 0.35));
       border-radius: $radius-lg;
-      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8), 0 0 40px rgba(217, 70, 239, 0.2);
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8), 0 0 42px rgba($rb-violet, 0.22);
       overflow: hidden;
 
       .hud-header {
@@ -96,12 +107,11 @@
         padding: 1.5rem;
         min-height: 280px;
         position: relative;
-        background: radial-gradient(circle at center, rgba(28, 18, 44, 0.7) 0%, rgba(9, 7, 14, 0.96) 100%);
+        background: radial-gradient(circle at center, rgba(30, 27, 46, 0.7) 0%, rgba(9, 8, 15, 0.96) 100%);
         display: flex;
         flex-direction: column;
         justify-content: space-between;
 
-        // In-game HUD Mock Elements
         .hud-watermark {
           display: flex;
           align-items: center;
@@ -109,15 +119,13 @@
           background: rgba(0, 0, 0, 0.55);
           padding: 0.4rem 0.8rem;
           border-radius: $radius-sm;
-          border-left: 3px solid $pink-magenta;
+          border-left: 3px solid $rb-cyan;
           width: fit-content;
           font-weight: 700;
           font-size: 0.85rem;
           color: $text-bright;
 
-          span {
-            color: $pink-magenta;
-          }
+          span { @include gradient-text; }
         }
 
         .hud-middle-row {
@@ -142,6 +150,7 @@
               font-size: 0.8rem;
               font-weight: 700;
               color: $text-secondary;
+              transition: all $transition-fast;
 
               &.key-w { grid-column: 2; }
               &.key-a { grid-column: 1; }
@@ -149,10 +158,10 @@
               &.key-d { grid-column: 3; }
 
               &.active {
-                background: rgba(232, 121, 249, 0.3);
-                border-color: $pink-magenta;
+                background: rgba($rb-sky, 0.28);
+                border-color: $rb-sky;
                 color: $text-bright;
-                box-shadow: 0 0 12px rgba(232, 121, 249, 0.45);
+                box-shadow: 0 0 14px rgba($rb-sky, 0.45);
               }
             }
           }
@@ -169,13 +178,13 @@
               font-weight: 600;
               padding: 0.15rem 0.5rem;
               background: rgba(0, 0, 0, 0.65);
-              border-right: 2px solid $pink-light;
+              border-right: 2px solid $rb-rose;
               border-radius: 2px;
               color: $text-bright;
 
-              &:nth-child(2) { border-color: $pink-magenta; }
-              &:nth-child(3) { border-color: $purple-pink; }
-              &:nth-child(4) { border-color: $purple-deep; }
+              &:nth-child(2) { border-color: $rb-amber; }
+              &:nth-child(3) { border-color: $rb-green; }
+              &:nth-child(4) { border-color: $rb-sky; }
             }
           }
         }
@@ -190,21 +199,19 @@
           font-size: 0.75rem;
           color: $text-muted;
 
-          strong {
-            color: $pink-magenta;
-          }
+          strong { color: $rb-sky; }
         }
       }
     }
   }
 }
 
-// Stats Counter Banner
+// ─── Stats Banner ───────────────────────────────────────────────────────────
 .stats-banner {
   padding: 3rem 0;
   border-top: 1px solid rgba(255, 255, 255, 0.06);
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(14, 10, 22, 0.45);
+  background: rgba(15, 14, 24, 0.45);
 
   .stats-grid {
     display: grid;
@@ -220,7 +227,7 @@
       .stat-number {
         font-size: 2.25rem;
         font-weight: 800;
-        @include gradient-text($gradient-primary);
+        @include gradient-text;
         margin-bottom: 0.2rem;
       }
 
@@ -234,14 +241,14 @@
   }
 }
 
-// Section Header
+// ─── Section Header ─────────────────────────────────────────────────────────
 .section-header {
   text-align: center;
-  max-width: 680px;
+  max-width: 700px;
   margin: 0 auto 3.5rem;
 
   .section-title {
-    font-size: 2rem;
+    font-size: 2.1rem;
     font-weight: 800;
     color: $text-bright;
     margin: 0.75rem 0;
@@ -253,7 +260,7 @@
   }
 }
 
-// Modules Section
+// ─── Modules Section ────────────────────────────────────────────────────────
 .modules-section {
   padding: 6rem 0;
 
@@ -272,10 +279,10 @@
   }
 }
 
-// Architecture / Features Section
+// ─── Features Section ───────────────────────────────────────────────────────
 .features-section {
   padding: 6rem 0;
-  background: radial-gradient(circle at 50% 50%, rgba(217, 70, 239, 0.06) 0%, transparent 60%);
+  background: radial-gradient(circle at 50% 50%, rgba($rb-violet, 0.06) 0%, transparent 60%);
 
   .features-grid {
     display: grid;
@@ -296,14 +303,18 @@
       padding: 2rem;
       transition: all $transition-normal;
 
+      &:hover {
+        transform: translateY(-4px);
+        border-color: rgba($rb-sky, 0.4);
+      }
+
       .feature-icon {
         width: 48px;
         height: 48px;
         border-radius: $radius-md;
-        background: rgba(232, 121, 249, 0.12);
-        border: 1px solid rgba(232, 121, 249, 0.3);
+        background: rgba($rb-sky, 0.12);
+        border: 1px solid rgba($rb-sky, 0.3);
         @include flex-center;
-        color: $pink-magenta;
         font-size: 1.4rem;
         margin-bottom: 1.25rem;
       }
@@ -324,7 +335,7 @@
   }
 }
 
-// Installation & Usage Section
+// ─── Requirements & Install Sections ────────────────────────────────────────
 .install-section {
   padding: 6rem 0;
 
@@ -351,7 +362,7 @@
           width: 38px;
           height: 38px;
           border-radius: 50%;
-          background: $gradient-primary;
+          @include gradient-anim;
           color: #0c0a14;
           font-weight: 800;
           @include flex-center;
@@ -374,11 +385,18 @@
   }
 }
 
-// Footer
+// ─── Scripting Section ──────────────────────────────────────────────────────
+.scripting-section {
+  padding: 6rem 0;
+  background: radial-gradient(circle at 15% 0%, rgba($rb-cyan, 0.07) 0%, transparent 55%),
+              radial-gradient(circle at 85% 100%, rgba($rb-violet, 0.07) 0%, transparent 55%);
+}
+
+// ─── Footer ─────────────────────────────────────────────────────────────────
 .footer {
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   padding: 4rem 0 2rem;
-  background: rgba(7, 5, 12, 0.95);
+  background: rgba(7, 6, 12, 0.95);
 
   .footer-inner {
     display: flex;
@@ -411,5 +429,6 @@
   .footer-text {
     font-size: 0.85rem;
     color: $text-muted;
+    max-width: 640px;
   }
 }

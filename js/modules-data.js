@@ -1,171 +1,158 @@
 /**
- * Aegleseeker Client - Modules Database
- * AegleDllMSVC C++ Modules Registry
+ * Azyre Client — Modules Database
+ * Mirrors the C++ module registry (src/Modules/impl).
  */
 
-const aegleModules = [
-  // Combat Category
-  {
-    id: 'hitbox',
-    name: 'Hitbox Expander',
-    category: 'Combat',
-    keybind: 'NONE',
-    status: 'Active',
-    description: 'Dynamically expands entity bounding boxes in memory for enhanced collision detection and target accuracy.',
-    tags: ['Hitbox', 'Combat', 'Entity']
-  },
-  {
-    id: 'reach',
-    name: 'Reach Modifier',
-    category: 'Combat',
-    keybind: 'NONE',
-    status: 'Active',
-    description: 'Customizes maximum melee attack reach distance via direct hooks into the rendering & interaction matrices.',
-    tags: ['Reach', 'Combat', 'Distance']
-  },
+const azyreModules = [
+  // ── Combat ──────────────────────────────────────────────────────────────
+  { id: 'aimassist', name: 'AimAssist', category: 'Combat', keybind: 'R', status: 'Active',
+    description: 'Smoothly assists aim toward the nearest valid target with configurable range, FOV and speed.',
+    tags: ['Aim', 'Combat', 'Assist'] },
+  { id: 'backtrack', name: 'Backtrack', category: 'Combat', keybind: 'NONE', status: 'Active',
+    description: 'Attacks against lag-compensated (historical) target positions to land hits that would otherwise miss.',
+    tags: ['Backtrack', 'Combat', 'Lag'] },
+  { id: 'criticals', name: 'Criticals', category: 'Combat', keybind: 'NONE', status: 'Active',
+    description: 'Forces critical hits by alternating the ground state with a controlled vertical nudge.',
+    tags: ['Crit', 'Combat', 'Damage'] },
+  { id: 'hitbox', name: 'Hitbox', category: 'Combat', keybind: 'NONE', status: 'Active',
+    description: 'Expands attack hitboxes through a live code patch with an adjustable multiplier.',
+    tags: ['Hitbox', 'Combat', 'Patch'] },
+  { id: 'rapidhit', name: 'RapidHit', category: 'Combat', keybind: 'NONE', status: 'Active',
+    description: 'Bypasses the attack cooldown to increase hit frequency.',
+    tags: ['Rapid', 'Combat', 'Cooldown'] },
+  { id: 'reach', name: 'Reach', category: 'Combat', keybind: 'NONE', status: 'Active',
+    description: 'Extends interaction and attack reach by patching the engine range value.',
+    tags: ['Reach', 'Combat', 'Distance'] },
+  { id: 'velocity', name: 'Velocity', category: 'Combat', keybind: 'NONE', status: 'Active',
+    description: 'Reduces or cancels incoming knockback via a SetEntityMotionPacket hook.',
+    tags: ['Velocity', 'Combat', 'Knockback'] },
 
-  // Movement Category
-  {
-    id: 'autosprint',
-    name: 'AutoSprint',
-    category: 'Movement',
-    keybind: 'KEY_V',
-    status: 'Active',
-    description: 'Automatically maintains sprint state whenever moving forward without needing to hold down a sprint key.',
-    tags: ['AutoSprint', 'Movement', 'Speed']
-  },
-  {
-    id: 'timer',
-    name: 'Game Timer',
-    category: 'Movement',
-    keybind: 'NONE',
-    status: 'Active',
-    description: 'Modifies the internal game tick loop speed to accelerate or smooth player movement and world physics.',
-    tags: ['Timer', 'Tick', 'Speed']
-  },
+  // ── Movement ────────────────────────────────────────────────────────────
+  { id: 'antivoid', name: 'AntiVoid', category: 'Movement', keybind: 'NONE', status: 'Active',
+    description: 'Applies a rescue impulse before you fall far enough to die in the void.',
+    tags: ['Void', 'Movement', 'Safety'] },
+  { id: 'autosprint', name: 'AutoSprint', category: 'Movement', keybind: 'NONE', status: 'Active',
+    description: 'Automatically maintains sprint state while moving forward.',
+    tags: ['Sprint', 'Movement'] },
+  { id: 'flight', name: 'Flight', category: 'Movement', keybind: 'F', status: 'Active',
+    description: 'Multi-mode flight: Motion, Pregame and Jump — with speed, anti-kick and damage-window tuning.',
+    tags: ['Flight', 'Movement', 'Air'] },
+  { id: 'glide', name: 'Glide', category: 'Movement', keybind: 'NONE', status: 'Active',
+    description: 'Reduces fall speed for a controlled descent.',
+    tags: ['Glide', 'Movement'] },
+  { id: 'highjump', name: 'HighJump', category: 'Movement', keybind: 'NONE', status: 'Active',
+    description: 'Increases jump height.',
+    tags: ['Jump', 'Movement'] },
+  { id: 'inventorywalk', name: 'InventoryWalk', category: 'Movement', keybind: 'NONE', status: 'Active',
+    description: 'Lets you move with WASD while an inventory screen is open.',
+    tags: ['Inventory', 'Movement'] },
+  { id: 'longjump', name: 'LongJump', category: 'Movement', keybind: 'NONE', status: 'Active',
+    description: 'Extends horizontal jump distance.',
+    tags: ['Jump', 'Movement', 'Distance'] },
+  { id: 'nofall', name: 'NoFall', category: 'Movement', keybind: 'NONE', status: 'Active',
+    description: 'Prevents fall damage using a ghost-ground technique.',
+    tags: ['Fall', 'Movement', 'Safety'] },
+  { id: 'noslow', name: 'NoSlow', category: 'Movement', keybind: 'NONE', status: 'Active',
+    description: 'Removes the slowdown applied while using items.',
+    tags: ['Slow', 'Movement'] },
+  { id: 'speed', name: 'Speed', category: 'Movement', keybind: 'G', status: 'Active',
+    description: 'Movement speed boosts in Friction and Legit modes with damage-boost handling.',
+    tags: ['Speed', 'Movement', 'Boost'] },
 
-  // Visuals Category
-  {
-    id: 'clickgui',
-    name: 'ImGui ClickGUI',
-    category: 'Visuals',
-    keybind: 'INSERT',
-    status: 'Core',
-    description: 'Advanced DirectX 11 overlay interface featuring tabbed navigation, smooth animations, and theme presets.',
-    tags: ['GUI', 'Menu', 'DirectX11']
-  },
-  {
-    id: 'watermark',
-    name: 'Watermark HUD',
-    category: 'Visuals',
-    keybind: 'NONE',
-    status: 'Active',
-    description: 'On-screen watermark displaying the Aegleseeker Client branding, version tag, and real-time performance state.',
-    tags: ['HUD', 'Watermark', 'Overlay']
-  },
-  {
-    id: 'fullbright',
-    name: 'FullBright',
-    category: 'Visuals',
-    keybind: 'KEY_B',
-    status: 'Active',
-    description: 'Boosts scene gamma illumination to eliminate dark shadows in caves and dimensions without shader distortion.',
-    tags: ['Gamma', 'Lighting', 'Visuals']
-  },
-  {
-    id: 'keystrokes',
-    name: 'Keystrokes HUD',
-    category: 'Visuals',
-    keybind: 'NONE',
-    status: 'Active',
-    description: 'Renders a real-time HUD widget reflecting key inputs (WASD, Left Click, Right Click).',
-    tags: ['Keystrokes', 'HUD', 'Input']
-  },
-  {
-    id: 'cpscounter',
-    name: 'CPS Counter',
-    category: 'Visuals',
-    keybind: 'NONE',
-    status: 'Active',
-    description: 'Calculates and displays exact Clicks Per Second for both left and right mouse buttons.',
-    tags: ['CPS', 'Stats', 'HUD']
-  },
-  {
-    id: 'fpsoverlay',
-    name: 'FPS Overlay',
-    category: 'Visuals',
-    keybind: 'NONE',
-    status: 'Active',
-    description: 'Monitors DirectX 11 frame rates with minimal CPU/GPU overhead.',
-    tags: ['FPS', 'Performance', 'HUD']
-  },
-  {
-    id: 'pingcounter',
-    name: 'Ping Counter',
-    category: 'Visuals',
-    keybind: 'NONE',
-    status: 'Active',
-    description: 'Displays current network latency in milliseconds to the Minecraft Bedrock server.',
-    tags: ['Ping', 'Network', 'HUD']
-  },
-  {
-    id: 'renderinfo',
-    name: 'Render Info',
-    category: 'Visuals',
-    keybind: 'NONE',
-    status: 'Active',
-    description: 'HUD panel displaying exact player coordinates (X, Y, Z), biome name, and process memory usage.',
-    tags: ['Coords', 'Info', 'Stats']
-  },
-  {
-    id: 'motionblur',
-    name: 'Motion Blur',
-    category: 'Visuals',
-    keybind: 'NONE',
-    status: 'Active',
-    description: 'Cinematic motion blur effect implemented via Direct3D 11 frame accumulation buffer blending.',
-    tags: ['Shaders', 'MotionBlur', 'FX']
-  },
+  // ── Visuals ─────────────────────────────────────────────────────────────
+  { id: 'arraylist', name: 'ArrayList', category: 'Visuals', keybind: 'NONE', status: 'Active',
+    description: 'On-screen list of enabled modules with multiple animated styles.',
+    tags: ['HUD', 'ArrayList', 'Overlay'] },
+  { id: 'crosshair', name: 'Crosshair', category: 'Visuals', keybind: 'NONE', status: 'Active',
+    description: 'Custom centered crosshair.',
+    tags: ['Crosshair', 'Visuals'] },
+  { id: 'esp', name: 'ESP', category: 'Visuals', keybind: 'P', status: 'Active',
+    description: '2D/3D boxes highlighting players through walls, with names, distance and friend colors.',
+    tags: ['ESP', 'Visuals', 'Boxes'] },
+  { id: 'fullbright', name: 'FullBright', category: 'Visuals', keybind: 'NONE', status: 'Active',
+    description: 'Maximum brightness in dark areas via a code patch.',
+    tags: ['Gamma', 'Lighting', 'Visuals'] },
+  { id: 'hud', name: 'HUD', category: 'Visuals', keybind: 'H', status: 'Active',
+    description: 'On-screen player stats: direction, speed, coordinates and slot.',
+    tags: ['HUD', 'Stats'] },
+  { id: 'keystrokes', name: 'Keystrokes', category: 'Visuals', keybind: 'NONE', status: 'Active',
+    description: 'Animated WASD / mouse key display with rainbow and blur options.',
+    tags: ['Keystrokes', 'HUD', 'Input'] },
+  { id: 'motionblur', name: 'MotionBlur', category: 'Visuals', keybind: 'NONE', status: 'Active',
+    description: 'Cinematic motion blur via ghost-frame accumulation.',
+    tags: ['FX', 'MotionBlur'] },
+  { id: 'nameprotect', name: 'NameProtect', category: 'Visuals', keybind: 'NONE', status: 'Active',
+    description: 'Replaces your name in-game (and in chat) with a configurable alias — streaming-friendly.',
+    tags: ['Name', 'Privacy'] },
+  { id: 'nametags', name: 'NameTags', category: 'Visuals', keybind: 'NONE', status: 'Active',
+    description: 'Floating name tags with health bars and optional blur.',
+    tags: ['NameTags', 'HUD'] },
+  { id: 'nohurtcam', name: 'NoHurtCam', category: 'Visuals', keybind: 'NONE', status: 'Active',
+    description: 'Disables the hurt camera shake.',
+    tags: ['Camera', 'Visuals'] },
+  { id: 'placehighlights', name: 'PlaceHighlights', category: 'Visuals', keybind: 'NONE', status: 'Active',
+    description: 'Fading highlights on blocks you place, with a convex-hull 3D box.',
+    tags: ['Blocks', 'Visuals'] },
+  { id: 'potionhud', name: 'PotionHUD', category: 'Visuals', keybind: 'NONE', status: 'Active',
+    description: 'Animated display of your active effects with sprite icons and progress bars.',
+    tags: ['Effects', 'HUD'] },
+  { id: 'spotify', name: 'Spotify', category: 'Visuals', keybind: 'NONE', status: 'Active',
+    description: '“Now playing” widget with OAuth and album-art rendering.',
+    tags: ['Spotify', 'Media', 'Widget'] },
+  { id: 'targethud', name: 'TargetHUD', category: 'Visuals', keybind: 'NONE', status: 'Active',
+    description: 'Information card for the current target.',
+    tags: ['HUD', 'Target'] },
+  { id: 'tracers', name: 'Tracers', category: 'Visuals', keybind: 'NONE', status: 'Active',
+    description: 'Lines pointing from the crosshair to nearby players.',
+    tags: ['Tracers', 'Visuals'] },
+  { id: 'trail', name: 'Trail', category: 'Visuals', keybind: 'NONE', status: 'Active',
+    description: 'Leaves a fading trail behind your movement.',
+    tags: ['Trail', 'Visuals'] },
+  { id: 'trajectories', name: 'Trajectories', category: 'Visuals', keybind: 'NONE', status: 'Active',
+    description: 'Predicts the arc of a thrown/held projectile with block collision and a landing marker.',
+    tags: ['Trajectory', 'Projectile'] },
+  { id: 'watermark', name: 'Watermark', category: 'Visuals', keybind: 'NONE', status: 'Active',
+    description: 'Client watermark with FPS and branding, plus a Solstice style.',
+    tags: ['Watermark', 'HUD'] },
 
-  // Misc Category
-  {
-    id: 'autoclicker',
-    name: 'AutoClicker',
-    category: 'Misc',
-    keybind: 'NONE',
-    status: 'Active',
-    description: 'Automates mouse clicks at a configurable frequency with random jitter to mimic human clicking patterns.',
-    tags: ['Clicker', 'Automation', 'Misc']
-  },
-  {
-    id: 'antiafk',
-    name: 'AntiAFK',
-    category: 'Misc',
-    keybind: 'NONE',
-    status: 'Active',
-    description: 'Executes subtle micro-movements to prevent idle timeouts on multiplayer servers.',
-    tags: ['AntiAFK', 'Misc', 'Automation']
-  },
-  {
-    id: 'unlockfps',
-    name: 'Unlock FPS',
-    category: 'Misc',
-    keybind: 'NONE',
-    status: 'Active',
-    description: 'Removes v-sync constraints and default graphics engine caps to achieve maximum possible frame rates.',
-    tags: ['FPS', 'Unlock', 'Performance']
-  },
-  {
-    id: 'screenshot',
-    name: 'Screenshot Helper',
-    category: 'Misc',
-    keybind: 'KEY_F2',
-    status: 'Active',
-    description: 'Captures high-resolution screenshots directly from the DirectX 11 backbuffer and saves them locally.',
-    tags: ['Screenshot', 'Capture', 'Misc']
-  }
+  // ── Misc ────────────────────────────────────────────────────────────────
+  { id: 'antiafk', name: 'AntiAFK', category: 'Misc', keybind: 'NONE', status: 'Active',
+    description: 'Subtle rotations and jumps to prevent inactivity kicks.',
+    tags: ['AntiAFK', 'Automation'] },
+  { id: 'antibot', name: 'AntiBot', category: 'Misc', keybind: 'NONE', status: 'Active',
+    description: 'Filters bots, NPCs and holograms from ESP and targeting.',
+    tags: ['AntiBot', 'Filter'] },
+  { id: 'autotool', name: 'AutoTool', category: 'Misc', keybind: 'NONE', status: 'Active',
+    description: 'Switches to the best tool for the block under your crosshair while mining.',
+    tags: ['AutoTool', 'Mining'] },
+  { id: 'friends', name: 'Friends', category: 'Misc', keybind: 'NONE', status: 'Active',
+    description: 'Friend list management — middle-click a player to toggle them.',
+    tags: ['Friends', 'Social'] },
+  { id: 'irc', name: 'IRC', category: 'Misc', keybind: 'NONE', status: 'Active',
+    description: 'In-game bridge to an IRC channel for chat and coordination.',
+    tags: ['IRC', 'Network'] },
+  { id: 'playernotifier', name: 'PlayerNotifier', category: 'Misc', keybind: 'NONE', status: 'Active',
+    description: 'Join / leave / death / under-attack alerts built on the ECS event pipeline.',
+    tags: ['Alerts', 'ECS'] },
+  { id: 'staffdetector', name: 'StaffDetector', category: 'Misc', keybind: 'NONE', status: 'Active',
+    description: 'Priority alerts when a configured staff member enters render distance.',
+    tags: ['Staff', 'Alerts'] },
+
+  // ── Scripting ───────────────────────────────────────────────────────────
+  { id: 'script-engine', name: 'Script Engine', category: 'Scripting', keybind: 'NONE', status: 'Core',
+    description: 'Per-script sandboxed Luau VM. Drop a .lua file in Scripts/ and it becomes a module.',
+    tags: ['Luau', 'Sandbox'] },
+  { id: 'script-settings', name: 'Declarative Settings', category: 'Scripting', keybind: 'NONE', status: 'Core',
+    description: 'Sliders, checkboxes and combos declared in Lua, persisted through the config system.',
+    tags: ['Settings', 'JSON'] },
+  { id: 'script-api', name: 'Native API', category: 'Scripting', keybind: 'NONE', status: 'Core',
+    description: 'game, modules, input, draw, ui, chat and friends namespaces bound to native code.',
+    tags: ['API', 'Bindings'] },
+  { id: 'script-commands', name: '.script Commands', category: 'Scripting', keybind: 'NONE', status: 'Core',
+    description: 'Manage scripts at runtime with .script reload / list / remove.',
+    tags: ['Commands', 'Hot-reload'] }
 ];
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = aegleModules;
+  module.exports = azyreModules;
 }

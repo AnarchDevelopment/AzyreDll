@@ -3,9 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Aegleseeker Client - High Performance DirectX 11 Client for Minecraft Bedrock</title>
-  <meta name="description" content="Aegleseeker Client is a high-performance C++ client/mod for Minecraft Bedrock Edition built on DirectX 11, ImGui, and MinHook.">
-  <meta name="keywords" content="Aegleseeker Client, Aegleseeker, Minecraft Bedrock Client, MSVC v142, Visual Studio 18 2026, Windows 11 SDK, DirectX SDK, DirectX 11, ImGui, MinHook">
+  <title>Azyre Client — High Performance DirectX 11 Client for Minecraft Bedrock</title>
+  <meta name="description" content="Azyre Client is a high-performance C++ client for Minecraft Bedrock Edition built on DirectX 11, ImGui, MinHook and a sandboxed Luau scripting runtime.">
+  <meta name="keywords" content="Azyre Client, Azyre, Minecraft Bedrock Client, DirectX 11, ImGui, MinHook, Luau, scripting, ECS, EnTT, Modular C++ client">
+  <meta name="theme-color" content="#0a0912">
 
   <!-- Favicon -->
   <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
@@ -24,8 +25,8 @@
   <header class="navbar">
     <div class="container nav-inner">
       <a href="#" class="brand">
-        <img src="assets/favicon.svg" alt="Aegleseeker Logo">
-        <span>Aegleseeker<span class="text-gradient">Client</span></span>
+        <img src="assets/favicon.svg" alt="Azyre Logo">
+        <span>Azyre<span class="text-gradient"> Client</span></span>
       </a>
 
       <button class="mobile-toggle" aria-label="Toggle navigation menu">
@@ -35,12 +36,11 @@
       <ul class="nav-links">
         <li><a href="#hero" class="active">Home</a></li>
         <li><a href="#modules">Modules</a></li>
+        <li><a href="#scripting">Scripting</a></li>
         <li><a href="#architecture">Architecture</a></li>
-        <li><a href="#requirements">Requirements</a></li>
-        <li><a href="#repository">Repository</a></li>
-        <li><a href="#installation">Installation</a></li>
+        <li><a href="#installation">Build</a></li>
         <li>
-          <a href="https://github.com/AnarchDevelopment/aegledll" target="_blank" class="btn btn--outline btn--sm">
+          <a href="https://github.com/AnarchDevelopment/AzyreDll" target="_blank" rel="noopener" class="btn btn--outline btn--sm">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
             GitHub
           </a>
@@ -55,11 +55,14 @@
       <div class="hero-content">
         <span class="badge badge--purple">Minecraft Bedrock • DirectX 11 Target</span>
         <h1 class="hero-title">
-          Extreme Performance. <br>
-          <span class="text-gradient">Complete Control & ImGui Interface.</span>
+          Extreme Performance.<br>
+          <span class="text-gradient">Modular. Scriptable. Glass.</span>
         </h1>
         <p class="hero-subtitle">
-          Aegleseeker Client is a native C++ DLL developed with MSVC v142 & Visual Studio 18 2026. Features direct DirectX 11 hooking via MinHook, memory pattern scanning, and a fully customizable HUD targeting <code>Minecraft.Win10.DX11.exe</code>.
+          Azyre Client is a native C++ DLL for Minecraft: Bedrock Edition (Windows). It pairs a
+          DirectX 11 <code>Present</code> hook (MinHook) with an ImGui interface, an EnTT-based
+          game-state ECS, a GPU glass/acrylic render pipeline, and a sandboxed <strong>Luau</strong>
+          scripting runtime.
         </p>
 
         <div class="hero-cta">
@@ -67,8 +70,8 @@
             Explore Modules
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
           </a>
-          <a href="#installation" class="btn btn--outline">
-            Build Guide
+          <a href="#scripting" class="btn btn--outline">
+            Scripting Docs
           </a>
         </div>
       </div>
@@ -80,12 +83,12 @@
             <div class="window-dots">
               <span></span><span></span><span></span>
             </div>
-            <div class="window-title">Aegleseeker Client - In-Game Overlay Sim</div>
+            <div class="window-title">Azyre Client — In-Game Overlay</div>
           </div>
           <div class="hud-body">
             <!-- Top Watermark -->
             <div class="hud-watermark">
-              Aegleseeker <span>v1.0-MSVC</span>
+              Azyre <span>v1.1.0</span>
             </div>
 
             <!-- Middle Row: Keystrokes & ArrayList -->
@@ -98,10 +101,10 @@
               </div>
 
               <div class="arraylist-box">
-                <div class="array-item">AutoSprint</div>
+                <div class="array-item">AutoTool</div>
                 <div class="array-item">FullBright</div>
-                <div class="array-item">MotionBlur</div>
-                <div class="array-item">Keystrokes</div>
+                <div class="array-item">Trajectories</div>
+                <div class="array-item">NameProtect</div>
               </div>
             </div>
 
@@ -121,20 +124,20 @@
   <section class="stats-banner">
     <div class="container stats-grid">
       <div class="stat-item">
-        <div class="stat-number">17+</div>
-        <div class="stat-label">Integrated Modules</div>
+        <div class="stat-number">30+</div>
+        <div class="stat-label">Feature Modules</div>
       </div>
       <div class="stat-item">
-        <div class="stat-number">60 FPS+</div>
-        <div class="stat-label">Zero-Lag ImGui Rate</div>
+        <div class="stat-number">Luau</div>
+        <div class="stat-label">Sandboxed Scripting</div>
       </div>
       <div class="stat-item">
         <div class="stat-number">DX11</div>
         <div class="stat-label">Native Render Hook</div>
       </div>
       <div class="stat-item">
-        <div class="stat-number">MSVC v142</div>
-        <div class="stat-label">VS 18 2026 x64 Toolset</div>
+        <div class="stat-number">3</div>
+        <div class="stat-label">Supported Toolchains</div>
       </div>
     </div>
   </section>
@@ -145,7 +148,7 @@
       <div class="section-header">
         <span class="badge">Feature Catalog</span>
         <h2 class="section-title">Client Modules</h2>
-        <p class="section-desc">Search and filter through Combat, Movement, Visuals, and Utility modules configurable directly from the Aegleseeker ClickGUI.</p>
+        <p class="section-desc">Search and filter through Combat, Movement, Visuals, Misc and Scripting modules configurable directly from the Azyre ClickGUI.</p>
       </div>
 
       <!-- Filter Tabs & Search -->
@@ -156,11 +159,12 @@
           <button class="tab-btn" data-category="MOVEMENT">Movement</button>
           <button class="tab-btn" data-category="VISUALS">Visuals</button>
           <button class="tab-btn" data-category="MISC">Misc</button>
+          <button class="tab-btn" data-category="SCRIPTING">Scripting</button>
         </div>
 
         <div class="search-box">
           <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          <input type="text" id="module-search" placeholder="Search module (e.g. FullBright, Reach)...">
+          <input type="text" id="module-search" placeholder="Search module (e.g. ESP, Speed)...">
         </div>
       </div>
 
@@ -171,50 +175,381 @@
     </div>
   </section>
 
+  <!-- Scripting Documentation Section -->
+  <section id="scripting" class="scripting-section">
+    <div class="container">
+      <div class="section-header">
+        <span class="badge badge--purple">Extend Without Rebuilding</span>
+        <h2 class="section-title">Luau Scripting</h2>
+        <p class="section-desc">Azyre embeds a sandboxed <strong>Luau</strong> runtime. Each script runs in its own VM, returns a module table, and gets first-class access to the game, drawing, input and friends APIs.</p>
+      </div>
+
+      <div class="docs-layout">
+        <!-- Table of Contents -->
+        <aside class="docs-toc">
+          <h4>On this page</h4>
+          <ul>
+            <li><a href="#scr-overview">Overview</a></li>
+            <li><a href="#scr-quickstart">Quick start</a></li>
+            <li><a href="#scr-module">Module table</a></li>
+            <li><a href="#scr-settings">Settings</a></li>
+            <li><a href="#scr-lifecycle">Lifecycle callbacks</a></li>
+            <li><a href="#scr-api-game">API · game</a></li>
+            <li><a href="#scr-api-modules">API · modules</a></li>
+            <li><a href="#scr-api-input">API · input</a></li>
+            <li><a href="#scr-api-draw">API · draw</a></li>
+            <li><a href="#scr-api-misc">API · ui / chat / friends</a></li>
+            <li><a href="#scr-examples">Examples</a></li>
+            <li><a href="#scr-notes">Error handling &amp; notes</a></li>
+          </ul>
+        </aside>
+
+        <!-- Documentation content -->
+        <div class="docs-content">
+
+          <div class="docs-block" id="scr-overview">
+            <h3>Overview</h3>
+            <p>Scripts are plain <code>.lua</code> files (Luau syntax) placed in the client's <code>Scripts/</code> folder. On boot, every script is compiled into its own isolated VM and, if it returns a valid module table, registered as a first-class client module.</p>
+            <ul class="docs-list">
+              <li>One VM per script — scripts cannot interfere with each other.</li>
+              <li>Sandboxed: the <code>debug</code> library is removed and <code>os</code> is limited to read-only time functions.</li>
+              <li>Settings are declarative and persist through the config system (keyed by setting <code>id</code>).</li>
+              <li>Scripts appear in the <strong>Scripting</strong> tab of the ClickGUI and can be toggled like any module.</li>
+            </ul>
+            <div class="callout callout--info">
+              <span>💡</span>
+              <div>The scripting runtime is exposed entirely through <strong>native bindings</strong> — no file I/O, no arbitrary memory access, no <code>require</code> of native modules.</div>
+            </div>
+          </div>
+
+          <div class="docs-block" id="scr-quickstart">
+            <h3>Quick start</h3>
+            <p>Drop a file such as <code>Scripts/hello.lua</code> and reload with <code>.script reload</code> in chat, or restart the client.</p>
+            <div class="code-box">
+              <div class="code-header">
+                <span>Scripts/hello.lua</span>
+                <button class="copy-btn" data-target="scr-code-1">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                  Copy
+                </button>
+              </div>
+              <pre id="scr-code-1"><code>-- Every script returns a module table.
+local module = {
+    name = "Hello",
+    description = "A minimal Azyre script",
+    keybind = "H", -- single character, or a VK code number
+}
+
+function module.onEnable()
+    ui.notify("Hello from Azyre!")
+end
+
+function module.onTick()
+    local me = game.localPlayer()
+    if me and me.onGround then
+        -- ...
+    end
+end
+
+return module</code></pre>
+            </div>
+            <div class="docs-group-title">chat commands</div>
+            <table class="api-table">
+              <thead><tr><th>Command</th><th class="ret">Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>.script reload</code></td><td class="desc">Recompiles all loaded scripts and loads any new <code>.lua</code> files. Preserves setting values by <code>id</code>.</td></tr>
+                <tr><td><code>.script list</code></td><td class="desc">Lists every loaded script; faulty scripts are flagged with <em>(error)</em>.</td></tr>
+                <tr><td><code>.script remove &lt;name&gt;</code></td><td class="desc">Unloads the module <strong>and deletes its <code>.lua</code> file</strong> from disk. Accepts the module name or the file name.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="docs-block" id="scr-module">
+            <h3>Module table</h3>
+            <p>The chunk must return a table. Recognised fields:</p>
+            <table class="api-table">
+              <thead><tr><th>Field</th><th>Type</th><th class="ret">Notes</th></tr></thead>
+              <tbody>
+                <tr><td><code>name</code></td><td>string</td><td class="desc">Display name (defaults to the file name).</td></tr>
+                <tr><td><code>description</code></td><td>string</td><td class="desc">Shown as the module tooltip.</td></tr>
+                <tr><td><code>keybind</code></td><td>string&nbsp;|&nbsp;number</td><td class="desc">A single character (e.g. <code>"H"</code>) or a raw VK code.</td></tr>
+                <tr><td><code>settings</code></td><td>table</td><td class="desc">Array of setting declarations (see below).</td></tr>
+                <tr><td><code>category</code></td><td>—</td><td class="desc">Ignored: scripts always live in the <em>Scripting</em> category.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="docs-block" id="scr-settings">
+            <h3>Settings</h3>
+            <p>Declare settings as an array. Each entry renders a native widget and its value is saved/loaded by the config system.</p>
+            <table class="api-table">
+              <thead><tr><th>Key</th><th>Type</th><th class="ret">Notes</th></tr></thead>
+              <tbody>
+                <tr><td><code>id</code></td><td>string</td><td class="desc">Unique key used in the <code>settings</code> table and in saved JSON.</td></tr>
+                <tr><td><code>label</code></td><td>string</td><td class="desc">Widget label.</td></tr>
+                <tr><td><code>type</code></td><td>string</td><td class="desc"><code>"slider"</code> · <code>"checkbox"</code> / <code>"bool"</code> / <code>"boolean"</code> · <code>"combo"</code> / <code>"list"</code></td></tr>
+                <tr><td><code>min</code> / <code>max</code></td><td>number</td><td class="desc">Range for sliders. If <code>max &lt;= min</code> it falls back to <code>min + 1</code>.</td></tr>
+                <tr><td><code>value</code></td><td>number&nbsp;|&nbsp;bool</td><td class="desc">Default value.</td></tr>
+                <tr><td><code>options</code></td><td>string[]</td><td class="desc">Required for <code>combo</code>; the numeric value is the 1-based index.</td></tr>
+              </tbody>
+            </table>
+            <div class="code-box">
+              <div class="code-header">
+                <span>settings declaration</span>
+                <button class="copy-btn" data-target="scr-code-2">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                  Copy
+                </button>
+              </div>
+              <pre id="scr-code-2"><code>settings = {
+    { id = "speed",  label = "Speed",  type = "slider",   min = 1, max = 10, value = 5 },
+    { id = "legit",  label = "Legit",  type = "checkbox", value = true },
+    { id = "mode",   label = "Mode",   type = "combo",    options = { "Vanilla", "Legit" }, value = 1 },
+}
+
+-- Inside any callback, read the live values:
+function module.onTick()
+    if settings.legit then
+        local s = settings.speed
+        -- ...
+    end
+end</code></pre>
+            </div>
+          </div>
+
+          <div class="docs-block" id="scr-lifecycle">
+            <h3>Lifecycle callbacks</h3>
+            <p>Define any of the following functions on the module table. They are invoked exactly like native modules (main thread, once per frame / tick as appropriate).</p>
+            <table class="api-table">
+              <thead><tr><th>Callback</th><th class="ret">When</th></tr></thead>
+              <tbody>
+                <tr><td><code>onEnable()</code></td><td class="desc">Module was turned on.</td></tr>
+                <tr><td><code>onDisable()</code></td><td class="desc">Module was turned off.</td></tr>
+                <tr><td><code>onTick()</code></td><td class="desc">Fixed game tick (≈20 Hz). Best place for movement / interactions.</td></tr>
+                <tr><td><code>onRender()</code></td><td class="desc">Every rendered frame. Best place for <code>draw.*</code> calls.</td></tr>
+                <tr><td><code>onCommand(cmd)</code></td><td class="desc">A chat command line starting with your prefix was sent (raw string).</td></tr>
+                <tr><td><code>onShutdown()</code></td><td class="desc">Client is unloading.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="docs-block" id="scr-api-game">
+            <h3>API · <code style="font-size:1rem">game</code></h3>
+            <p>Read and write local player state. All setters no-op safely when no world is loaded.</p>
+            <table class="api-table">
+              <thead><tr><th>Function</th><th>Returns</th><th class="ret">Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>game.localPlayer()</code></td><td>table&nbsp;|&nbsp;nil</td><td class="desc"><code>name, x, y, z, vx, vy, vz, yaw, pitch, health, height, onGround, slot, leftClick, usingItem, hurtTime, isHurt, eyeX, eyeY, eyeZ</code></td></tr>
+                <tr><td><code>game.players()</code></td><td>table[]</td><td class="desc">Remote players: <code>name, x, y, z, yaw, pitch, health, height, onGround</code>.</td></tr>
+                <tr><td><code>game.setVelocity(x, y, z)</code></td><td>—</td><td class="desc">Sets the local player's velocity vector.</td></tr>
+                <tr><td><code>game.setVelocityXZ(x, z)</code></td><td>—</td><td class="desc">Sets horizontal velocity only.</td></tr>
+                <tr><td><code>game.setPos(x, y, z)</code></td><td>—</td><td class="desc">Teleports the local player.</td></tr>
+                <tr><td><code>game.setOnGround(bool)</code></td><td>—</td><td class="desc">Forces the ground flag.</td></tr>
+                <tr><td><code>game.setYaw(deg)</code></td><td>—</td><td class="desc">Sets yaw (degrees).</td></tr>
+                <tr><td><code>game.setPitch(deg)</code></td><td>—</td><td class="desc">Sets pitch, clamped to −90…90.</td></tr>
+                <tr><td><code>game.hotbar()</code></td><td>table&nbsp;|&nbsp;nil</td><td class="desc">9 entries of <code>{ valid, count, block }</code> plus <code>.selected</code>.</td></tr>
+                <tr><td><code>game.setHotbarSlot(slot)</code></td><td>—</td><td class="desc">Selects hotbar slot, clamped to 0…8.</td></tr>
+                <tr><td><code>game.click([fast])</code></td><td>—</td><td class="desc">Simulates an attack/use click (<code>fast</code> skips cooldown where possible).</td></tr>
+                <tr><td><code>game.camera()</code></td><td>table&nbsp;|&nbsp;nil</td><td class="desc"><code>x, y, z, yaw, pitch</code> of the active camera.</td></tr>
+                <tr><td><code>game.worldToScreen(x, y, z)</code></td><td>number, number&nbsp;|&nbsp;nil</td><td class="desc">Projects a world position to screen coordinates.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="docs-block" id="scr-api-modules">
+            <h3>API · <code style="text-transform:none">modules</code></h3>
+            <table class="api-table">
+              <thead><tr><th>Function</th><th>Returns</th><th class="ret">Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>modules.toggle(name, bool)</code></td><td>—</td><td class="desc">Enables or disables a module by name.</td></tr>
+                <tr><td><code>modules.enabled(name)</code></td><td>bool&nbsp;|&nbsp;nil</td><td class="desc">Current state, or <code>nil</code> if unknown.</td></tr>
+                <tr><td><code>modules.list()</code></td><td>table[]</td><td class="desc"><code>{ name, enabled, category }</code> for every registered module.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="docs-block" id="scr-api-input">
+            <h3>API · <code style="text-transform:none">input</code></h3>
+            <table class="api-table">
+              <thead><tr><th>Function</th><th>Returns</th><th class="ret">Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>input.isDown(key)</code></td><td>bool</td><td class="desc">Key may be a VK number or a name: <code>A</code>–<code>Z</code>, <code>0</code>–<code>9</code>, <code>F1</code>–<code>F24</code>, <code>SPACE</code>, <code>SHIFT</code>, <code>CTRL</code>, <code>ALT</code>, <code>TAB</code>, <code>ENTER</code>, <code>ESC</code>, <code>LMB</code>, <code>RMB</code>, <code>MBUTTON</code>, <code>XBUTTON1/2</code>.</td></tr>
+                <tr><td><code>input.mouseDown([btn])</code></td><td>bool</td><td class="desc"><code>0</code> = left (default), <code>1</code> = right, <code>2</code> = middle.</td></tr>
+                <tr><td><code>input.mouseX()</code> / <code>input.mouseY()</code></td><td>number</td><td class="desc">Cursor position in screen pixels.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="docs-block" id="scr-api-draw">
+            <h3>API · <code style="text-transform:none">draw</code></h3>
+            <p>All drawing happens on the foreground overlay; call from <code>onRender</code>. Colors are <code>r, g, b[, a]</code> in <code>0…255</code> (defaults to white).</p>
+            <table class="api-table">
+              <thead><tr><th>Function</th><th>Returns</th><th class="ret">Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>draw.text(x, y, text[, r,g,b[,a]])</code></td><td>—</td><td class="desc">Draws a text string.</td></tr>
+                <tr><td><code>draw.rect(x1, y1, x2, y2[, filled[, r,g,b[,a]]])</code></td><td>—</td><td class="desc">Rectangle (filled by default).</td></tr>
+                <tr><td><code>draw.line(x1, y1, x2, y2[, r,g,b[,a]])</code></td><td>—</td><td class="desc">A line.</td></tr>
+                <tr><td><code>draw.circle(x, y, r[, r,g,b[,a]])</code></td><td>—</td><td class="desc">Outlined circle.</td></tr>
+                <tr><td><code>draw.filledCircle(x, y, r[, r,g,b[,a]])</code></td><td>—</td><td class="desc">Filled circle.</td></tr>
+                <tr><td><code>draw.textSize(text)</code></td><td>number, number</td><td class="desc">Measured width and height of text.</td></tr>
+                <tr><td><code>draw.width()</code> / <code>draw.height()</code></td><td>number</td><td class="desc">Screen dimensions in pixels.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="docs-block" id="scr-api-misc">
+            <h3>API · <code style="text-transform:none">ui</code>, <code style="text-transform:none">chat</code>, <code style="text-transform:none">friends</code></h3>
+            <div class="docs-group-title">ui</div>
+            <table class="api-table">
+              <thead><tr><th>Function</th><th>Returns</th><th class="ret">Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>ui.notify(text)</code></td><td>—</td><td class="desc">Shows a toast notification on screen.</td></tr>
+              </tbody>
+            </table>
+            <div class="docs-group-title">chat</div>
+            <table class="api-table">
+              <thead><tr><th>Function</th><th>Returns</th><th class="ret">Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>chat.display(text)</code></td><td>bool</td><td class="desc">Prints a local message to the in-game chat.</td></tr>
+              </tbody>
+            </table>
+            <div class="docs-group-title">friends</div>
+            <table class="api-table">
+              <thead><tr><th>Function</th><th>Returns</th><th class="ret">Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>friends.isFriend(name)</code></td><td>bool</td><td class="desc">Whether the name is on the friends list.</td></tr>
+                <tr><td><code>friends.toggle(name)</code></td><td>bool&nbsp;|&nbsp;nil</td><td class="desc">Adds/removes and returns the new state.</td></tr>
+                <tr><td><code>friends.list()</code></td><td>string[]</td><td class="desc">All friend names.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="docs-block" id="scr-examples">
+            <h3>Examples</h3>
+            <h4>1 · Sprint-boost with a toggle</h4>
+            <div class="code-box">
+              <div class="code-header"><span>bhop.lua</span><button class="copy-btn" data-target="scr-code-3"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Copy</button></div>
+              <pre id="scr-code-3"><code>local module = {
+    name = "AutoJump",
+    description = "Jumps while holding the space bar",
+    keybind = "J",
+    settings = {
+        { id = "power", label = "Jump power", type = "slider", min = 0.3, max = 0.6, value = 0.42 },
+    },
+}
+
+function module.onTick()
+    if input.isDown("SPACE") then
+        local me = game.localPlayer()
+        if me and me.onGround then
+            game.setVelocity(me.vx, settings.power, me.vz)
+        end
+    end
+end
+
+return module</code></pre>
+            </div>
+
+            <h4>2 · On-screen info via the draw API</h4>
+            <div class="code-box">
+              <div class="code-header"><span>info.lua</span><button class="copy-btn" data-target="scr-code-4"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Copy</button></div>
+              <pre id="scr-code-4"><code>local module = { name = "Info", description = "Draws your coordinates" }
+
+function module.onRender()
+    local me = game.localPlayer()
+    if not me then return end
+    local label = string.format("%.1f  %.1f  %.1f", me.x, me.y, me.z)
+    draw.rect(10, 10, 10 + draw.textSize(label) + 16, 34, true, 12, 14, 22, 190)
+    draw.text(18, 17, label, 210, 225, 255, 255)
+end
+
+return module</code></pre>
+            </div>
+
+            <h4>3 · Highlight players through the draw API</h4>
+            <div class="code-box">
+              <div class="code-header"><span>tracers.lua</span><button class="copy-btn" data-target="scr-code-5"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Copy</button></div>
+              <pre id="scr-code-5"><code>local module = { name = "Tracer", description = "Line to every non-friend player" }
+
+function module.onRender()
+    local w, h = draw.width(), draw.height()
+    for _, p in ipairs(game.players()) do
+        if not friends.isFriend(p.name) then
+            local sx, sy = game.worldToScreen(p.x, p.y + p.height, p.z)
+            if sx then
+                draw.line(w / 2, h, sx, sy, 160, 200, 255, 170)
+            end
+        end
+    end
+end
+
+return module</code></pre>
+            </div>
+          </div>
+
+          <div class="docs-block" id="scr-notes">
+            <h3>Error handling &amp; notes</h3>
+            <ul class="docs-list">
+              <li>A runtime error in any callback is logged, a toast is shown, and the script module is <strong>automatically disabled</strong> until reloaded.</li>
+              <li><code>reload</code> preserves setting values by matching their <code>id</code>.</li>
+              <li>Scripts run on the client's main thread — keep <code>onTick</code>/<code>onRender</code> lightweight.</li>
+              <li>There is no CPU/time quota: an infinite loop in a callback will stall the client.</li>
+            </ul>
+            <div class="callout callout--danger">
+              <span>⚠</span>
+              <div><strong><code>.script remove</code> deletes the file.</strong> Keep backups of scripts you care about.</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- Architecture & Specs Section -->
   <section id="architecture" class="features-section">
     <div class="container">
       <div class="section-header">
         <span class="badge badge--purple">C++ Engineering</span>
         <h2 class="section-title">Internal Architecture</h2>
-        <p class="section-desc">Built from the ground up prioritizing memory efficiency, low-latency hooks, and extensible modular design.</p>
+        <p class="section-desc">Built from the ground up prioritizing memory efficiency, low-latency hooks, and an extensible modular design.</p>
       </div>
 
       <div class="features-grid">
         <div class="feature-card">
           <div class="feature-icon">⚡</div>
           <h3 class="feature-title">DirectX 11 Present Hook</h3>
-          <p class="feature-desc">Direct swap chain hooking into <code>IDXGISwapChain::Present</code> via MinHook to render the ImGui interface without disrupting the game pipeline.</p>
+          <p class="feature-desc">Swap-chain hooking into <code>IDXGISwapChain::Present</code> via MinHook to render the ImGui overlay without disrupting the game pipeline.</p>
         </div>
 
         <div class="feature-card">
-          <div class="feature-icon">🔍</div>
-          <h3 class="feature-title">Memory Pattern Scanning</h3>
-          <p class="feature-desc">Automated <code>PatternScan</code> module for locating dynamic byte signatures in memory within <code>Minecraft.Win10.DX11.exe</code> across game updates.</p>
+          <div class="feature-icon">🧩</div>
+          <h3 class="feature-title">EnTT Game-State ECS</h3>
+          <p class="feature-desc">Players and world blocks are synchronized into an EnTT registry with events (join/leave/hurt), so modules consume clean data instead of raw offsets.</p>
         </div>
 
         <div class="feature-card">
           <div class="feature-icon">🎨</div>
-          <h3 class="feature-title">ImGui Custom Render Engine</h3>
-          <p class="feature-desc">Animated tab switching with interpolated lerp, drop shadows, and an intuitive draggable HUD element manager (Watermark, Keystrokes, Coords, CPS).</p>
+          <h3 class="feature-title">Glass / Acrylic Pipeline</h3>
+          <p class="feature-desc">A GPU capture → separable Gaussian → rounded-SDF glass composite with refraction and edge lighting, applied to the menu and HUD panels.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">📜</div>
+          <h3 class="feature-title">Sandboxed Luau Runtime</h3>
+          <p class="feature-desc">Per-script VM with declarative settings and native <code>game</code>/<code>draw</code>/<code>input</code> bindings — extend the client without recompiling.</p>
         </div>
 
         <div class="feature-card">
           <div class="feature-icon">⚙️</div>
-          <h3 class="feature-title">Config Manager (nlohmann JSON)</h3>
-          <p class="feature-desc">JSON disk persistence engine to save and load configuration presets, custom color themes, and module toggle states instantaneously.</p>
+          <h3 class="feature-title">Config Manager (JSON)</h3>
+          <p class="feature-desc">nlohmann/json persistence for module states, keybinds, presets, HUD layout and script settings.</p>
         </div>
 
         <div class="feature-card">
-          <div class="feature-icon">🎧</div>
-          <h3 class="feature-title">miniaudio Sound Engine</h3>
-          <p class="feature-desc">Integrated miniaudio library rendering spatial audio feedback and event sound effects on module toggles and UI interaction.</p>
-        </div>
-
-        <div class="feature-card">
-          <div class="feature-icon">⌨️</div>
-          <h3 class="feature-title">Win32 Keybind Blocking Hook</h3>
-          <p class="feature-desc">Intelligent low-level keyboard hook (<code>SetWindowsHookExW</code>) preventing key inputs from bleeding into game controls while typing in the menu.</p>
+          <div class="feature-icon">🛡️</div>
+          <h3 class="feature-title">Fault-Isolated Modules</h3>
+          <p class="feature-desc">SEH + C++ exception guards around every module callback: a faulty module is disabled instead of crashing the process.</p>
         </div>
       </div>
     </div>
@@ -226,60 +561,59 @@
       <div class="section-header">
         <span class="badge badge--purple">Build Prerequisites</span>
         <h2 class="section-title">Development Requirements</h2>
-        <p class="section-desc">Ensure your development workstation meets the required IDE toolchain, compilers, and SDK components before building.</p>
+        <p class="section-desc">Ensure your workstation has a supported toolchain, CMake and the Windows SDK before building.</p>
       </div>
 
       <div class="features-grid">
         <div class="feature-card">
           <div class="feature-icon">💻</div>
-          <h3 class="feature-title">Visual Studio 18 2026</h3>
-          <p class="feature-desc">Primary IDE environment configured with C++ Desktop Development Workload and MSBuild x64 target tools.</p>
+          <h3 class="feature-title">Visual Studio 2026 (MSVC)</h3>
+          <p class="feature-desc">Primary toolchain. Install the <em>Desktop development with C++</em> workload (x64) — includes the MSVC compiler and CMake integration.</p>
         </div>
 
         <div class="feature-card">
           <div class="feature-icon">🛠️</div>
-          <h3 class="feature-title">MSVC v142 Compiler</h3>
-          <p class="feature-desc">Microsoft Visual C++ v142 compiler toolset configured for C++20 language features and low-level memory alignments.</p>
+          <h3 class="feature-title">Clang-CL &amp; MinGW (optional)</h3>
+          <p class="feature-desc">The build is compiler-aware: it also validates with the <strong>Clang-CL</strong> toolset and <strong>MinGW-w64 GCC</strong> (via MSYS2).</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">📦</div>
+          <h3 class="feature-title">CMake 3.25+</h3>
+          <p class="feature-desc">All third-party dependencies (ImGui, MinHook, Luau, SoLoud, EnTT, nlohmann/json) are fetched automatically via <code>FetchContent</code>.</p>
         </div>
 
         <div class="feature-card">
           <div class="feature-icon">🪟</div>
-          <h3 class="feature-title">Windows 11 SDK</h3>
-          <p class="feature-desc">Windows 11 Software Development Kit providing <code>psapi.lib</code>, <code>ws2_32.lib</code>, <code>winhttp.lib</code>, and core Win32 headers.</p>
-        </div>
-
-        <div class="feature-card">
-          <div class="feature-icon">🎮</div>
-          <h3 class="feature-title">DirectX SDK</h3>
-          <p class="feature-desc">DirectX 11 headers and link libraries (<code>d3d11.lib</code>, <code>d3dcompiler.lib</code>, <code>dxgi.lib</code>) for swapchain hooking & shaders.</p>
+          <h3 class="feature-title">Windows SDK (10/11)</h3>
+          <p class="feature-desc">Provides the DirectX 11 headers (<code>d3d11</code>, <code>dxgi</code>), <code>d3dcompiler</code> and the C++/WinRT headers used by the WinRT integrations.</p>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- GitHub Repository Embedded Site & Real Commits Section -->
-  <section id="repository" class="install-section" style="background: rgba(14, 10, 22, 0.3); border-top: 1px solid rgba(255,255,255,0.06); border-bottom: 1px solid rgba(255,255,255,0.06);">
+  <!-- GitHub Repository Section -->
+  <section id="repository" class="install-section" style="background: rgba(15, 14, 24, 0.3); border-top: 1px solid rgba(255,255,255,0.06); border-bottom: 1px solid rgba(255,255,255,0.06);">
     <div class="container">
       <div class="section-header">
         <span class="badge">Open Source Codebase</span>
         <h2 class="section-title">GitHub Repository</h2>
-        <p class="section-desc">Explore the live repository codebase, directory structure, and real latest commits fetched directly from GitHub.</p>
+        <p class="section-desc">Explore the live repository codebase, directory structure, and latest commits fetched directly from GitHub.</p>
       </div>
 
       <div class="github-widget-container">
         <div class="widget-header">
           <div class="widget-title">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
-            AnarchDevelopment / aegledll
+            AnarchDevelopment / AzyreDll
             <span class="badge badge--purple" style="margin-left: 0.5rem; font-size: 0.7rem;">public</span>
           </div>
-          <a href="https://github.com/AnarchDevelopment/aegledll" target="_blank" class="btn btn--primary btn--sm">
-            View on GitHub.com
+          <a href="https://github.com/AnarchDevelopment/AzyreDll" target="_blank" rel="noopener" class="btn btn--primary btn--sm">
+            View on GitHub
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
           </a>
         </div>
 
-        <!-- Interactive GitHub Repository Real Commit Viewer -->
         <div class="repo-site-viewer">
           <div class="repo-meta-bar">
             <div class="repo-meta-item">
@@ -288,28 +622,17 @@
             </div>
             <div class="repo-meta-item">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-              <span>Latest Commit: <strong id="latest-commit-msg">Loading real commit...</strong></span>
-              <span id="latest-commit-sha" class="keybind-badge">4e37ef2</span>
+              <span>Latest Commit: <strong id="latest-commit-msg">Loading…</strong></span>
+              <span id="latest-commit-sha" class="keybind-badge">—</span>
             </div>
           </div>
 
-          <!-- Real Commits Stream Container -->
           <div style="margin-bottom: 1rem; font-size: 0.8rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">
             Recent Repository Commits
           </div>
           <div id="real-commits-list" class="repo-files-list">
-            <!-- Dynamically populated from GitHub API with local fallbacks -->
-            <div class="file-row">
-              <span class="file-name"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M16 12A4 4 0 0 1 12 16"/><line x1="6" y1="12" x2="2" y2="12"/></svg> Solution modified to Multi Thread</span>
-              <span class="file-desc"><span class="keybind-badge">4e37ef2</span> by <strong>iVyz3r</strong></span>
-            </div>
-            <div class="file-row">
-              <span class="file-name"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M16 12A4 4 0 0 1 12 16"/><line x1="6" y1="12" x2="2" y2="12"/></svg> Update license information in README.md</span>
-              <span class="file-desc"><span class="keybind-badge">a902429</span> by <strong>NqtVyzer</strong></span>
-            </div>
-            <div class="file-row">
-              <span class="file-name"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M16 12A4 4 0 0 1 12 16"/><line x1="6" y1="12" x2="2" y2="12"/></svg> Add an4rch Development Public Source License v1.1</span>
-              <span class="file-desc"><span class="keybind-badge">dff222c</span> by <strong>NqtVyzer</strong></span>
+            <div class="file-row" style="justify-content:center;color:var(--text-muted);">
+              <span>⟳ Fetching latest commits from GitHub API…</span>
             </div>
           </div>
         </div>
@@ -321,9 +644,9 @@
   <section id="installation" class="install-section">
     <div class="container">
       <div class="section-header">
-        <span class="badge badge--green">Development & Build</span>
-        <h2 class="section-title">Compilation & Injection</h2>
-        <p class="section-desc">Follow these steps to build <code>AegleDllMSVC.dll</code> using <strong>Visual Studio 18 2026</strong>, <strong>MSVC v142</strong>, <strong>Windows 11 SDK</strong>, and <strong>DirectX SDK</strong>.</p>
+        <span class="badge badge--green">Development &amp; Build</span>
+        <h2 class="section-title">Compilation &amp; Injection</h2>
+        <p class="section-desc">Build <code>AzyreSDK.dll</code> with CMake using <strong>MSVC</strong>, <strong>Clang-CL</strong> or <strong>MinGW-w64</strong>, then inject it into <code>Minecraft.Win10.DX11.exe</code>.</p>
       </div>
 
       <div class="install-grid">
@@ -332,31 +655,31 @@
             <div class="step-number">1</div>
             <div class="step-content">
               <h4>Clone Repository</h4>
-              <p>Clone the source codebase into your development environment.</p>
+              <p>Clone the source: <code>git clone https://github.com/AnarchDevelopment/AzyreDll.git</code></p>
             </div>
           </div>
 
           <div class="step-item">
             <div class="step-number">2</div>
             <div class="step-content">
-              <h4>Configure Toolchain & SDKs</h4>
-              <p>Ensure <strong>Visual Studio 18 2026</strong> has installed the <strong>MSVC v142</strong> build tools, <strong>Windows 11 SDK</strong>, and <strong>DirectX SDK</strong>.</p>
+              <h4>Configure &amp; Build</h4>
+              <p>Use CMake with a supported toolchain. Dependencies download automatically during the configure step.</p>
             </div>
           </div>
 
           <div class="step-item">
             <div class="step-number">3</div>
             <div class="step-content">
-              <h4>Build DLL Binary</h4>
-              <p>Compile <code>AegleDllMSVC.vcxproj</code> under <strong>Release x64</strong> configuration. The resulting DLL will be placed in <code>x64/Release/AegleDllMSVC.dll</code>.</p>
+              <h4>Locate the Binary</h4>
+              <p>The DLL is produced at <code>build/Release/AzyreSDK.dll</code> (MSVC/Clang-CL) or <code>build/AzyreSDK.dll</code> (MinGW).</p>
             </div>
           </div>
 
           <div class="step-item">
             <div class="step-number">4</div>
             <div class="step-content">
-              <h4>Process Injection</h4>
-              <p>Inject <code>AegleDllMSVC.dll</code> into <code>Minecraft.Win10.DX11.exe</code>. Press <kbd>INSERT</kbd> to open the Aegleseeker ClickGUI menu.</p>
+              <h4>Inject</h4>
+              <p>Inject <code>AzyreSDK.dll</code> into <code>Minecraft.Win10.DX11.exe</code>, then press <kbd>INSERT</kbd> to open the Azyre ClickGUI.</p>
             </div>
           </div>
         </div>
@@ -364,20 +687,37 @@
         <div>
           <div class="code-box">
             <div class="code-header">
-              <span>Visual Studio 18 2026 / MSBuild CLI Command</span>
-              <button class="copy-btn" data-target="build-code">
+              <span>MSVC — Visual Studio generator (recommended)</span>
+              <button class="copy-btn" data-target="build-code-msvc">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                 Copy
               </button>
             </div>
-            <pre id="build-code"><code># Clone repository
-git clone https://github.com/AnarchDevelopment/aegledll.git
-cd aegledll
+            <pre id="build-code-msvc"><code>git clone https://github.com/AnarchDevelopment/AzyreDll.git
+cd AzyreDll
 
-# Build using Visual Studio 18 2026 MSBuild (MSVC v142 Toolset, Win11 SDK, DirectX SDK)
-msbuild AegleDllMSVC.vcxproj /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v142
+cmake -B build -G "Visual Studio 18 2026" -A x64
+cmake --build build --config Release --parallel
 
-# Target Process: Minecraft.Win10.DX11.exe</code></pre>
+# Output: build/Release/AzyreSDK.dll</code></pre>
+          </div>
+
+          <div class="code-box">
+            <div class="code-header">
+              <span>Clang-CL &amp; MinGW-w64 (GCC)</span>
+              <button class="copy-btn" data-target="build-code-alt">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                Copy
+              </button>
+            </div>
+            <pre id="build-code-alt"><code># Clang-CL (VS toolset)
+cmake -B build -G "Visual Studio 18 2026" -A x64 -T ClangCL
+cmake --build build --config Release --parallel
+
+# MinGW-w64 / GCC (Ninja, single-config)
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release ^
+      -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++
+cmake --build build --parallel</code></pre>
           </div>
         </div>
       </div>
@@ -388,12 +728,13 @@ msbuild AegleDllMSVC.vcxproj /p:Configuration=Release /p:Platform=x64 /p:Platfor
   <footer class="footer">
     <div class="container footer-inner">
       <div class="footer-brand">
-        <img src="assets/favicon.svg" alt="Aegleseeker Logo">
-        <span>Aegleseeker Client</span>
+        <img src="assets/favicon.svg" alt="Azyre Logo">
+        <span>Azyre Client</span>
       </div>
 
       <div class="footer-text">
-        Under <strong>an4rch Development Public Source License 1.0</strong>. Requires Visual Studio 18 2026, MSVC v142, Windows 11 SDK & DirectX SDK. Target: <code>Minecraft.Win10.DX11.exe</code>.
+        Under the <strong>an4rch Development Public Source License</strong>.
+        Build with MSVC, Clang-CL or MinGW-w64. Target: <code>Minecraft.Win10.DX11.exe</code>.
       </div>
     </div>
   </footer>

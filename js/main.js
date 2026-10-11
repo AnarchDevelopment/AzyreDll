@@ -1,36 +1,27 @@
 /**
- * Aegleseeker Client - Interactive Script
- * Handles navigation, module filters, live HUD interactive preview & code copy
+ * Azyre Client — Interactive Script
+ * Navigation, module filtering, live HUD preview, docs scroll-spy, commit feed.
  */
 
 const GITHUB_OWNER = 'AnarchDevelopment';
-const GITHUB_REPO  = 'aegledll';
+const GITHUB_REPO  = 'AzyreDll';
 
-// Local fallback commits from git log (in case GitHub API is rate-limited)
+// Local fallback commits (used when the GitHub API is rate-limited).
 const LOCAL_COMMITS = [
   {
-    sha: '4e37ef29d9d07be9ba7e382c01ad7e1c44ee22f2',
-    commit: {
-      message: 'Solution modified to Multi Thread',
-      author: { name: 'iVyz3r', date: '2026-07-20T16:17:46-04:00' }
-    },
-    html_url: `https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/commit/4e37ef29d9d07be9ba7e382c01ad7e1c44ee22f2`
+    sha: 'de24a64e057259c666a7dc705d9b8541b8036d75',
+    commit: { message: 'ci: green build across MSVC, Clang-CL and MinGW', author: { name: 'iVyz3r', date: '2026-10-11T03:55:00-04:00' } },
+    html_url: `https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/commit/de24a64e057259c666a7dc705d9b8541b8036d75`
   },
   {
-    sha: 'a90242969689c91b02b8df096010ac47ff026455',
-    commit: {
-      message: 'Update license information in README.md',
-      author: { name: 'NqtVyzer', date: '2026-07-20T16:05:10-04:00' }
-    },
-    html_url: `https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/commit/a90242969689c91b02b8df096010ac47ff026455`
+    sha: '0244b7615384c76424b823f4d31cc0a1aa16dc5c',
+    commit: { message: 'ci: cross-toolchain compatibility (SEH / WinRT / CRT)', author: { name: 'iVyz3r', date: '2026-10-11T03:18:00-04:00' } },
+    html_url: `https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/commit/0244b7615384c76424b823f4d31cc0a1aa16dc5c`
   },
   {
-    sha: 'dff222cc75f2b9f5b3b28dabf687abc6170705cb',
-    commit: {
-      message: 'Add an4rch Development Public Source License v1.1',
-      author: { name: 'NqtVyzer', date: '2026-07-20T16:04:07-04:00' }
-    },
-    html_url: `https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/commit/dff222cc75f2b9f5b3b28dabf687abc6170705cb`
+    sha: '7cae045c4bd5763d4fc02d2ca3bf656fbcbf0583',
+    commit: { message: 'feat: add networking system to Spotify module and IRC implementation', author: { name: 'iVyz3r', date: '2026-10-11T02:59:00-04:00' } },
+    html_url: `https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/commit/7cae045c4bd5763d4fc02d2ca3bf656fbcbf0583`
   }
 ];
 
@@ -40,6 +31,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initHUDInteractiveSim();
   initCopyButtons();
   initGitHubCommits();
+  initDocsScrollSpy();
 });
 
 /* ─── Navbar ─────────────────────────────────────────────────────────────── */
@@ -48,9 +40,11 @@ function initNavbar() {
   const mobileToggle = document.querySelector('.mobile-toggle');
   const navLinks     = document.querySelector('.nav-links');
 
-  window.addEventListener('scroll', () => {
-    navbar.classList.toggle('scrolled', window.scrollY > 30);
-  });
+  if (navbar) {
+    window.addEventListener('scroll', () => {
+      navbar.classList.toggle('scrolled', window.scrollY > 30);
+    });
+  }
 
   if (mobileToggle && navLinks) {
     mobileToggle.addEventListener('click', () => navLinks.classList.toggle('open'));
@@ -66,7 +60,7 @@ function initModulesGrid() {
   const searchInput   = document.getElementById('module-search');
   const tabButtons    = document.querySelectorAll('.tab-btn');
 
-  if (!gridContainer || typeof aegleModules === 'undefined') return;
+  if (!gridContainer || typeof azyreModules === 'undefined') return;
 
   let currentCategory = 'ALL';
   let searchQuery     = '';
@@ -74,7 +68,7 @@ function initModulesGrid() {
   function renderModules() {
     gridContainer.innerHTML = '';
 
-    const filtered = aegleModules.filter(mod => {
+    const filtered = azyreModules.filter(mod => {
       const matchesCat    = (currentCategory === 'ALL') || (mod.category.toUpperCase() === currentCategory);
       const matchesSearch = mod.name.toLowerCase().includes(searchQuery) ||
                             mod.description.toLowerCase().includes(searchQuery) ||
@@ -85,8 +79,8 @@ function initModulesGrid() {
     if (filtered.length === 0) {
       gridContainer.innerHTML = `
         <div style="grid-column: 1 / -1; text-align: center; padding: 3rem 1rem; color: var(--text-muted);">
-          <p style="font-size: 1.1rem; margin-bottom: 0.5rem;">No modules found matching your current search query.</p>
-          <span style="font-size: 0.85rem;">Try searching another keyword or select the "All" tab.</span>
+          <p style="font-size: 1.1rem; margin-bottom: 0.5rem;">No modules found for this query.</p>
+          <span style="font-size: 0.85rem;">Try another keyword or select the "All" tab.</span>
         </div>`;
       return;
     }
@@ -105,7 +99,7 @@ function initModulesGrid() {
         <p class="module-desc">${mod.description}</p>
         <div class="card-footer">
           <div style="display:flex;gap:.4rem;flex-wrap:wrap;">
-            ${mod.tags.map(t => `<span style="font-size:.72rem;color:var(--text-muted);background:rgba(255,255,255,.03);padding:.15rem .45rem;border-radius:4px;">#${t}</span>`).join('')}
+            ${mod.tags.map(t => `<span class="tag">#${t}</span>`).join('')}
           </div>
           <span class="keybind-badge">${mod.keybind}</span>
         </div>`;
@@ -188,6 +182,29 @@ function initCopyButtons() {
   });
 }
 
+/* ─── Docs scroll spy ────────────────────────────────────────────────────── */
+function initDocsScrollSpy() {
+  const links = Array.from(document.querySelectorAll('.docs-toc a'));
+  if (links.length === 0) return;
+
+  const targets = links
+    .map(a => document.querySelector(a.getAttribute('href')))
+    .filter(Boolean);
+  if (targets.length === 0) return;
+
+  const setActive = (id) => {
+    links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + id));
+  };
+
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) setActive(entry.target.id);
+    });
+  }, { rootMargin: '-90px 0px -70% 0px', threshold: 0 });
+
+  targets.forEach(t => observer.observe(t));
+}
+
 /* ─── GitHub Real Commits ─────────────────────────────────────────────────── */
 function initGitHubCommits() {
   const commitsList    = document.getElementById('real-commits-list');
@@ -198,24 +215,18 @@ function initGitHubCommits() {
 
   const apiUrl = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/commits?per_page=5`;
 
-  // Show loading state
   commitsList.innerHTML = `
     <div class="file-row" style="justify-content:center;color:var(--text-muted);">
       <span>⟳ Fetching latest commits from GitHub API…</span>
     </div>`;
 
-  fetch(apiUrl, {
-    headers: { 'Accept': 'application/vnd.github.v3+json' }
-  })
+  fetch(apiUrl, { headers: { 'Accept': 'application/vnd.github.v3+json' } })
     .then(res => {
       if (!res.ok) throw new Error(`GitHub API ${res.status}`);
       return res.json();
     })
     .then(commits => renderCommits(commits))
-    .catch(() => {
-      // Fallback: use local commits recorded from git log
-      renderCommits(LOCAL_COMMITS, true);
-    });
+    .catch(() => renderCommits(LOCAL_COMMITS, true));
 
   function renderCommits(commits, isFallback = false) {
     if (!commits || commits.length === 0) {
@@ -223,15 +234,13 @@ function initGitHubCommits() {
       return;
     }
 
-    // Update latest commit header
     const latest = commits[0];
-    const latestMsg = latest.commit.message.split('\n')[0]; // first line only
+    const latestMsg = latest.commit.message.split('\n')[0];
     const latestSha = latest.sha.substring(0, 7);
 
     if (latestMsgEl) latestMsgEl.textContent = latestMsg;
     if (latestShaEl) latestShaEl.textContent = latestSha;
 
-    // Build commit rows
     commitsList.innerHTML = '';
 
     if (isFallback) {

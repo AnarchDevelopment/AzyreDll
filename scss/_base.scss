@@ -1,8 +1,9 @@
 // ==========================================
-// Aegle Client SCSS Base & Resets
+// Azyre Client — SCSS Base & Resets
 // ==========================================
 
 @use 'variables' as *;
+@use 'mixins' as *;
 
 *, *::before, *::after {
   box-sizing: border-box;
@@ -24,10 +25,28 @@ body {
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-image: 
-    radial-gradient(circle at 15% 15%, rgba(232, 121, 249, 0.08) 0%, transparent 40%),
-    radial-gradient(circle at 85% 65%, rgba(168, 85, 247, 0.09) 0%, transparent 45%);
+  background-image:
+    radial-gradient(circle at 15% 15%, rgba($rb-violet, 0.07) 0%, transparent 42%),
+    radial-gradient(circle at 85% 60%, rgba($rb-sky, 0.08) 0%, transparent 46%),
+    radial-gradient(circle at 50% 100%, rgba($rb-cyan, 0.06) 0%, transparent 50%);
   background-attachment: fixed;
+}
+
+// Moving-rainbow keyframes
+@keyframes gradientFlow {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes floatY {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-10px); }
+}
+
+@keyframes pulseGlow {
+  0%, 100% { opacity: 0.55; }
+  50%      { opacity: 1; }
 }
 
 a {
@@ -48,9 +67,12 @@ code, pre {
   font-family: $font-mono;
 }
 
+img, svg { display: block; }
+
 // Custom Scrollbar
 ::-webkit-scrollbar {
-  width: 8px;
+  width: 10px;
+  height: 10px;
 }
 
 ::-webkit-scrollbar-track {
@@ -58,10 +80,11 @@ code, pre {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(232, 121, 249, 0.25);
   border-radius: $radius-full;
+  background: linear-gradient(180deg, rgba($rb-sky, 0.35), rgba($rb-violet, 0.35));
+  border: 2px solid $bg-dark;
   &:hover {
-    background: rgba(232, 121, 249, 0.5);
+    background: linear-gradient(180deg, rgba($rb-sky, 0.6), rgba($rb-violet, 0.6));
   }
 }
 
@@ -73,10 +96,7 @@ code, pre {
 }
 
 .text-gradient {
-  background: $gradient-primary;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  @include gradient-text;
 }
 
 .badge {
@@ -85,23 +105,36 @@ code, pre {
   gap: 0.4rem;
   padding: 0.35rem 0.85rem;
   border-radius: $radius-full;
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   font-weight: 600;
   letter-spacing: 0.03em;
   text-transform: uppercase;
-  background: rgba(232, 121, 249, 0.12);
-  color: $pink-magenta;
-  border: 1px solid rgba(232, 121, 249, 0.3);
+  color: $rb-sky;
+  background: rgba($rb-sky, 0.12);
+  border: 1px solid rgba($rb-sky, 0.32);
 
   &--purple {
-    background: rgba(168, 85, 247, 0.14);
-    color: #d8b4fe;
-    border-color: rgba(168, 85, 247, 0.35);
+    color: $rb-violet;
+    background: rgba($rb-violet, 0.14);
+    border-color: rgba($rb-violet, 0.34);
   }
 
   &--green {
-    background: rgba(16, 185, 129, 0.12);
     color: #34d399;
+    background: rgba(16, 185, 129, 0.12);
     border-color: rgba(16, 185, 129, 0.3);
   }
+}
+
+// Small rainbow pill (used for version / meta chips)
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: $radius-full;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #0c0a14;
+  @include gradient-anim;
 }
