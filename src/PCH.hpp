@@ -1,5 +1,8 @@
 #pragma once
 
+// Macros de compatibilidad cross-toolchain (SEH fallback para GCC/clang nativo).
+#include "Framework/Compat.hpp"
+
 #include <windows.h>
 #include <cstdint>
 #include <cstddef>
