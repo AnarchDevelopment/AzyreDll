@@ -1,15 +1,23 @@
 #include "Render/DX11.hpp"
 
+#include "Config/Config.hpp"
+#include "Framework/Hook.hpp"
 #include "Framework/Log.hpp"
+#include "Features/ECS/ECS.hpp"
 #include "GUI/Menu.hpp"
 #include "GUI/Theme.hpp"
 #include "Input/InputSystem.hpp"
 #include "Modules/ModuleManager.hpp"
+#include "Render/BlurHelper/BlurHelper.hpp"
+#include "Render/EffectSprites.hpp"
 #include "SDK/Game.hpp"
 #include "resource.h"
 
+#include <windows.h>
 #include <d3d11.h>
+#include <d3dcompiler.h>
 #include <dxgi.h>
+#include <dxgi1_2.h>
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <imgui_impl_dx11.h>
@@ -28,48 +36,117 @@ void* moduleHandle()
     return g_module;
 }
 
-static ImFont* LoadRobotoFont(ImFontAtlas* fonts)
+static ImFont* sehLoadFont(ImFontAtlas* fonts, void* data, int size, float px)
 {
-    if (!g_module)
-        return nullptr;
-
-    HRSRC res = FindResourceW(g_module, MAKEINTRESOURCEW(IDR_ROBOTO), RT_RCDATA);
-    if (!res)
+    __try
     {
-        MC_LOG_ERROR("[Font] Roboto resource not found");
+        ImFontConfig cfg;
+        cfg.FontDataOwnedByAtlas = false;
+        cfg.SizePixels = px;
+        return fonts->AddFontFromMemoryTTF(data, size, px, &cfg);
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER)
+    {
         return nullptr;
     }
-
-    HGLOBAL hg = LoadResource(g_module, res);
-    DWORD size = SizeofResource(g_module, res);
-    void* data = LockResource(hg);
-    if (!data || !size)
-    {
-        MC_LOG_ERROR("[Font] Failed to lock Roboto resource");
-        return nullptr;
-    }
-
-    ImFontConfig cfg;
-    cfg.FontDataOwnedByAtlas = false;
-    cfg.SizePixels = 16.0f;
-
-    ImFont* font = fonts->AddFontFromMemoryTTF(data, (int)size, 16.0f, &cfg);
-    if (!font)
-    {
-        MC_LOG_ERROR("[Font] AddFontFromMemoryTTF failed");
-        return nullptr;
-    }
-
-    MC_LOG("[Font] Roboto loaded (%lu bytes)", size);
-    return font;
 }
 
+static ImFont* g_hudFont = nullptr;
+
+ImFont* hudFont()
+{
+    return g_hudFont;
+}
+
+static void LoadAllFonts(ImFontAtlas* fonts)
+{
+    if (!g_module)
+        return;
+
+    struct FontEntry
+    {
+        int id;
+        const char* name;
+    };
+
+    static const FontEntry entries[] = {
+        {IDR_ROBOTO, "Roboto"},
+        {IDR_COMFORTAA, "Comfortaa"},
+        {IDR_COMFORTAA_BOLD, "Comfortaa-Bold"},
+        {IDR_MOJANGLES, "Mojangles"},
+        {IDR_MOJANGLES_BOLD, "Mojangles-Bold"},
+        {IDR_OPEN_SANS, "Open-Sans"},
+        {IDR_OPEN_SANS_BOLD, "Open-Sans-Bold"},
+        {IDR_PRODUCT_SANS, "Product-Sans"},
+        {IDR_PRODUCT_SANS_BOLD, "Product-Sans-Bold"},
+        {IDR_SF_PRO, "SF-Pro"},
+        {IDR_SF_PRO_BOLD, "SF-Pro-Bold"},
+        {IDR_SARABUN, "Sarabun"},
+    };
+
+    for (const FontEntry& fe : entries)
+    {
+        HRSRC res = FindResourceW(g_module, MAKEINTRESOURCEW(fe.id), RT_RCDATA);
+        if (!res)
+        {
+            MC_LOG_ERROR("[Font] %s: resource not found", fe.name);
+            continue;
+        }
+        HGLOBAL hg = LoadResource(g_module, res);
+        if (!hg)
+        {
+            MC_LOG_ERROR("[Font] %s: LoadResource failed", fe.name);
+            continue;
+        }
+        DWORD fsize = SizeofResource(g_module, res);
+        void* data = LockResource(hg);
+        if (!data || !fsize)
+        {
+            MC_LOG_ERROR("[Font] %s: null data or size", fe.name);
+            continue;
+        }
+
+        if (sehLoadFont(fonts, data, (int)fsize, 16.0f))
+            MC_LOG("[Font] %s: OK (%lu bytes)", fe.name, fsize);
+        else
+            MC_LOG_ERROR("[Font] %s: FAILED (%lu bytes) - corrupted TTF?", fe.name, fsize);
+    }
+
+    // Copia grande del Product Sans Bold para widgets HUD (ArrayList estilo
+    // Solstice): el atlas base es de 16px y escalado a ~25px se ve suave;
+    // esta copia horneada a 26px se ve crujiente en ese rango.
+    {
+        HRSRC res = FindResourceW(g_module, MAKEINTRESOURCEW(IDR_PRODUCT_SANS_BOLD), RT_RCDATA);
+        if (res)
+        {
+            HGLOBAL hg = LoadResource(g_module, res);
+            if (hg)
+            {
+                DWORD fsize = SizeofResource(g_module, res);
+                void* data = LockResource(hg);
+                if (data && fsize)
+                {
+                    g_hudFont = sehLoadFont(fonts, data, (int)fsize, 26.0f);
+                    if (g_hudFont)
+                        MC_LOG("[Font] Product-Sans-Bold-26: OK (hud font)");
+                    else
+                        MC_LOG_ERROR("[Font] Product-Sans-Bold-26: FAILED");
+                }
+            }
+        }
+    }
+
+    MC_LOG("[Font] Atlas: %zu fonts loaded", fonts->Fonts.size());
+}
 typedef HRESULT(__stdcall* PresentFunc)(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT Flags);
 typedef HRESULT(__stdcall* ResizeBuffersFunc)(IDXGISwapChain* pSwapChain, UINT BufferCount, UINT Width, UINT Height,
                                               DXGI_FORMAT NewFormat, UINT SwapChainFlags);
 
 static ID3D11Device* g_pd3dDevice = nullptr;
 static ID3D11DeviceContext* g_pd3dDeviceContext = nullptr;
+
+void* d3dDevice() { return g_pd3dDevice; }
+void* d3dContext() { return g_pd3dDeviceContext; }
 static IDXGISwapChain* g_pSwapChain = nullptr;
 static ID3D11RenderTargetView* g_mainRenderTargetView = nullptr;
 static ID3D11RenderTargetView* g_originalRenderTargetView = nullptr;
@@ -113,118 +190,6 @@ static void CreateRenderTarget(IDXGISwapChain* pSwapChain)
 }
 
 // ---------------------------------------------------------------------------
-// Backdrop acrilico (WinUI): captura el frame del juego y lo desenfoca con
-// dos pases de downscale bilinear (1/4 y 1/16), reutilizando el renderer de
-// ImGui para dibujar los quads sin escribir shaders propios.
-// ---------------------------------------------------------------------------
-
-static ID3D11Texture2D* g_blurTexA = nullptr;
-static ID3D11RenderTargetView* g_blurRtvA = nullptr;
-static ID3D11ShaderResourceView* g_blurSrvA = nullptr;
-static UINT g_blurWA = 0, g_blurHA = 0;
-
-static ID3D11Texture2D* g_blurTexB = nullptr;
-static ID3D11RenderTargetView* g_blurRtvB = nullptr;
-static ID3D11ShaderResourceView* g_blurSrvB = nullptr;
-static UINT g_blurWB = 0, g_blurHB = 0;
-
-static bool g_backdropBroken = false;
-
-static void releaseBackdrop()
-{
-    if (g_blurSrvA) { g_blurSrvA->Release(); g_blurSrvA = nullptr; }
-    if (g_blurRtvA) { g_blurRtvA->Release(); g_blurRtvA = nullptr; }
-    if (g_blurTexA) { g_blurTexA->Release(); g_blurTexA = nullptr; }
-    g_blurWA = g_blurHA = 0;
-
-    if (g_blurSrvB) { g_blurSrvB->Release(); g_blurSrvB = nullptr; }
-    if (g_blurRtvB) { g_blurRtvB->Release(); g_blurRtvB = nullptr; }
-    if (g_blurTexB) { g_blurTexB->Release(); g_blurTexB = nullptr; }
-    g_blurWB = g_blurHB = 0;
-}
-
-static bool createBlurTex(UINT w, UINT h, DXGI_FORMAT format, ID3D11Texture2D** tex,
-                          ID3D11RenderTargetView** rtv, ID3D11ShaderResourceView** srv)
-{
-    D3D11_TEXTURE2D_DESC desc = {};
-    desc.Width = w;
-    desc.Height = h;
-    desc.MipLevels = 1;
-    desc.ArraySize = 1;
-    desc.Format = format;
-    desc.SampleDesc.Count = 1;
-    desc.SampleDesc.Quality = 0;
-    desc.Usage = D3D11_USAGE_DEFAULT;
-    desc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
-
-    if (FAILED(g_pd3dDevice->CreateTexture2D(&desc, nullptr, tex)))
-        return false;
-    if (FAILED(g_pd3dDevice->CreateRenderTargetView(*tex, nullptr, rtv)))
-    {
-        (*tex)->Release();
-        *tex = nullptr;
-        return false;
-    }
-    if (FAILED(g_pd3dDevice->CreateShaderResourceView(*tex, nullptr, srv)))
-    {
-        (*rtv)->Release();
-        *rtv = nullptr;
-        (*tex)->Release();
-        *tex = nullptr;
-        return false;
-    }
-    return true;
-}
-
-static bool ensureBackdrop()
-{
-    if (!g_pd3dDevice || !g_pSwapChain || g_DisplayWidth <= 0.0f || g_DisplayHeight <= 0.0f)
-        return false;
-
-    UINT w = (UINT)g_DisplayWidth;
-    UINT h = (UINT)g_DisplayHeight;
-    UINT wA = (UINT)ImMax(1.0f, g_DisplayWidth * 0.25f);
-    UINT hA = (UINT)ImMax(1.0f, g_DisplayHeight * 0.25f);
-    UINT wB = (UINT)ImMax(1.0f, g_DisplayWidth * 0.125f);
-    UINT hB = (UINT)ImMax(1.0f, g_DisplayHeight * 0.125f);
-
-    if (g_blurTexA && wA == g_blurWA && hA == g_blurHA &&
-        g_blurTexB && wB == g_blurWB && hB == g_blurHB)
-        return true;
-
-    releaseBackdrop();
-
-    // Formato del blur = formato del backbuffer (evita oscurecimiento si el
-    // juego corre HDR con formatos float/10bit).
-    DXGI_FORMAT fmt = DXGI_FORMAT_UNKNOWN;
-    {
-        ID3D11Texture2D* bb = nullptr;
-        if (SUCCEEDED(g_pSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)&bb)))
-        {
-            D3D11_TEXTURE2D_DESC bd = {};
-            bb->GetDesc(&bd);
-            fmt = bd.Format;
-            bb->Release();
-        }
-    }
-    if (fmt == DXGI_FORMAT_UNKNOWN)
-        fmt = DXGI_FORMAT_B8G8R8A8_UNORM;
-
-    if (!createBlurTex(wA, hA, fmt, &g_blurTexA, &g_blurRtvA, &g_blurSrvA))
-        return false;
-    g_blurWA = wA;
-    g_blurHA = hA;
-
-    if (!createBlurTex(wB, hB, fmt, &g_blurTexB, &g_blurRtvB, &g_blurSrvB))
-    {
-        releaseBackdrop();
-        return false;
-    }
-    g_blurWB = wB;
-    g_blurHB = hB;
-    return true;
-}
-
 static void renderQuadToCurrentRT(ID3D11ShaderResourceView* srv, UINT w, UINT h)
 {
     if (!srv || w == 0 || h == 0)
@@ -235,7 +200,7 @@ static void renderQuadToCurrentRT(ID3D11ShaderResourceView* srv, UINT w, UINT h)
     dl->AddImage(ImTextureRef((void*)srv), ImVec2(0.0f, 0.0f), ImVec2((float)w, (float)h));
     dl->PopClipRect();
 
-    ImDrawData dd;
+    ImDrawData dd{};
     dd.Valid = true;
     dd.FrameCount = ImGui::GetFrameCount();
     dd.TotalIdxCount = dl->IdxBuffer.Size;
@@ -253,90 +218,6 @@ static void renderQuadToCurrentRT(ID3D11ShaderResourceView* srv, UINT w, UINT h)
 
     dd.CmdLists.clear();
     IM_DELETE(dl);
-}
-
-static void backdropPassBody()
-{
-    if (!g_pd3dDeviceContext || !g_pSwapChain)
-        return;
-    if (!ensureBackdrop())
-        return;
-
-    g_pd3dDeviceContext->OMSetRenderTargets(0, nullptr, nullptr);
-
-    // SRV efimero del backbuffer: existe SOLO durante este pase. Asi no queda
-    // ninguna referencia a la swapchain al cerrar el menu (eso congelaba la
-    // camara). CopyResource se evita: crashea con buffers flip-model.
-    ID3D11Texture2D* bb = nullptr;
-    ID3D11ShaderResourceView* bbSrv = nullptr;
-    if (FAILED(g_pSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)&bb)))
-        return;
-    HRESULT hr = g_pd3dDevice->CreateShaderResourceView(bb, nullptr, &bbSrv);
-    bb->Release();
-    if (FAILED(hr) || !bbSrv)
-        return;
-
-    // Paso 1: backbuffer -> A (1/4)
-    g_pd3dDeviceContext->OMSetRenderTargets(1, &g_blurRtvA, nullptr);
-    renderQuadToCurrentRT(bbSrv, g_blurWA, g_blurHA);
-
-    // Paso 2: A -> B (1/16, blur final)
-    g_pd3dDeviceContext->OMSetRenderTargets(1, &g_blurRtvB, nullptr);
-    renderQuadToCurrentRT(g_blurSrvA, g_blurWB, g_blurHB);
-
-    g_pd3dDeviceContext->OMSetRenderTargets(0, nullptr, nullptr);
-
-    ID3D11ShaderResourceView* nullSrv = nullptr;
-    g_pd3dDeviceContext->PSSetShaderResources(0, 1, &nullSrv);
-    bbSrv->Release();
-}
-
-static void runBackdropPass()
-{
-    if (g_backdropBroken)
-        return;
-    __try
-    {
-        backdropPassBody();
-    }
-    __except (EXCEPTION_EXECUTE_HANDLER)
-    {
-        g_backdropBroken = true;
-        g_pd3dDeviceContext->OMSetRenderTargets(0, nullptr, nullptr);
-        MC_LOG_ERROR("[Backdrop] Excepcion durante el pase de blur - blur desactivado");
-    }
-}
-
-bool backdropWanted()
-{
-    if (mc::menu::visible())
-        return true;
-
-    const auto& notifs = mc::ModuleManager::get().notifications();
-    if (!notifs.empty())
-    {
-        ULONGLONG now = GetTickCount64();
-        for (const auto& n : notifs)
-            if (now - n.time < 2600ull)
-                return true;
-    }
-
-    // Modulos con panel acrilico: blur en vivo durante el juego (throttled).
-    auto modOn = [](const char* name) {
-        mc::Module* m = mc::ModuleManager::get().find(name);
-        return m && m->enabled();
-    };
-    return modOn("HUD") || modOn("ArrayList") || modOn("Watermark");
-}
-
-bool backdropReady()
-{
-    return g_Initialized && ensureBackdrop();
-}
-
-void* backdropSrv()
-{
-    return (void*)g_blurSrvB;
 }
 
 static HRESULT __stdcall HookedPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT Flags)
@@ -362,6 +243,9 @@ static HRESULT __stdcall HookedPresent(IDXGISwapChain* pSwapChain, UINT SyncInte
 
             CreateRenderTarget(pSwapChain);
 
+            mc::blur::init(g_pd3dDevice, g_pd3dDeviceContext, pSwapChain);
+            mc::blur::setDisplaySize(g_DisplayWidth, g_DisplayHeight);
+
             IMGUI_CHECKVERSION();
             ImGui::CreateContext();
             mc::theme::apply();
@@ -369,17 +253,23 @@ static HRESULT __stdcall HookedPresent(IDXGISwapChain* pSwapChain, UINT SyncInte
             io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
             io.ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange;
             io.ConfigDebugHighlightIdConflicts = false;
+            // Input legacy por polling (MousePos/MouseDown directos + eventos
+            // de wheel): la Trickling Rule difiere el evento de wheel cada
+            // vez que hay un MousePos previo en la cola (i.e. cualquier
+            // micro-movimiento del mouse mientras scrolleas) y lo muere de
+            // inanicion. Con polling plano no aporta nada: fuera.
+            io.ConfigInputTrickleEventQueue = false;
             io.DisplaySize = ImVec2(g_DisplayWidth, g_DisplayHeight);
 
-            ImFont* roboto = LoadRobotoFont(io.Fonts);
-            if (roboto)
-                io.FontDefault = roboto;
+            LoadAllFonts(io.Fonts);
+            if (!io.Fonts->Fonts.empty())
+                io.FontDefault = io.Fonts->Fonts[theme::FontIndex];
 
             ImGui_ImplDX11_Init(g_pd3dDevice, g_pd3dDeviceContext);
 
             g_Initialized = true;
             input::init();
-            ModuleManager::get().notifyInfo("Azyre | 1.1.0 injected - INSERT to open");
+            ModuleManager::get().notifyInfo("Azyre | 1.1.0 injected - INSERT to open", 6.0f);
             MC_LOG("[SUCCESS] ImGui initialized successfully!");
         }
         else
@@ -397,7 +287,24 @@ static HRESULT __stdcall HookedPresent(IDXGISwapChain* pSwapChain, UINT SyncInte
         ImGui_ImplDX11_NewFrame();
         ImGui::NewFrame();
 
+        // Diagnostico del pipeline de scroll: el evento encolado por
+        // input::updateFrame debe verse aqui como io.MouseWheel != 0.
+        if (ImGui::GetIO().MouseWheel != 0.0f)
+        {
+            static ULONGLONG lastMwDbg = 0;
+            ULONGLONG nowMw = GetTickCount64();
+            if (nowMw - lastMwDbg > 200ull)
+            {
+                lastMwDbg = nowMw;
+                MC_LOG("[WheelDBG] io.MouseWheel=%.2f tras NewFrame",
+                       ImGui::GetIO().MouseWheel);
+            }
+        }
+
         Game::get().update();
+        ecs::get().sync(Game::get());
+        ecs::get().syncBlocks(Game::get());
+        ecs::get().dispatcher.update();
         ModuleManager::get().handleKeybinds();
 
         static float tickAccum = 0.0f;
@@ -413,26 +320,56 @@ static HRESULT __stdcall HookedPresent(IDXGISwapChain* pSwapChain, UINT SyncInte
         }
 
         ModuleManager::get().onFrame(ImGui::GetIO().DeltaTime);
+        // Los paneles acrilicos de los widgets registran sus rects este frame;
+        // el BlurHelper los compone en el backbuffer (shader Glass) en runPass.
+        mc::blur::beginAcrylic();
         ModuleManager::get().onRender();
         menu::handleInput();
         menu::render();
         menu::renderToasts();
+        menu::renderHudChrome();
 
         ImGui::EndFrame();
         ImGui::Render();
 
         // Blur del frame del juego cuando algo lo usa. Con el menu abierto va
-        // a full rate; en juego se limita a ~30Hz (el blur es 1/16 de resolucion,
-        // la diferencia es imperceptible y la exposicion con la swapchain minima).
-        if (backdropWanted())
-        {
-            static ULONGLONG lastPassMs = 0;
-            ULONGLONG nowMs = GetTickCount64();
-            if (mc::menu::visible() || nowMs - lastPassMs >= 33ull)
+        // a full rate; en juego se limita a ~30Hz.
+            mc::blur::setDisplaySize(g_DisplayWidth, g_DisplayHeight);
+            mc::blur::identifyGameBbRTV(g_originalRenderTargetView);
+
+            // El composite Mica debe correr a FULL RATE durante TODO el fade
+            // (incluido el de cierre): con el menu visible() en false y solo
+            // el throttle de 33ms, los frames alternan frost/sin-frost durante
+            // la animacion de cierre = parpadeo.
+            bool fadeActive = mc::menu::animationAlpha() > 0.001f;
+            bool bdWanted = mc::blur::wanted() || fadeActive;
+            mc::blur::setRecording(bdWanted);
+            mc::blur::armProxy(bdWanted);
+            if (bdWanted)
             {
-                runBackdropPass();
-                lastPassMs = nowMs;
+                static ULONGLONG lastPassMs = 0;
+                ULONGLONG nowMs = GetTickCount64();
+                // MotionBlur graba a full rate: los ghosts deben ser frames
+                // consecutivos o el trail queda entrecortado.
+                if (mc::menu::visible() || fadeActive || mc::blur::ghostRecording() ||
+                    nowMs - lastPassMs >= 33ull)
+                {
+                    mc::blur::runPass(g_originalRenderTargetView);
+                    lastPassMs = nowMs;
+                }
             }
+            else
+            {
+                mc::blur::clearRing();
+            }
+
+        // Con el proxy activo el juego nunca dibujo en el backbuffer real:
+        // volcar el frame capturado antes de renderizar el overlay.
+        if (void* proxyFrame = mc::blur::takeProxyFrame())
+        {
+            g_pd3dDeviceContext->OMSetRenderTargets(1, &g_mainRenderTargetView, nullptr);
+            renderQuadToCurrentRT((ID3D11ShaderResourceView*)proxyFrame,
+                                  (UINT)g_DisplayWidth, (UINT)g_DisplayHeight);
         }
 
         g_pd3dDeviceContext->OMSetRenderTargets(1, &g_mainRenderTargetView, nullptr);
@@ -459,7 +396,12 @@ static HRESULT __stdcall HookedResizeBuffers(IDXGISwapChain* pSwapChain, UINT Bu
 {
     MC_LOG("[VTable] ResizeBuffers called - Width: %d, Height: %d", Width, Height);
 
-    releaseBackdrop();
+    mc::blur::onResize();
+
+    if (g_pd3dDeviceContext)
+    {
+        g_pd3dDeviceContext->OMSetRenderTargets(0, nullptr, nullptr);
+    }
 
     if (g_mainRenderTargetView)
     {
@@ -553,7 +495,10 @@ bool install()
 
 void shutdown()
 {
-    releaseBackdrop();
+    // Texturas propias antes de soltar el device (sprites de efectos, etc).
+    mc::fxsprites::unloadAll();
+
+    mc::blur::shutdown();
 
     if (g_pSwapChainVTable)
     {
