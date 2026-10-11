@@ -69,6 +69,15 @@ namespace useItemPacket
     constexpr uintptr_t Flag = 0x58;
 }
 
+namespace textPacket
+{
+    constexpr uintptr_t Type = 0x08;
+    constexpr uintptr_t SourceName = 0x18;
+    constexpr uintptr_t Message = 0x38;
+    constexpr uintptr_t MessageSize = 0x48;
+    constexpr uintptr_t MessageCap = 0x50;
+}
+
 namespace chain
 {
     constexpr uintptr_t PlayerLevel = 0x90;
@@ -94,6 +103,16 @@ namespace chat
     constexpr uintptr_t MsgSourceName = 0x08;
     constexpr uintptr_t MsgVariant = 0x28;
     constexpr uintptr_t MsgText = 0x48;
+}
+
+// Efectos activos: ScreenContext (cacheado por el hook del render) ->
+// dueno del vector en +0x290 -> vector de 16 bytes por entrada
+// (id:+0, duration ticks:+4, amplifier:+8). Mismos offsets que el prototipo.
+namespace effects
+{
+    constexpr uintptr_t CtxOwner = 0x290;
+    constexpr uintptr_t VectorBegin = 0xCB8;
+    constexpr uintptr_t VectorEnd = 0xCC0;
 }
 
 namespace damage
@@ -139,6 +158,23 @@ namespace fn
     constexpr uintptr_t BlockSourceHelper = 0x5E8B50;
     constexpr uintptr_t BlockSourceDestructor = 0x5E6C20;
     constexpr uintptr_t BlockSourceConstructor = 0x5E6B20;
+
+    // (this, NetworkIdentifier*, Packet*)
+    constexpr uintptr_t SendToServer = 0x38B940;
+
+    // ChatCtrl::addMessage(this, const std::string&, const std::string&, int, char)
+    constexpr uintptr_t ChatAddMessage = 0x0C5C00;
+
+    // Render que recibe el ScreenContext* como segundo arg (firma completa
+    // desconocida: el thunk de SDK/Effects.cpp solo roba rdx sin tocar el
+    // resto). Es el mismo que usa el prototipo de potion_hud.py.
+    constexpr uintptr_t RenderWithScreenContext = 0x090B60;
+
+    // MouseDevice::feed(this, actionButtonId, buttonData, x, y, dx, dy,
+    // forceMotionlessPointer): la entrada universal de input del juego.
+    // actionButtonId 4 = wheel (0x78/0x7F arriba, 0x88/0x80 abajo).
+    // RVA pendiente desde IDA (firma de Solstice no matchea este build).
+    constexpr uintptr_t MouseDeviceFeed = 0;
 }
 
 namespace gameconst
@@ -219,6 +255,29 @@ namespace misc
     constexpr uintptr_t Reach = 0xB52A70;
     constexpr uintptr_t HitboxExpand = 0x4B57B0;
     constexpr uintptr_t GlideFallback = 0x4D740B;
+}
+
+// ---- Lectura de bloques e items -------------------------------------------
+// El objeto Block* (retorno de BlockSource::getBlock, RVA 0x5E73F0) no tiene
+// layout confirmado en este build: se prueban varios offsets candidatos y se
+// acepta el primer int con valor plausible. Ajustar en IDA si ningun candidato
+// acierta (basta con poner el correcto primero).
+namespace block
+{
+    inline constexpr uintptr_t IdCandidates[] = {
+        0x08, 0x0C, 0x10, 0x14, 0x18, 0x1C, 0x20, 0x24,
+        0x28, 0x2C, 0x30, 0x34, 0x38, 0x3C};
+    inline constexpr int IdMin = 0;
+    inline constexpr int IdMax = 4096;
+}
+
+// El Item* (ItemInstance::item()) tampoco tiene el offset del id confirmado.
+namespace item
+{
+    inline constexpr uintptr_t IdCandidates[] = {0x08, 0x0C, 0x10, 0x14,
+                                                 0x18, 0x1C, 0x20, 0x24};
+    inline constexpr int IdMin = 0;
+    inline constexpr int IdMax = 4096;
 }
 
 }

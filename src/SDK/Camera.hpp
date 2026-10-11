@@ -132,8 +132,14 @@ inline float readGameFov(float fallback = 110.0f)
 
     auto tryFile = [](const char* path) -> float {
         FILE* fp = nullptr;
+#ifdef _MSC_VER
         if (fopen_s(&fp, path, "r") != 0 || !fp)
             return 0.0f;
+#else
+        fp = std::fopen(path, "r");
+        if (!fp)
+            return 0.0f;
+#endif
         char line[256];
         float found = 0.0f;
         while (fgets(line, sizeof(line), fp))

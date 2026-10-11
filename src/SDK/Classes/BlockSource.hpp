@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Framework/Memory.hpp"
+#include "SDK/Offsets.hpp"
 #include "SDK/VTables.hpp"
 
 namespace mc {
@@ -18,6 +19,12 @@ public:
         return mem::read<uintptr_t>(addr) == mem::resolve(vt::BlockSource);
     }
     uintptr_t address() const { return addr; }
+
+    // Block* (o 0 si falla). Llama a BlockSource::getBlock via SEH.
+    uintptr_t getBlockPtr(int x, int y, int z) const;
+    // Id numerico legacy del bloque (o -1 si no se pudo leer).
+    int getBlockId(int x, int y, int z) const;
+    bool isAir(int x, int y, int z) const;
 
 private:
     uintptr_t addr = 0;

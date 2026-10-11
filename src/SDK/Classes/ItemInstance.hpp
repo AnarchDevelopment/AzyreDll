@@ -21,6 +21,18 @@ public:
     int metadata() const { return mem::read<int>(addr + off::item::Metadata); }
     uintptr_t item() const { return mem::read<uintptr_t>(addr + off::item::ItemPtr); }
 
+    // Vtable del Item* (para clasificar por tipo: DiggerItem, BowItem, etc).
+    uintptr_t itemVtable() const
+    {
+        uintptr_t ip = item();
+        return ip ? mem::read<uintptr_t>(ip) : 0;
+    }
+
+    bool isToolVtable() const { return itemVtable() == mem::resolve(vt::DiggerItem); }
+
+    // Id numerico legacy del Item* (o -1 si no se pudo leer).
+    int itemId() const;
+
     static bool isBlockItemVtable(uintptr_t itemVtable)
     {
         if (!itemVtable)
