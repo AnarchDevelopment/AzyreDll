@@ -4,8 +4,10 @@
 #include "Features/Friends.hpp"
 #include "Framework/Log.hpp"
 #include "GUI/Widgets.hpp"
+#include "Input/KeyNames.hpp"
 #include "Modules/ModuleManager.hpp"
 #include "SDK/Camera.hpp"
+#include "SDK/ChatHook.hpp"
 #include "SDK/Classes/MoveInputHandler.hpp"
 #include "SDK/Game.hpp"
 
@@ -535,39 +537,7 @@ int parseKeyCode(lua_State* L, int idx)
     const char* s = lua_tostring(L, idx);
     if (!s || !s[0])
         return 0;
-    if (s[1] == '\0')
-        return (int)(unsigned char)std::toupper((unsigned char)s[0]);
-
-    std::string k = s;
-    for (char& c : k)
-        c = (char)std::toupper((unsigned char)c);
-    if (k == "SPACE")
-        return VK_SPACE;
-    if (k == "SHIFT")
-        return VK_SHIFT;
-    if (k == "CTRL" || k == "CONTROL")
-        return VK_CONTROL;
-    if (k == "ALT")
-        return VK_MENU;
-    if (k == "TAB")
-        return VK_TAB;
-    if (k == "ENTER" || k == "RETURN")
-        return VK_RETURN;
-    if (k == "ESC" || k == "ESCAPE")
-        return VK_ESCAPE;
-    if (k == "LMB")
-        return VK_LBUTTON;
-    if (k == "RMB")
-        return VK_RBUTTON;
-    if (k == "MBUTTON")
-        return VK_MBUTTON;
-    if (k.size() >= 2 && k[0] == 'F')
-    {
-        int f = atoi(k.c_str() + 1);
-        if (f >= 1 && f <= 24)
-            return VK_F1 + f - 1;
-    }
-    return 0;
+    return input::keyCodeFromName(s);
 }
 
 static int l_input_isDown(lua_State* L)
@@ -635,6 +605,18 @@ static int l_friends_list(lua_State* L)
     return 1;
 }
 
+// ---- chat ----
+
+static int l_chat_display(lua_State* L)
+{
+    const char* s = lua_tostring(L, 1);
+    bool ok = false;
+    if (s && s[0])
+        ok = chathook::display(s);
+    lua_pushboolean(L, ok);
+    return 1;
+}
+
 void makeGroup(lua_State* L, const char* gname,
                std::initializer_list<std::pair<const char*, lua_CFunction>> fns)
 {
@@ -672,9 +654,10 @@ void installBindings(lua_State* L)
               {"mouseX", l_input_mouseX},
               {"mouseY", l_input_mouseY}});
     makeGroup(L, "friends",
-             {{"isFriend", l_friends_isFriend},
-              {"toggle", l_friends_toggle},
-              {"list", l_friends_list}});
+              {{"isFriend", l_friends_isFriend},
+               {"toggle", l_friends_toggle},
+               {"list", l_friends_list}});
+    makeGroup(L, "chat", {{"display", l_chat_display}});
     makeGroup(L, "draw",
              {{"text", l_draw_text},
               {"rect", l_draw_rect},
@@ -926,6 +909,7 @@ public:
     void onDisable() override { callField("onDisable"); }
     void onTick() override { callField("onTick"); }
     void onRender() override { callField("onRender"); }
+    void onCommand(const std::string& cmd) override { callField("onCommand", cmd.c_str()); }
     void onShutdown() override { closeVm(); }
 
     void drawSettings() override
@@ -1039,7 +1023,7 @@ private:
         lua_setglobal(L_, "settings");
     }
 
-    void callField(const char* field)
+    void callField(const char* field, const char* strArg = nullptr)
     {
         if (!L_ || errored_)
             return;
@@ -1058,8 +1042,14 @@ private:
         }
 
         pushSettingsGlobal();
+        int nargs = 0;
+        if (strArg)
+        {
+            lua_pushstring(L_, strArg);
+            nargs = 1;
+        }
 
-        if (lua_pcall(L_, 0, 0, 0) != 0)
+        if (lua_pcall(L_, nargs, 0, 0) != 0)
         {
             const char* e = lua_tostring(L_, -1);
             lastError_ = e ? e : "unknown error";
@@ -1172,6 +1162,47 @@ void reload()
         MC_LOG("[Script] Reloaded: %s", m->name().c_str());
     }
     loadAll();
+}
+
+std::vector<ScriptInfo> list()
+{
+    std::vector<ScriptInfo> out;
+    for (ScriptModule* m : g_modules)
+        out.push_back({m->name(), m->file(), m->errored()});
+    return out;
+}
+
+bool remove(const std::string& name)
+{
+    for (size_t i = 0; i < g_modules.size(); ++i)
+    {
+        ScriptModule* m = g_modules[i];
+        bool byName = (m->name() == name);
+        bool byFile = (m->file() == name) || (fileBaseName(m->file()) == name);
+        if (!byName && !byFile)
+            continue;
+
+        std::string path = m->file();
+        if (!ModuleManager::get().remove(m->name()))
+            return false;
+
+        g_modules.erase(g_modules.begin() + i);
+        auto it = std::find(g_files.begin(), g_files.end(), path);
+        if (it != g_files.end())
+            g_files.erase(it);
+
+        if (DeleteFileA(path.c_str()))
+        {
+            MC_LOG("[Script] Removed: %s (%s)", m->name().c_str(), path.c_str());
+        }
+        else
+        {
+            MC_LOG_ERROR("[Script] Removed module %s but file delete failed: %s",
+                         m->name().c_str(), path.c_str());
+        }
+        return true;
+    }
+    return false;
 }
 
 void shutdown()
