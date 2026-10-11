@@ -7,14 +7,21 @@
 #include "Input/InputSystem.hpp"
 #include "Input/WheelHook.hpp"
 #include "Modules/ModuleManager.hpp"
+#include "Networking/Spotify/SpotifyService.hpp"
 #include "Render/DX11.hpp"
+#include "Input/MouseHook.hpp"
 #include "Scripting/Scripting.hpp"
+#include "SDK/ChatHook.hpp"
+#include "SDK/Effects.hpp"
 #include "SDK/Game.hpp"
 
+#ifdef _MSC_VER
 #include <winrt/Windows.Foundation.h>
+#endif
 
-static DWORD WINAPI Bootstrap(LPVOID)
+static void initCom()
 {
+#ifdef _MSC_VER
     try
     {
         winrt::init_apartment(winrt::apartment_type::multi_threaded);
@@ -22,22 +29,48 @@ static DWORD WINAPI Bootstrap(LPVOID)
     catch (...)
     {
     }
+#else
+    // Toolchains no-MSVC (CI): inicializacion COM clasica en vez de WinRT.
+    CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+#endif
+}
 
+static DWORD WINAPI Bootstrap(LPVOID)
+{
+    initCom();
+
+    MC_LOG("[BOOT] 1: installing wheel...");
     mc::wheel::install();
+    MC_LOG("[BOOT] 2: crash handler...");
     mc::log::installCrashHandler();
+    MC_LOG("[BOOT] 3: config init (early para el log path)...");
+    mc::config::init();
+    MC_LOG("[BOOT] 4: log file redirect...");
+    mc::log::setFile((mc::config::baseDir() + "\\azyre_sdk.log").c_str());
+    MC_LOG("[BOOT] 5: sound...");
     mc::sound::setModule(mc::dx11::moduleHandle());
     mc::sound::init();
-    // Precalcular rutas (WinRT solo en este hilo MTA) y cargar scripts antes
-    // de la config para que sus estados persistidos se apliquen.
-    mc::config::init();
-    mc::log::setFile((mc::config::baseDir() + "\\azyre_sdk.log").c_str());
+    MC_LOG("[BOOT] 6: scripts...");
     mc::scripts::loadAll();
+    MC_LOG("[BOOT] 7: config load...");
     mc::config::loadAll();
+    MC_LOG("[BOOT] 7b: spotify callback server (localhost:8888)...");
+    mc::spotify::startServer();
+    MC_LOG("[BOOT] 8: window title...");
     mc::window::setTitle("Azyre | 1.1.0");
+    MC_LOG("[BOOT] 9: dx11 install...");
 
     if (mc::dx11::install())
     {
+        MC_LOG("[BOOT] 10: game scanner...");
         mc::Game::get().install();
+        MC_LOG("[BOOT] 11: chat hook...");
+        mc::chathook::install();
+        MC_LOG("[BOOT] 12: effects hook...");
+        mc::effects::install();
+        MC_LOG("[BOOT] 13: mouse hook...");
+        mc::mousehook::install();
+        MC_LOG("[BOOT] 14: ALL BOOT STEPS COMPLETE");
         MC_LOG("[SUCCESS] DX11 hooks active - waiting for Present call...");
     }
     else
@@ -55,13 +88,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID)
         mc::dx11::setModule(hModule);
         mc::wheel::setModule(hModule);
 
-        try
-        {
-            winrt::init_apartment(winrt::apartment_type::multi_threaded);
-        }
-        catch (...)
-        {
-        }
+        initCom();
 
         mc::log::init("azyre_sdk.log");
         MC_LOG("=========================================");
@@ -77,7 +104,11 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID)
         mc::config::saveAll();
         mc::scripts::shutdown();
         mc::wheel::uninstall();
+        mc::mousehook::uninstall();
+        mc::chathook::uninstall();
+        mc::effects::uninstall();
         mc::ModuleManager::get().shutdownAll();
+        mc::spotify::shutdown();
         mc::Game::get().uninstall();
         mc::input::shutdown();
         mc::sound::shutdown();
