@@ -51,6 +51,28 @@ bool create(void* target, void* detour, void** original)
     return true;
 }
 
+void remove(void* target)
+{
+    if (!g_initialized || !target)
+        return;
+
+    MH_STATUS status = MH_DisableHook(target);
+    if (status != MH_OK)
+    {
+        MC_LOG_ERROR("[MinHook] MH_DisableHook(%p) failed: %d", target, (int)status);
+        return;
+    }
+
+    status = MH_RemoveHook(target);
+    if (status != MH_OK)
+    {
+        MC_LOG_ERROR("[MinHook] MH_RemoveHook(%p) failed: %d", target, (int)status);
+        return;
+    }
+
+    MC_LOG("[MinHook] Removed %p", target);
+}
+
 void shutdown()
 {
     if (!g_initialized)

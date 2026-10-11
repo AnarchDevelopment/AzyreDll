@@ -17,6 +17,7 @@ bool g_ready = false;
 SoLoud::Soloud g_soloud;
 SoLoud::Wav g_wavOn;
 SoLoud::Wav g_wavOff;
+SoLoud::Wav g_wavAlert;
 
 bool loadResourceSound(SoLoud::Wav& wav, int resourceId, const char* name)
 {
@@ -75,6 +76,7 @@ bool init()
 
     bool on = loadResourceSound(g_wavOn, IDR_CELESTIAL_ON, "celestial_on");
     bool off = loadResourceSound(g_wavOff, IDR_CELESTIAL_OFF, "celestial_off");
+    bool alert = loadResourceSound(g_wavAlert, IDR_ALERT, "alert");
 
     if (!on && !off)
     {
@@ -82,6 +84,8 @@ bool init()
         MC_LOG_ERROR("[Sound] No sounds loaded - sound system disabled");
         return false;
     }
+
+    (void)alert;
 
     g_ready = true;
     MC_LOG("[SUCCESS] SoLoud ready (winmm backend)");
@@ -109,6 +113,13 @@ void playOff()
     if (!g_ready || !g_wavOff.mSampleCount)
         return;
     g_soloud.setVolume(g_soloud.play(g_wavOff), 0.6f);
+}
+
+void playAlert()
+{
+    if (!g_ready || !g_wavAlert.mSampleCount)
+        return;
+    g_soloud.setVolume(g_soloud.play(g_wavAlert), 0.85f);
 }
 
 }

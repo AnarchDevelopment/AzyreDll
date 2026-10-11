@@ -4,7 +4,9 @@
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
+#ifdef _MSC_VER
 #include <eh.h>
+#endif
 #include <exception>
 #include <fstream>
 
@@ -15,17 +17,31 @@ static FILE* g_err = nullptr;
 static char g_fileBuf[260] = "azyre_sdk.log";
 static bool g_ready = false;
 
+static void copyPath(char* dst, size_t cap, const char* src)
+{
+    if (!dst || cap == 0 || !src)
+        return;
+#ifdef _MSC_VER
+    strncpy_s(dst, cap, src, _TRUNCATE);
+#else
+    strncpy(dst, src, cap - 1);
+    dst[cap - 1] = '\0';
+#endif
+}
+
 void init(const char* file)
 {
-    if (file && *file)
-    {
-        strncpy_s(g_fileBuf, file, _TRUNCATE);
-    }
+    copyPath(g_fileBuf, sizeof(g_fileBuf), file);
     if (!GetConsoleWindow())
         AllocConsole();
 
+#ifdef _MSC_VER
     freopen_s(&g_out, "CONOUT$", "w", stdout);
     freopen_s(&g_err, "CONOUT$", "w", stderr);
+#else
+    g_out = std::freopen("CONOUT$", "w", stdout);
+    g_err = std::freopen("CONOUT$", "w", stderr);
+#endif
     SetConsoleTitle(L"Azyre - Debug");
 
     HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
@@ -39,10 +55,7 @@ void init(const char* file)
 
 void setFile(const char* file)
 {
-    if (file && *file)
-    {
-        strncpy_s(g_fileBuf, file, _TRUNCATE);
-    }
+    copyPath(g_fileBuf, sizeof(g_fileBuf), file);
 }
 
 // =====================================================================
@@ -77,6 +90,7 @@ static LONG WINAPI unhandledLogger(EXCEPTION_POINTERS* ep)
     return EXCEPTION_CONTINUE_SEARCH;
 }
 
+#ifdef _MSC_VER
 static void __cdecl invalidParamLogger(const wchar_t*, const wchar_t*, const wchar_t*, unsigned,
                                         uintptr_t)
 {
@@ -85,6 +99,7 @@ static void __cdecl invalidParamLogger(const wchar_t*, const wchar_t*, const wch
              GetCurrentThreadId());
     rawFatalWrite(buf);
 }
+#endif
 
 static void terminateLogger()
 {
@@ -121,7 +136,9 @@ static void terminateLogger()
 void installCrashHandler()
 {
     std::set_terminate(terminateLogger);
+#ifdef _MSC_VER
     _set_invalid_parameter_handler(invalidParamLogger);
+#endif
     SetUnhandledExceptionFilter(unhandledLogger);
 }
 

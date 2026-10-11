@@ -45,6 +45,11 @@ std::string readString(uintptr_t addr);
 
 uintptr_t readPtr(uintptr_t addr);
 
+// Escanea la imagen del modulo buscando un patron de bytes con wildcards
+// ("48 89 5C 24 ? 41 56 ..."). Devuelve la direccion del primer match o 0.
+// Cacheado por patron: el escaneo completo solo corre una vez.
+uintptr_t findPattern(const char* pattern);
+
 using ValidateFn = std::function<bool(uintptr_t)>;
 
 struct VtableQuery

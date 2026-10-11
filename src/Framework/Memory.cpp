@@ -1,8 +1,11 @@
 #include "Memory.hpp"
 
+#include "Log.hpp"
+
 #include <windows.h>
 #include <cmath>
 #include <cstring>
+#include <map>
 #include <vector>
 
 namespace mc::mem {
@@ -179,6 +182,96 @@ std::string readString(uintptr_t addr)
     if (!rawRead(out.data(), ptr, strSize))
         return {};
     return out;
+}
+
+namespace {
+
+struct PatByte
+{
+    uint8_t value;
+    bool wildcard;
+};
+
+int hexVal(char c)
+{
+    if (c >= '0' && c <= '9')
+        return c - '0';
+    if (c >= 'A' && c <= 'F')
+        return c - 'A' + 10;
+    if (c >= 'a' && c <= 'f')
+        return c - 'a' + 10;
+    return -1;
+}
+
+} // namespace
+
+uintptr_t findPattern(const char* pattern)
+{
+    if (!pattern || !*pattern)
+        return 0;
+
+    // Cache por string de patron: el escaneo de la imagen es caro.
+    static std::map<std::string, uintptr_t> cache;
+    std::string key(pattern);
+    auto cached = cache.find(key);
+    if (cached != cache.end())
+        return cached->second;
+
+    std::vector<PatByte> bytes;
+    const char* p = pattern;
+    while (*p)
+    {
+        if (*p == ' ' || *p == '\t')
+        {
+            ++p;
+            continue;
+        }
+        if (*p == '?')
+        {
+            bytes.push_back({0, true});
+            ++p;
+            if (*p == '?')
+                ++p;
+            continue;
+        }
+        int hi = hexVal(p[0]);
+        int lo = p[1] ? hexVal(p[1]) : -1;
+        if (hi < 0 || lo < 0)
+            break; // patron malformado
+        bytes.push_back({(uint8_t)((hi << 4) | lo), false});
+        p += 2;
+    }
+    if (bytes.empty())
+        return 0;
+
+    const ModuleInfo& info = moduleInfo();
+    if (!info.base || info.size <= bytes.size())
+        return 0;
+
+    uintptr_t end = info.base + info.size - bytes.size();
+    for (uintptr_t addr = info.base; addr <= end; ++addr)
+    {
+        bool match = true;
+        for (size_t i = 0; i < bytes.size(); ++i)
+        {
+            if (bytes[i].wildcard)
+                continue;
+            if (*(volatile uint8_t*)(addr + i) != bytes[i].value)
+            {
+                match = false;
+                break;
+            }
+        }
+        if (match)
+        {
+            cache[key] = addr;
+            return addr;
+        }
+    }
+
+    MC_LOG("[Mem] findPattern: sin matches");
+    cache[key] = 0;
+    return 0;
 }
 
 static bool regionScannable(const MEMORY_BASIC_INFORMATION& mbi)
