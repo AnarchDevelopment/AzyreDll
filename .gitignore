@@ -3,8 +3,14 @@
 ##
 ## Get latest from https://github.com/github/gitignore/blob/main/VisualStudio.gitignore
 
+# Agents
+opencode
+.freebuff
+.claude
+
 [Bb]uild/
-XD.txt
+gitstatus_stdout.txt
+libs/
 
 # User-specific files
 *.rsuser

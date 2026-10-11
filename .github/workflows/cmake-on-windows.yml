@@ -1,4 +1,4 @@
-name: CMake on Windows
+name: CI
 
 on:
   push:
@@ -9,16 +9,62 @@ on:
 env:
   BUILD_TYPE: Release
 
-jobs:
-  build:
-    runs-on: windows-latest
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
+jobs:
+  windows-msvc:
+    name: Windows - MSVC
+    runs-on: windows-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
       - name: Configure CMake
-        run: cmake -B build -A x64
+        run: cmake -B build -G "Visual Studio 18 2026" -A x64
 
       - name: Build
-        run: cmake --build build --config ${{ env.BUILD_TYPE }}
+        run: cmake --build build --config ${{ env.BUILD_TYPE }} --parallel
+
+  windows-gcc:
+    name: Windows - GCC (MinGW)
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja
+
+      - name: Configure CMake
+        run: cmake -S . -B build -G Ninja
+             -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
+             -DCMAKE_C_COMPILER=gcc
+             -DCMAKE_CXX_COMPILER=g++
+
+      - name: Build
+        run: cmake --build build --parallel
+
+  windows-clang:
+    name: Windows - Clang (clang-cl)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Configure CMake (ClangCL toolset)
+        run: cmake -B build -G "Visual Studio 18 2026" -A x64 -T ClangCL
+
+      - name: Build
+        run: cmake --build build --config ${{ env.BUILD_TYPE }} --parallel

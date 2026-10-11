@@ -39,13 +39,18 @@ FetchContent_Declare(
     URL https://github.com/jarikomppa/soloud/archive/refs/heads/master.tar.gz
 )
 
+FetchContent_Declare(
+    entt
+    URL https://github.com/skypjack/entt/archive/refs/heads/master.tar.gz
+)
+
 # Luau: solo librerias (VM + Compiler), sin herramientas de desarrollo.
 set(LUAU_BUILD_CLI OFF CACHE BOOL "" FORCE)
 set(LUAU_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(LUAU_BUILD_FUZZER OFF CACHE BOOL "" FORCE)
 set(LUAU_BUILD_ANALYSIS OFF CACHE BOOL "" FORCE)
 
-FetchContent_MakeAvailable(imgui minhook json luau soloud)
+FetchContent_MakeAvailable(imgui minhook json luau soloud entt)
 
 set(IMGUI_SOURCES
     ${imgui_SOURCE_DIR}/imgui.cpp
@@ -147,6 +152,7 @@ endif()
 
 target_compile_definitions(AzyreSDK PRIVATE
     WIN32_LEAN_AND_MEAN
+    _CRT_SECURE_NO_WARNINGS
     NOMINMAX
     UNICODE
     _UNICODE
@@ -154,23 +160,64 @@ target_compile_definitions(AzyreSDK PRIVATE
     WITH_WINMM
 )
 
-target_compile_options(AzyreSDK PRIVATE /utf-8 /MP /W3)
+# Flags por compilador:
+#   - cl.exe:      /utf-8 + /MP (paralelo) + /W3
+#   - clang-cl:    entiende /utf-8 y /W3, pero NO /MP (clang-cl lo rechaza)
+#   - clang nativo / gcc: flags POSIX (-Wall ...) en vez de /x
+set(AZYRE_FLAGS "")
+if(MSVC)
+    set(AZYRE_FLAGS "/utf-8" "/W3")
+    if(NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+        list(APPEND AZYRE_FLAGS "/MP")
+    endif()
+else()
+    set(AZYRE_FLAGS "-Wall" "-Wextra" "-Wno-unused-parameter" "-Wno-unused-but-set-variable")
+endif()
+target_compile_options(AzyreSDK PRIVATE ${AZYRE_FLAGS})
 
 target_precompile_headers(AzyreSDK PRIVATE
     "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_CURRENT_SOURCE_DIR}/src/PCH.hpp>"
 )
 
+# Directorio de import libs del Windows SDK (um/x64). MinGW no trae
+# d3dcompiler_47.a: se apunta a d3dcompiler.lib del SDK (COFF import lib que
+# ld de MinGW linkea via ruta/full path o -L).
+set(_kits_lib_dir "")
+if(EXISTS "C:/Program Files (x86)/Windows Kits/10/Lib")
+    file(GLOB _kit_lib_versions LIST_DIRECTORIES true "C:/Program Files (x86)/Windows Kits/10/Lib/*")
+    list(SORT _kit_lib_versions)
+    list(REVERSE _kit_lib_versions)
+    foreach(_l IN LISTS _kit_lib_versions)
+        if(EXISTS "${_l}/um/x64")
+            set(_kits_lib_dir "${_l}/um/x64")
+            break()
+        endif()
+    endforeach()
+endif()
+
+# Librerias del sistema: nombres de import lib dependen del toolchain.
+#   - MSVC:    d3dcompiler + windowsapp (WinRT)
+#   - Clang/l: el d3dcompiler del SDK suele llamarse d3dcompiler_47 y
+#              windowsapp.lib no existe → hay que encontrar la lib o dejarla
+#              fuera si el SDK no la provee.
+set(AZYRE_SYSTEM_LIBS d3d11 dxgi user32 shell32 ole32 winmm ws2_32 winhttp)
+if(MSVC)
+    list(APPEND AZYRE_SYSTEM_LIBS d3dcompiler windowsapp)
+else()
+    target_link_directories(AzyreSDK PRIVATE ${_kits_lib_dir})
+    find_library(AZYRE_D3DCOMPILER_LIB NAMES d3dcompiler_47 d3dcompiler
+                 HINTS ${_kits_lib_dir})
+    if(AZYRE_D3DCOMPILER_LIB)
+        list(APPEND AZYRE_SYSTEM_LIBS ${AZYRE_D3DCOMPILER_LIB})
+    endif()
+endif()
+
 target_link_libraries(AzyreSDK PRIVATE
-    d3d11
-    dxgi
-    user32
-    shell32
-    ole32
-    winmm
-    windowsapp
+    ${AZYRE_SYSTEM_LIBS}
     nlohmann_json::nlohmann_json
     Luau.Compiler
     Luau.VM
+    EnTT::EnTT
 )
 
 set_target_properties(AzyreSDK PROPERTIES OUTPUT_NAME "AzyreSDK")
