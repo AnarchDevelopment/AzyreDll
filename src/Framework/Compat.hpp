@@ -22,12 +22,11 @@
 // __try/__except para su SEH) esten antes de remapear.
 #    include <windows.h>
 
-#    undef __try
+// NOTA: en GCC/MinGW-x64 (MSYS2) `__try` es una KEYWORD nativa del
+// compilador que equivale a `try` — no se puede redefinir con #define.
+// Por eso solo remapeamos __except para que forme un try/catch valido.
 #    undef __except
-#    ifndef __try
-#        define __try if (true)
-#    endif
 #    ifndef __except
-#        define __except(x) else
+#        define __except(x) catch (...)
 #    endif
 #endif
