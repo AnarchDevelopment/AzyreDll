@@ -29,4 +29,12 @@
 #    ifndef __except
 #        define __except(x) catch (...)
 #    endif
+
+// GetExceptionCode() es un intrinsic SEH de MSVC: dentro del catch(...) de
+// GCC no hay codigo de excepcion real y el simbolo `_exception_code` no
+// existe al linkear. Se degrada a 0 (solo informativo en el log).
+#    undef GetExceptionCode
+#    ifndef GetExceptionCode
+#        define GetExceptionCode() (0)
+#    endif
 #endif
