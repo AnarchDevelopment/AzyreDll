@@ -172,6 +172,10 @@ if(MSVC)
     endif()
 else()
     set(AZYRE_FLAGS "-Wall" "-Wextra" "-Wno-unused-parameter" "-Wno-unused-but-set-variable")
+    # Compat.hpp SIEMPRE disponible en toolchains no-MSVC: el PCH de CMake no
+    # se genera de forma fiable para GCC con genex, asi que se fuerza -include
+    # (Compat es self-contained: incluye windows.h y remapea __try/__except).
+    list(APPEND AZYRE_FLAGS "-include" "${CMAKE_CURRENT_SOURCE_DIR}/src/Framework/Compat.hpp")
 endif()
 target_compile_options(AzyreSDK PRIVATE ${AZYRE_FLAGS})
 
@@ -219,5 +223,11 @@ target_link_libraries(AzyreSDK PRIVATE
     Luau.VM
     EnTT::EnTT
 )
+
+# Toolchains no-MSVC (GCC/MinGW): DLL autocontenida — no depender de
+# libgcc/libstdc++/winpthreads dinámicas en el target.
+if(NOT MSVC)
+    target_link_options(AzyreSDK PRIVATE -static -static-libgcc)
+endif()
 
 set_target_properties(AzyreSDK PROPERTIES OUTPUT_NAME "AzyreSDK")

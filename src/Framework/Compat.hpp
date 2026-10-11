@@ -18,6 +18,10 @@
 // ============================================================================
 
 #if !defined(_MSC_VER)
+// Self-contained: aseguramos que los headers del sistema (que pueden definir
+// __try/__except para su SEH) esten antes de remapear.
+#    include <windows.h>
+
 #    undef __try
 #    undef __except
 #    ifndef __try
