@@ -1,9 +1,10 @@
 #pragma once
 
-// Macros de compatibilidad cross-toolchain (SEH fallback para GCC/clang nativo).
-#include "Framework/Compat.hpp"
-
 #include <windows.h>
+
+// Macros de compatibilidad cross-toolchain. Se incluyen DESPUES de windows.h:
+// MinGW tambien define __try/__except en sus headers, y aqui las remapeamos.
+#include "Framework/Compat.hpp"
 #include <cstdint>
 #include <cstddef>
 #include <cstdio>

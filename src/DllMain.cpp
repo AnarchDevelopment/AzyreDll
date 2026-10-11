@@ -17,6 +17,8 @@
 
 #ifdef _MSC_VER
 #include <winrt/Windows.Foundation.h>
+#else
+#include <objbase.h> // CoInitializeEx / COINIT_MULTITHREADED (GCC/MinGW)
 #endif
 
 static void initCom()
