@@ -1,0 +1,45 @@
+# Azyre SDK — formato basado en LLVM con ajustes del proyecto
+BasedOnStyle: LLVM
+Standard: c++20
+Language: Cpp
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+ColumnLimit: 100
+
+# Alineacion de access specifiers
+AccessModifierOffset: -4
+IndentAccessModifiers: false
+
+# Llaves: attach (mismo estilo que el proyecto)
+BreakBeforeBraces: Attach
+
+# Punteros: pegado al tipo
+PointerAlignment: Right
+DerivePointerAlignment: false
+
+# Includes: ordena y agrupa
+SortIncludes: CaseSensitive
+IncludeBlocks: Preserve
+
+# Espacios
+SpaceAfterCStyleCast: true
+SpaceBeforeParens: ControlStatements
+SpacesBeforeTrailingComments: 2
+
+# Enum: una linea si cabe
+AllowShortEnumsOnASingleLine: true
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLambdasOnASingleLine: All
+
+# Align
+AlignConsecutiveAssignments: false
+AlignConsecutiveDeclarations: false
+AlignTrailingComments: true
+AlignOperands: Align
+
+# Misc
+KeepEmptyLinesAtTheStartOfBlocks: false
+MaxEmptyLinesToKeep: 1
+InsertNewlineAtEOF: true
