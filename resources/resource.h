@@ -49,3 +49,6 @@
 #define IDR_EFFECT_28 142
 #define IDR_EFFECT_29 143
 #define IDR_EFFECT_30 144
+
+// Cabeza de Steve (PlayerList / TAB HUD).
+#define IDR_STEVE_HEAD 146

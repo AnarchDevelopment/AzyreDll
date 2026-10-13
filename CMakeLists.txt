@@ -206,7 +206,7 @@ endif()
 #              fuera si el SDK no la provee.
 set(AZYRE_SYSTEM_LIBS d3d11 dxgi user32 shell32 ole32 winmm ws2_32 winhttp)
 if(MSVC)
-    list(APPEND AZYRE_SYSTEM_LIBS d3dcompiler windowsapp)
+    list(APPEND AZYRE_SYSTEM_LIBS d3dcompiler windowsapp d2d1)
 else()
     target_link_directories(AzyreSDK PRIVATE ${_kits_lib_dir})
     find_library(AZYRE_D3DCOMPILER_LIB NAMES d3dcompiler_47 d3dcompiler

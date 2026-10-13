@@ -47,3 +47,5 @@ IDR_EFFECT_27 RCDATA "Effect/Sprites/slow_falling.png"
 IDR_EFFECT_28 RCDATA "Effect/Sprites/bad_omen.png"
 IDR_EFFECT_29 RCDATA "Effect/Sprites/village_hero.png"
 IDR_EFFECT_30 RCDATA "Effect/Sprites/darkness.png"
+
+IDR_STEVE_HEAD RCDATA "Skin/steve_head.png"
