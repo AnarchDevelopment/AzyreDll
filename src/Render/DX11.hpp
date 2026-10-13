@@ -25,4 +25,8 @@ void* d3dContext();
 // nullptr si el resource no cargo.
 ImFont* hudFont();
 
+// Mojangles (fuente Minecraft) a 16px — la usa el PlayerList (TAB).
+// nullptr si el resource no cargo.
+ImFont* gameFont();
+
 }

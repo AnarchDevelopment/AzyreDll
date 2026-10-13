@@ -5,6 +5,7 @@
 #include "GUI/Theme.hpp"
 #include "Modules/impl/Interface/Interface.hpp"
 #include "Render/DX11.hpp"
+#include "Render/D2D/D2D.hpp"
 #include "Render/BlurHelper/BlurHelper.hpp"
 
 #include <imgui.h>
@@ -103,13 +104,27 @@ void AcrylicPanel(ImDrawList* d, const ImVec2& min, const ImVec2& max,
 
     SoftShadow(d, min, max, rounding, shadowStrength * alpha, shadowSpread);
 
+    // Modo Solstice: blur con Direct2D (callback en el draw list).
+#ifdef _MSC_VER
+    if (gui::blurMode() == 1)
+    {
+        if (D2D::addBlur(d, 10.0f, ImVec4(min.x, min.y, max.x, max.y), rounding))
+        {
+            d->AddRectFilled(min, max, IM_COL32(16, 20, 28, (int)(66.0f * alpha)), rounding);
+            if (drawBorder)
+                d->AddRect(min, max, IM_COL32(255, 255, 255, (int)(22.0f * alpha)), rounding, 0, 1.0f);
+            return;
+        }
+    }
+#endif
+
+    // Modo Native: panel acrilico via BlurHelper (DX11).
     const bool haveGlass = blur::ready() && blur::srv();
     if (haveGlass)
         blur::addAcrylicRect(min.x, min.y, max.x, max.y, rounding, alpha);
     else
         d->AddRectFilled(min, max, IM_COL32(31, 31, 33, (int)(200.0f * alpha)), rounding);
 
-    // Scrim sobre el vidrio compuesto (blur a la vista, tarjeta apenas tinta).
     d->AddRectFilled(min, max, IM_COL32(16, 20, 28, (int)(66.0f * alpha)), rounding);
     if (drawBorder)
         d->AddRect(min, max, IM_COL32(255, 255, 255, (int)(22.0f * alpha)), rounding, 0, 1.0f);

@@ -12,6 +12,7 @@
 #include <deque>
 #include <mutex>
 #include <random>
+#include <set>
 #include <thread>
 
 namespace mc::irc {
@@ -34,6 +35,50 @@ std::deque<std::string> g_chatQueue;
 std::deque<std::string> g_sendQueue;
 
 std::string g_nick;
+
+// Nicks presentes en el canal (lowercase). Solo se toca bajo g_mutex.
+std::set<std::string> g_users;
+
+std::string lowerStr(std::string s)
+{
+    for (char& c : s)
+        c = (char)std::tolower((unsigned char)c);
+    return s;
+}
+
+// Quita prefijos de op/voice (@ + ~ & %) del nombre en una lista NAMES.
+std::string stripUserPrefix(const std::string& n)
+{
+    size_t i = 0;
+    while (i < n.size() && (n[i] == '@' || n[i] == '+' || n[i] == '~' || n[i] == '&' ||
+                            n[i] == '%'))
+        ++i;
+    return n.substr(i);
+}
+
+void userAdd(const std::string& nick)
+{
+    if (nick.empty())
+        return;
+    std::lock_guard<std::mutex> lock(g_mutex);
+    g_users.insert(lowerStr(nick));
+}
+
+void userRemove(const std::string& nick)
+{
+    if (nick.empty())
+        return;
+    std::lock_guard<std::mutex> lock(g_mutex);
+    g_users.erase(lowerStr(nick));
+}
+
+void userRename(const std::string& oldNick, const std::string& newNick)
+{
+    std::lock_guard<std::mutex> lock(g_mutex);
+    g_users.erase(lowerStr(oldNick));
+    if (!newNick.empty())
+        g_users.insert(lowerStr(newNick));
+}
 
 void pushLog(const std::string& line)
 {
@@ -142,6 +187,25 @@ void handleLine(SOCKET s, const std::string& line)
         return;
     }
 
+    if (cmd == "353") // RPL_NAMREPLY: lista de usuarios del canal
+    {
+        size_t colon = args.find(':');
+        std::string names = (colon == std::string::npos) ? args : args.substr(colon + 1);
+        size_t i = 0;
+        while (i < names.size())
+        {
+            size_t sp = names.find(' ', i);
+            std::string tok = (sp == std::string::npos) ? names.substr(i) : names.substr(i, sp - i);
+            tok = stripUserPrefix(tok);
+            if (!tok.empty())
+                userAdd(tok);
+            if (sp == std::string::npos)
+                break;
+            i = sp + 1;
+        }
+        return;
+    }
+
     if (cmd == "PRIVMSG")
     {
         // PRIVMSG <target> :<text>
@@ -160,19 +224,31 @@ void handleLine(SOCKET s, const std::string& line)
     // JOIN/PART/QUIT del canal: avisos de connects/desconects en el chat.
     if (cmd == "JOIN")
     {
+        userAdd(prefixNick(prefix));
         pushChat("§a*** " + prefixNick(prefix) + " joined");
         return;
     }
 
     if (cmd == "PART")
     {
+        userRemove(prefixNick(prefix));
         pushChat("§7*** " + prefixNick(prefix) + " left the channel");
         return;
     }
 
     if (cmd == "QUIT")
     {
+        userRemove(prefixNick(prefix));
         pushChat("§7*** " + prefixNick(prefix) + " disconnected");
+        return;
+    }
+
+    if (cmd == "NICK")
+    {
+        std::string nn = args;
+        if (!nn.empty() && nn[0] == ':')
+            nn = nn.substr(1);
+        userRename(prefixNick(prefix), nn);
         return;
     }
 
@@ -429,6 +505,34 @@ std::vector<std::string> pollChat()
 Status status()
 {
     return g_status;
+}
+
+std::vector<std::string> users()
+{
+    std::lock_guard<std::mutex> lock(g_mutex);
+    return {g_users.begin(), g_users.end()};
+}
+
+bool isAzyreUser(const std::string& mcName)
+{
+    std::string target = lowerStr(sanitizeNick(mcName));
+    if (target.empty())
+        return false;
+
+    std::lock_guard<std::mutex> lock(g_mutex);
+    if (g_users.count(target))
+        return true;
+
+    for (const std::string& u : g_users)
+    {
+        std::string base = u;
+        size_t p = base.find("_(azyre_");
+        if (p != std::string::npos)
+            base = base.substr(0, p);
+        if (base == target)
+            return true;
+    }
+    return false;
 }
 
 }

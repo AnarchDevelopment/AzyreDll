@@ -18,7 +18,14 @@ constexpr uintptr_t PacketSender = 0xE699D0;
 constexpr uintptr_t ServerNetworkHandler = 0xE6BDA0;
 
 constexpr uintptr_t BlockSource = 0xEAEDD8;
+constexpr uintptr_t Block = 0xE7B470;
 constexpr uintptr_t Level = 0xEAF9F8;
+
+// Chunk sources (para validar la cadena de lectura de bloques).
+constexpr uintptr_t ChunkSource = 0xEAEFF8;
+constexpr uintptr_t MainChunkSource = 0xEAF1B0;
+constexpr uintptr_t PlayerChunkSource = 0xEAF350;
+constexpr uintptr_t FlatLevelSource = 0xEAFEF8;
 constexpr uintptr_t MultiPlayerLevel = 0xE62878;
 constexpr uintptr_t ServerLevel = 0xE6CCE0;
 

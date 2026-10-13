@@ -28,6 +28,7 @@ bool g_broken = false;       // SEH desactivo el pase para siempre
 bool g_hasContent = false;   // gaussB tiene un blur valido del frame actual
 bool g_debugCompositeRaw = false; // F11: componer la captura RAW sin blur
 bool g_ghostRecording = false;    // MotionBlur: capturar frames al anillo
+bool g_menuGlass = true;          // composite Glass del menu (off en modo Solstice)
 
 // Paneles acrilicos de los widgets registrados este frame (hilo de Present,
 // mismo hilo que runPass: sin mutex). Se limpian en beginAcrylic().
@@ -92,6 +93,10 @@ void passBody(ID3D11RenderTargetView* boundRtv)
         needChain = modOn("HUD") || modOn("ArrayList") || modOn("Watermark") ||
                     modOn("PotionHUD") || modOn("NameTags");
     }
+    // Widgets acrilicos registrados este frame (PlayerList, etc): necesitan la
+    // cadena de blur aunque no haya modulos "de blur" ni el menu abierto.
+    if (!needChain && !g_acrylic.empty())
+        needChain = true;
     if (!needChain)
     {
         passes::restore(bag);
@@ -123,7 +128,7 @@ void passBody(ID3D11RenderTargetView* boundRtv)
         // ClickGUI::mainCompositePS): la escena escarchada REEMPLAZA la
         // pantalla — sin overlays ImGui, sin blending. RTV fresco del
         // backbuffer (el del juego puede ser null en Present).
-        bool compMenu = menuAnim > 0.001f;
+        bool compMenu = (menuAnim > 0.001f) && g_menuGlass;
         bool compWidgets = !g_acrylic.empty();
         if (compMenu || compWidgets)
         {
@@ -279,6 +284,10 @@ bool wanted()
     if (g_ghostRecording)
         return true;
 
+    // Widgets acrilicos registrados este frame (PlayerList, etc).
+    if (!g_acrylic.empty())
+        return true;
+
     // Modulos con panel acrilico: blur en vivo durante el juego (throttled).
     auto modOn = [](const char* name) {
         mc::Module* m = mc::ModuleManager::get().find(name);
@@ -289,6 +298,16 @@ bool wanted()
 
     // NameTags (usa el blur para el fondo de los tags).
     return modOn("NameTags");
+}
+
+bool hasAcrylic()
+{
+    return !g_acrylic.empty();
+}
+
+void setMenuGlass(bool on)
+{
+    g_menuGlass = on;
 }
 
 bool ready()

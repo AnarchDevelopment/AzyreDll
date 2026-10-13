@@ -22,6 +22,8 @@ public:
 
     // Block* (o 0 si falla). Llama a BlockSource::getBlock via SEH.
     uintptr_t getBlockPtr(int x, int y, int z) const;
+    // Variante con BlockPos pasado por referencia (getBlock(const BlockPos&)).
+    uintptr_t getBlockPtrRef(int x, int y, int z) const;
     // Id numerico legacy del bloque (o -1 si no se pudo leer).
     int getBlockId(int x, int y, int z) const;
     bool isAir(int x, int y, int z) const;

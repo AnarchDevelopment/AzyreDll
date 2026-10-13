@@ -11,6 +11,9 @@ namespace mc {
 IRCModule::IRCModule()
     : Module("IRC", "Bridge to the IRC channel (Libera #aeglegeneral)", Category::Misc, 0)
 {
+    // Habilitado por defecto: el PlayerList usa la lista del canal para
+    // detectar usuarios que estan usando Azyre (nombre con gradiente).
+    setEnabled(true);
 }
 
 void IRCModule::onEnable()

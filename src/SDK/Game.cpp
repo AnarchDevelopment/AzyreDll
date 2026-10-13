@@ -2,6 +2,7 @@
 
 #include "Framework/Log.hpp"
 #include "Features/BotFilter.hpp"
+#include "SDK/VTables.hpp"
 
 #include <cmath>
 #include <condition_variable>
@@ -465,6 +466,28 @@ void Game::refreshBotFilter()
 
 uintptr_t Game::blockSourceAddr() const
 {
+    auto isBlockSource = [](uintptr_t p) {
+        return p && mem::isReadable(p, sizeof(uintptr_t)) &&
+               mem::read<uintptr_t>(p) == mem::resolve(vt::BlockSource);
+    };
+
+    // Candidatos: en algunos builds `level_` ES el block source; en otros
+    // cuelga de level+0x198 o de local+0x1F0. Se valida por vtable.
+    uintptr_t candidates[4] = {0, 0, 0, 0};
+    int n = 0;
+    if (level_)
+    {
+        candidates[n++] = level_;
+        candidates[n++] = mem::read<uintptr_t>(level_ + off::chain::LevelBlockSource);
+    }
+    if (local_)
+        candidates[n++] = mem::read<uintptr_t>(local_ + off::player::BlockSourceAlt);
+
+    for (int i = 0; i < n; ++i)
+        if (isBlockSource(candidates[i]))
+            return candidates[i];
+
+    // Fallback (aunque la vtable no cuadre): logica original.
     if (level_)
     {
         uintptr_t bs = mem::read<uintptr_t>(level_ + off::chain::LevelBlockSource);

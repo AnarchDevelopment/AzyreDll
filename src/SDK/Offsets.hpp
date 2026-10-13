@@ -280,4 +280,36 @@ namespace item
     inline constexpr int IdMax = 4096;
 }
 
+// ---- Lectura de bloques por chunks (LevelChunk) ---------------------------
+// Cadena: BlockSource +0x18 -> ChunkSource +0x20 -> MainChunkSource +0x38
+// (std::unordered_map<ChunkPos, LevelChunk*>).  La lista se recorre por los
+// nodos (_Myhead, _Next).  El array de bloques del LevelChunk es 16x16x128
+// bytes (1 byte por bloque) con indice (z_local + 16*x_local)*128 + y.
+namespace chunk
+{
+    constexpr uintptr_t BlockSourceChunkSource = 0x18; // BlockSource -> ChunkSource
+    constexpr uintptr_t ChunkSourceMain = 0x20;        // ChunkSource -> MainChunkSource
+    constexpr uintptr_t MainChunkSourceHashMap = 0x38; // hash_map de chunks
+
+    // std::unordered_map (layout de este build)
+    constexpr uintptr_t HashMapHead = 0x00; // _Myhead (nodo centinela)
+    constexpr uintptr_t HashMapSize = 0x08; // _Mysize (numero de chunks)
+
+    // Nodo de la lista
+    constexpr uintptr_t NodeNext = 0x00;  // _Next
+    constexpr uintptr_t NodeKeyX = 0x10;  // chunkX (key)
+    constexpr uintptr_t NodeKeyZ = 0x14;  // chunkZ (key)
+    constexpr uintptr_t NodeValue = 0x20; // LevelChunk*
+
+    // LevelChunk
+    constexpr uintptr_t X = 0x28;      // chunkX
+    constexpr uintptr_t Z = 0x2C;      // chunkZ
+    constexpr uintptr_t State = 0x80;  // state (>= 2 = cargado)
+    constexpr uintptr_t Blocks = 2704; // 0xA90 — u8[32768] (Y 0..127)
+
+    constexpr int BoundsXZ = 16;
+    constexpr int Height = 128;
+    constexpr int Volume = 16 * 16 * 128;
+}
+
 }

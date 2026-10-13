@@ -51,6 +51,12 @@ void* takeProxyFrame(); // proxy SRV si el juego renderizo en el este frame
 // refraccion), incluso con el menu cerrado durante el gameplay.
 void beginAcrylic();
 void addAcrylicRect(float x1, float y1, float x2, float y2, float radius, float alpha);
+// true si se registraron paneles acrilicos este frame (permite al Present
+// hook correr el pase a full rate en vez del throttle de ~30Hz).
+bool hasAcrylic();
+
+// Modo Solstice: desactiva el composite Glass nativo del menu (lo hace D2D).
+void setMenuGlass(bool on);
 
 // Debug F11: el composite Mica usa la captura RAW (sin blur) en lugar del
 // gaussB — separa "composite dibuja" vs "cadena de blur rota".

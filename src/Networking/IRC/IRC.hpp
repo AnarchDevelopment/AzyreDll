@@ -36,4 +36,11 @@ std::vector<std::string> pollChat();
 
 Status status();
 
+// Nicks actualmente en el canal (lowercase). Snapshot thread-safe.
+std::vector<std::string> users();
+
+// true si el nombre de jugador (MC) corresponde a un cliente que esta en el
+// canal IRC (Azyre), tolerando el sufijo "_(azyre_N)" y case-insensitive.
+bool isAzyreUser(const std::string& mcName);
+
 }

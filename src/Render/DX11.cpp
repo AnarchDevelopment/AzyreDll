@@ -8,8 +8,11 @@
 #include "GUI/Theme.hpp"
 #include "Input/InputSystem.hpp"
 #include "Modules/ModuleManager.hpp"
+#include "Modules/impl/Interface/Interface.hpp"
 #include "Render/BlurHelper/BlurHelper.hpp"
 #include "Render/EffectSprites.hpp"
+#include "Render/ResourceSprites.hpp"
+#include "Render/D2D/D2D.hpp"
 #include "SDK/Game.hpp"
 #include "resource.h"
 
@@ -52,10 +55,17 @@ static ImFont* sehLoadFont(ImFontAtlas* fonts, void* data, int size, float px)
 }
 
 static ImFont* g_hudFont = nullptr;
+static ImFont* g_gameFont = nullptr;
 
 ImFont* hudFont()
 {
     return g_hudFont;
+}
+
+// Mojangles (fuente Minecraft) — la usa el PlayerList (TAB).
+ImFont* gameFont()
+{
+    return g_gameFont;
 }
 
 static void LoadAllFonts(ImFontAtlas* fonts)
@@ -106,8 +116,13 @@ static void LoadAllFonts(ImFontAtlas* fonts)
             continue;
         }
 
-        if (sehLoadFont(fonts, data, (int)fsize, 16.0f))
+        ImFont* loaded = sehLoadFont(fonts, data, (int)fsize, 16.0f);
+        if (loaded)
+        {
+            if (fe.id == IDR_MOJANGLES)
+                g_gameFont = loaded;
             MC_LOG("[Font] %s: OK (%lu bytes)", fe.name, fsize);
+        }
         else
             MC_LOG_ERROR("[Font] %s: FAILED (%lu bytes) - corrupted TTF?", fe.name, fsize);
     }
@@ -352,7 +367,7 @@ static HRESULT __stdcall HookedPresent(IDXGISwapChain* pSwapChain, UINT SyncInte
                 // MotionBlur graba a full rate: los ghosts deben ser frames
                 // consecutivos o el trail queda entrecortado.
                 if (mc::menu::visible() || fadeActive || mc::blur::ghostRecording() ||
-                    nowMs - lastPassMs >= 33ull)
+                    mc::blur::hasAcrylic() || nowMs - lastPassMs >= 33ull)
                 {
                     mc::blur::runPass(g_originalRenderTargetView);
                     lastPassMs = nowMs;
@@ -373,7 +388,34 @@ static HRESULT __stdcall HookedPresent(IDXGISwapChain* pSwapChain, UINT SyncInte
         }
 
         g_pd3dDeviceContext->OMSetRenderTargets(1, &g_mainRenderTargetView, nullptr);
+
+        // Solstice blur (D2D): SOLO en modo Solstice. En modo Native, D2D queda
+        // completamente inerte (ni init ni begin/end) para no interferir con el
+        // device del juego. La init es lazy: la primera vez que se usa.
+#ifdef _MSC_VER
+        bool d2dActive = (mc::gui::blurMode() == 1);
+        if (d2dActive)
+        {
+            static bool s_d2dInited = false;
+            if (!s_d2dInited)
+            {
+                D2D::init(pSwapChain, g_pd3dDevice);
+                s_d2dInited = true;
+            }
+            IDXGISurface* d2dSurface = nullptr;
+            if (SUCCEEDED(pSwapChain->GetBuffer(0, __uuidof(IDXGISurface), (void**)&d2dSurface)) &&
+                d2dSurface)
+            {
+                D2D::beginRender(d2dSurface, 96.0f);
+                d2dSurface->Release();
+            }
+        }
+#endif
         ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
+#ifdef _MSC_VER
+        if (d2dActive)
+            D2D::endRender();
+#endif
 
         if (g_originalRenderTargetView)
         {
@@ -497,6 +539,10 @@ void shutdown()
 {
     // Texturas propias antes de soltar el device (sprites de efectos, etc).
     mc::fxsprites::unloadAll();
+    mc::resources::unloadAll();
+#ifdef _MSC_VER
+    D2D::shutdown();
+#endif
 
     mc::blur::shutdown();
 

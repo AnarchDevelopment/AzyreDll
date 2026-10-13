@@ -10,6 +10,12 @@ namespace gui {
 int style();
 void setStyle(int s);
 
+// Modo de blur del cliente:
+//   0 = Native (BlurHelper en DX11)
+//   1 = Solstice (Direct2D Gaussian blur)
+int blurMode();
+void setBlurMode(int mode);
+
 // Settings del estilo Solstice (persistidos por InterfaceModule). El tema
 // de color (paletas Solstice) vive en Framework/ColorUtils (mc::colors).
 int solsticeAnim(); // 0 = Zoom, 1 = Bounce

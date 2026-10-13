@@ -36,6 +36,7 @@ int g_style = 0;             // 0 = Azyre, 1 = Solstice
 int g_solsticeAnim = 0;      // 0 = Zoom, 1 = Bounce
 float g_solsticeEase = 18.0f;
 float g_solsticeBlur = 7.0f;
+int g_blurMode = 0;          // 0 = Native, 1 = Solstice (D2D)
 
 } // namespace
 
@@ -49,6 +50,8 @@ float solsticeEase() { return g_solsticeEase; }
 void setSolsticeEase(float v) { g_solsticeEase = v; }
 float solsticeBlur() { return g_solsticeBlur; }
 void setSolsticeBlur(float v) { g_solsticeBlur = v; }
+int blurMode() { return g_blurMode; }
+void setBlurMode(int mode) { g_blurMode = (mode == 1) ? 1 : 0; }
 } // namespace gui
 
 InterfaceModule::InterfaceModule()
@@ -180,6 +183,15 @@ void InterfaceModule::drawSettings()
 
     // ---- Blur (Backdrop Acrylic) ----
     ImGui::SeparatorText("Backdrop Blur");
+    {
+        const char* blurModes[] = {"Native", "Solstice"};
+        int bm = gui::blurMode();
+        if (widgets::CCombo("Blur Mode##iface", &bm, blurModes, 2))
+        {
+            gui::setBlurMode(bm);
+            config::saveAll();
+        }
+    }
     ImGui::TextDisabled("State: %s", (blur::ready() ? "Active" : "Unavailable"));
     ImGui::SameLine();
     if (ImGui::SmallButton("Info##blur_info"))
@@ -243,6 +255,7 @@ nlohmann::json InterfaceModule::saveSettings() const
     j["item_spacing_y"] = theme::ItemSpacingY;
     j["font_index"]     = theme::FontIndex;
     j["gui_style"]      = gui::style();
+    j["blur_mode"]      = gui::blurMode();
     j["sol_anim"]       = gui::solsticeAnim();
     j["sol_ease"]       = gui::solsticeEase();
     j["sol_blur"]       = gui::solsticeBlur();
@@ -268,6 +281,8 @@ void InterfaceModule::loadSettings(const nlohmann::json& j)
         theme::FontIndex = j["font_index"].get<int>();
     if (j.contains("gui_style"))
         gui::setStyle(j["gui_style"].get<int>());
+    if (j.contains("blur_mode"))
+        gui::setBlurMode(j["blur_mode"].get<int>());
     if (j.contains("sol_anim"))
         gui::setSolsticeAnim(j["sol_anim"].get<int>());
     if (j.contains("sol_ease"))

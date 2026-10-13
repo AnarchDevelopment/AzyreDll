@@ -13,6 +13,7 @@
 #include "Modules/impl/Interface/Style/sAzyre/sAzyre.hpp"
 #include "Modules/impl/Interface/Style/sSolstice/sSolstice.hpp"
 #include "Render/DX11.hpp"
+#include "Render/D2D/D2D.hpp"
 #include "Render/BlurHelper/BlurHelper.hpp"
 #include "Scripting/Scripting.hpp"
 #include "SDK/Game.hpp"
@@ -380,6 +381,9 @@ void render()
 {
     theme::apply();
 
+    // En modo Solstice el vidrio lo hace D2D: apagar el composite Glass nativo.
+    blur::setMenuGlass(gui::blurMode() == 0);
+
     float dt = ImGui::GetIO().DeltaTime;
     float speed = dt * 9.0f;
     if (speed > 1.0f)
@@ -419,6 +423,20 @@ void drawGlassSurface(ImDrawList* d, const ImVec2& mn, const ImVec2& mx,
     // Elevacion: sombra suave bajo el panel (Fluent "elevated surface").
     widgets::SoftShadow(ImGui::GetBackgroundDrawList(), mn, mx, rounding,
                         46.0f * alpha, 26.0f);
+
+    // Modo Solstice: blur con Direct2D sobre el rect de la ventana.
+#ifdef _MSC_VER
+    if (gui::blurMode() == 1)
+    {
+        D2D::addBlur(d, 14.0f, ImVec4(mn.x, mn.y, mx.x, mx.y), rounding);
+        d->AddRectFilled(mn, mx, IM_COL32(20, 24, 32, (int)(90.0f * alpha)), rounding);
+        d->AddRect(mn, mx, IM_COL32(255, 255, 255, (int)(30.0f * alpha)), rounding, 0, 1.0f);
+        float inset = rounding + 0.5f;
+        d->AddLine(ImVec2(mn.x + inset, mn.y + 0.5f), ImVec2(mx.x - inset, mn.y + 0.5f),
+                   IM_COL32(255, 255, 255, (int)(54.0f * alpha)), 1.0f);
+        return;
+    }
+#endif
 
     const bool haveGlass = blur::ready() && blur::srv();
     if (haveGlass)
