@@ -53,6 +53,7 @@ A fully-featured module library, modern blur rendering, and an embeddable Lua in
 - [Project Structure](#project-structure)
 - [Design Principles](#design-principles)
 - [Module System](#module-system)
+- [Dot-Commands](#dot-commands)
 - [Scripting](#scripting)
 - [Quick Start](#quick-start)
 - [Building](#building)
@@ -96,16 +97,16 @@ Dependencies are fetched automatically through CMake `FetchContent` — no manua
 
 ```
 src/
-├── Commands/        Dot-commands (bind, config, friend, toggle, ...)
+├── Commands/        Dot-commands (bind, binds, config, friend, help, irc, prefix, script, toggle)
 ├── Config/          JSON configuration, presets, and global settings
-├── Features/        ECS, friends, bot filter, smoothing, raycasting
+├── Features/        ECS, friends, bot filter, smoothing, raycasting, world chunks, HUD registry
 ├── Framework/       Hooking, memory, logging, math, sound, compat layer
 ├── GUI/             Menu, widgets, and theme
 ├── Input/           Input system, wheel/mouse hooks, keybinds
-├── Modules/         Feature modules (Combat / Movement / Visuals / Misc)
+├── Modules/         Feature modules (Combat / Movement / Visuals / Misc / Interface)
 ├── Networking/      IRC bridge and Spotify service
-├── Render/          DX11 Present hook + BlurHelper (glass/acrylic pipeline)
-├── SDK/             Game SDK: offsets, vtables, classes, code patches
+├── Render/          DX11 Present hook, BlurHelper, EffectSprites, ResourceSprites, D2D backend
+├── SDK/             Game SDK: offsets, vtables, classes, code patches, effects hook
 └── Scripting/       Luau runtime and native bindings
 ```
 
@@ -152,6 +153,7 @@ Each module lives in its own folder, implements a shared `Module` interface, and
 | **LongJump** | Extends horizontal jump distance |
 | **NoFall** | Prevents fall damage |
 | **NoSlow** | Removes slowdown from items and effects |
+| **Scaffold** | Automatically places blocks under your feet while walking (Stairs / Full / Down / Bottomless) |
 | **Speed** | Movement speed boosts (Friction / Legit modes) |
 
 ### Visuals
@@ -159,6 +161,7 @@ Each module lives in its own folder, implements a shared `Module` interface, and
 | Module | Description |
 |--------|-------------|
 | **ArrayList** | On-screen list of enabled modules (multiple styles) |
+| **BlockESP** | Highlights ores and special blocks (diamonds, emeralds, chests, spawners, …) through walls via chunk scanning |
 | **Crosshair** | Custom crosshair |
 | **ESP** | 2D/3D boxes highlighting players through walls |
 | **FullBright** | Maximum brightness in dark areas |
@@ -169,13 +172,15 @@ Each module lives in its own folder, implements a shared `Module` interface, and
 | **NameTags** | Floating name tags with health |
 | **NoHurtCam** | Disables the hurt camera shake |
 | **PlaceHighlights** | Fading highlight on blocks you place |
-| **PotionHUD** | Animated active-effects display |
+| **PlayerList** | TAB-style player overlay with Steve heads, health bars, and Azyre-user gradient highlighting |
+| **PotionHUD** | Animated active-effects display with effect sprites |
 | **Spotify** | "Now playing" widget (OAuth + album art) |
 | **TargetHUD** | Information card for the current target |
 | **Tracers** | Lines pointing to players |
 | **Trajectories** | Predicts the arc of a thrown/held projectile |
 | **Trail** | Leaves a trail behind the player |
 | **Watermark** | Client watermark with FPS |
+| **Waypoints** | Saveable points of interest with per-server profiles, tracers, and labels |
 
 ### Misc
 
@@ -196,6 +201,24 @@ Each module lives in its own folder, implements a shared `Module` interface, and
 | **Interface** | Appearance settings (style, theme, accent, font, rounding) |
 | **sAzyre** | Classic Azyre menu style |
 | **sSolstice** | Modern Solstice menu style |
+
+---
+
+## Dot-Commands
+
+In-game commands are entered via the chat box with a configurable prefix (default `.`). Each command is self-contained and registered through a shared `Command` interface.
+
+| Command | Description |
+|---------|-------------|
+| **`.bind <module> <key>`** | Bind a keybind to a module |
+| **`.binds`** | List all active keybinds |
+| **`.config <save\|load\|list> [name]`** | Manage configuration presets |
+| **`.friend <add\|remove\|list> [name]`** | Manage the friend list |
+| **`.help`** | Show available commands |
+| **`.irc <join\|leave\|msg\|nick>`** | IRC bridge control |
+| **`.prefix <char>`** | Change the command prefix |
+| **`.script <reload\|list\|remove> [name]`** | Manage Luau scripts |
+| **`.toggle <module>`** | Toggle a module on/off |
 
 ---
 
@@ -295,7 +318,7 @@ Continuous integration runs on every push and pull request to `main` via [`.gith
 Runtime state is stored as JSON in the client's base directory:
 
 ```
-<LocalAppData>/Packages/<Minecraft package>/RoamingState/Azyre/
+<LocalAppData>/Packages/<Minecraft package>/LocalState/Azyre/
 ├── Configs/
 │   ├── default.json     # All modules, keybinds, and settings
 │   ├── settings.json    # Global client settings
@@ -304,6 +327,8 @@ Runtime state is stored as JSON in the client's base directory:
 ├── Scripts/             # Luau scripts
 └── azyre_sdk.log        # Diagnostic log
 ```
+
+> **Note:** The client resolves `LocalState` via WinRT at boot. If WinRT is unavailable (non-MSVC builds), it falls back to the `RoamingState` path.
 
 Press **INSERT** to toggle the menu. Configuration is saved on close and when modules change.
 
@@ -316,13 +341,20 @@ Press **INSERT** to toggle the menu. Configuration is saved on close and when mo
 | **Luau scripting** | ✅ Live | Native game API, settings schema, `.script reload` |
 | **IRC bridge** | ✅ Live | In-game chat bridge with Spotify service |
 | **DX11 overlay** | ✅ Live | Acrylic/glass blur pipeline via BlurHelper |
-| **Module system** | ✅ Live | 40+ modules across Combat / Movement / Visuals / Misc / Interface |
+| **Module system** | ✅ Live | 49 modules across Combat / Movement / Visuals / Misc / Interface |
 | **Cross-toolchain CI** | ✅ Live | MSVC, Clang-CL, and MinGW GCC validated on every push |
+| **Effect sprites** | ✅ Live | Lazy-loaded potion-effect icon atlas (`src/Render/EffectSprites.*`) |
 | **World chunks** | 🔧 In progress | ECS-backed chunk tracking (`src/Features/WorldChunks.hpp`) |
 | **D2D rendering** | 🔧 In progress | Direct2D backend under `src/Render/D2D/` |
 | **Resource sprites** | 🔧 In progress | Sprite atlas system under `src/Render/ResourceSprites.*` |
 
 See the [issue tracker](https://github.com/AnarchDevelopment/AzyreDll/issues) for the full backlog and roadmap.
+
+---
+
+## Contributing
+
+Contributions are welcome! Please read the [CONTRIBUTING.md](CONTRIBUTING.md) guide before opening a pull request.
 
 ---
 
