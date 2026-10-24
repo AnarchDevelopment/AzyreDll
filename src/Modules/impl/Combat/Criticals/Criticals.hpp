@@ -13,6 +13,11 @@ public:
     void onDisable() override;
     void drawSettings() override;
 
+    std::string suffix() const override
+    {
+        return onlyWhileAttacking_ ? "Attack" : "Always";
+    }
+
     nlohmann::json saveSettings() const override
     {
         return nlohmann::json{

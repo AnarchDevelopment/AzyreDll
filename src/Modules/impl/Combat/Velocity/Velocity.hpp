@@ -14,6 +14,13 @@ public:
     void onShutdown() override;
     void drawSettings() override;
 
+    std::string suffix() const override
+    {
+        char buf[32];
+        snprintf(buf, sizeof(buf), "H:%d%% V:%d%%", hPercent_, vPercent_);
+        return buf;
+    }
+
     nlohmann::json saveSettings() const override
     {
         return nlohmann::json{

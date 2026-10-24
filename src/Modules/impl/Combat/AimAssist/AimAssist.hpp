@@ -12,6 +12,13 @@ public:
     void onFrame(float dt) override;
     void drawSettings() override;
 
+    std::string suffix() const override
+    {
+        char buf[32];
+        snprintf(buf, sizeof(buf), "H:%.2f V:%.2f", speedH_, speedV_);
+        return buf;
+    }
+
     nlohmann::json saveSettings() const override
     {
         return nlohmann::json{
