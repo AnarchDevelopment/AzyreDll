@@ -8,6 +8,9 @@ void setModule(void* moduleHandle);
 bool install();
 void uninstall();
 void addWinrtDelta(int wheelDelta);
+// Delta via la suscripcion DIRECTA de PointerWheelChanged (init). Acumulador
+// aparte para no duplicar si tambien dispara la suscripcion del dispatcher.
+void addWinrtDirectDelta(int wheelDelta);
 // Delta capturado desde el hook a MouseDevice::feed del juego (la fuente
 // que funciona sobre la ventana activa).
 void addGameDelta(int wheelDelta);

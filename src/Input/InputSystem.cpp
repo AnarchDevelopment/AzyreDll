@@ -44,6 +44,7 @@ struct WinRTTokens
     event_token pointerReleased{};
     event_token pointerMoved{};
     event_token pointerWheel{};
+    event_token pointerWheelDirect{};
     event_token charReceived{};
     event_token visibilityChanged{};
     event_token activated{};
@@ -292,6 +293,7 @@ void shutdown()
         g_coreWindow.PointerReleased(g_tokens.pointerReleased);
         g_coreWindow.PointerMoved(g_tokens.pointerMoved);
         g_coreWindow.PointerWheelChanged(g_tokens.pointerWheel);
+        g_coreWindow.PointerWheelChanged(g_tokens.pointerWheelDirect);
         g_coreWindow.CharacterReceived(g_tokens.charReceived);
         g_coreWindow.VisibilityChanged(g_tokens.visibilityChanged);
         g_coreWindow.Activated(g_tokens.activated);
@@ -353,6 +355,19 @@ void init()
                                                                  { g_pointerEvents++; });
 
         g_tokens.pointerMoved = g_coreWindow.PointerMoved([&](CoreWindow const&, PointerEventArgs const&) {});
+
+        // Suscripcion DIRECTA del wheel (misma via que KeyDown/PointerPressed,
+        // que si enganchan). Es el path del juego ACTIVO: el WH_MOUSE_LL no ve
+        // el wheel cuando la ventana esta en primer plano.
+        g_tokens.pointerWheelDirect = g_coreWindow.PointerWheelChanged(
+            [&](CoreWindow const&, PointerEventArgs const& args)
+            {
+                g_wheelEvents++;
+                int delta = args.CurrentPoint().Properties().MouseWheelDelta();
+                if (delta != 0)
+                    wheel::addWinrtDirectDelta(delta);
+            });
+        MC_LOG("[Wheel] PointerWheelChanged suscrito directo (init)");
 
         g_tokens.charReceived = g_coreWindow.CharacterReceived([&](CoreWindow const&, CharacterReceivedEventArgs const&)
                                                                 { g_charEvents++; });
@@ -501,17 +516,36 @@ void updateFrame()
     // (EndFrame la zeroea y solo los EVENTOS la repueblan en NewFrame).
     // Hay que inyectar via AddMouseWheelEvent o el scroll de todas las
     // ventanas queda muerto.
+    //
+    // Gate posValid: solo entregamos a ImGui el wheel ocurrido con el
+    // cursor sobre la ventana del juego. Un scroll hecho sobre la consola
+    // de debug (u otra app) llegaba aqui con MousePos invalida y ensuciaba
+    // el estado de eventos — hasta que el wheel "dejaba de funcionar".
     float wheelDelta = wheel::consume();
     if (wheelDelta != 0.0f)
     {
-        io.AddMouseWheelEvent(0.0f, wheelDelta);
-        // Diagnostico del pipeline (ver tambien [WheelDBG] tras NewFrame).
-        static ULONGLONG lastWheelDbg = 0;
-        ULONGLONG nowDbg = GetTickCount64();
-        if (nowDbg - lastWheelDbg > 200ull)
+        // [WheelDBG][Input]: estado del routing en el momento del evento.
+        // posValid=0 con eventos vivos = el cursor no esta sobre la
+        // ventana del juego (consola/alt-tab/WindowFromPoint raro).
+        static ULONGLONG lastInDbg = 0;
+        ULONGLONG nowInDbg = GetTickCount64();
+        if (nowInDbg - lastInDbg > 400ull)
         {
-            lastWheelDbg = nowDbg;
-            MC_LOG("[WheelDBG] consume=%.2f -> evento encolado", wheelDelta);
+            lastInDbg = nowInDbg;
+            MC_LOG("[WheelDBG][Input] consume=%.2f posValid=%d mouse=(%.0f,%.0f)",
+                   wheelDelta, posValid ? 1 : 0, io.MousePos.x, io.MousePos.y);
+        }
+        if (posValid)
+        {
+            io.AddMouseWheelEvent(0.0f, wheelDelta);
+            // Diagnostico del pipeline (ver tambien [WheelDBG] tras NewFrame).
+            static ULONGLONG lastWheelDbg = 0;
+            ULONGLONG nowDbg = GetTickCount64();
+            if (nowDbg - lastWheelDbg > 200ull)
+            {
+                lastWheelDbg = nowDbg;
+                MC_LOG("[WheelDBG] consume=%.2f -> evento encolado", wheelDelta);
+            }
         }
     }
 

@@ -13,13 +13,41 @@ static HMODULE g_module = nullptr;
 static HHOOK g_hook = nullptr;
 static HANDLE g_thread = nullptr;
 static DWORD g_threadId = 0;
-static std::atomic<int> g_llUnits{0};
-static std::atomic<int> g_gameUnits{0};
-static std::atomic<int> g_winrtUnits{0};
+static std::atomic<int> g_units{0};
+static std::atomic<int> g_lastSource{-1};
+static std::atomic<unsigned long long> g_lastSourceTime{0};
 static bool g_loggedWinrt = false;
 static bool g_loggedLL = false;
+static bool g_loggedMsg = false;
 static bool g_loggedGame = false;
 static float g_lastValue = 0.0f;
+
+// Varias rutas pueden capturar el MISMO giro (raw input, WH_MOUSE_LL, WinRT
+// CoreWindow, mensajes): wheelFeed deduplica por fuente para que un mismo
+// gesto no se cuente dos veces.
+enum WheelSource
+{
+    SRC_GAME = 0,
+    SRC_RAW = 1,
+    SRC_WINRT = 2,
+    SRC_WINRT_DIRECT = 3,
+    SRC_MSG = 4,
+    SRC_LL = 5
+};
+
+static void wheelFeed(int delta, int source)
+{
+    if (delta == 0)
+        return;
+    unsigned long long now = GetTickCount64();
+    int last = g_lastSource.load(std::memory_order_relaxed);
+    if (last != -1 && last != source &&
+        (now - g_lastSourceTime.load(std::memory_order_relaxed)) < 25ull)
+        return; // mismo gesto capturado por otra ruta: ignorar
+    g_lastSource.store(source, std::memory_order_relaxed);
+    g_lastSourceTime.store(now, std::memory_order_relaxed);
+    g_units.fetch_add(delta, std::memory_order_relaxed);
+}
 
 static bool g_msgHooked = false;
 static LPVOID g_peekTarget = nullptr;
@@ -39,7 +67,7 @@ static decltype(&GetMessageW) oGet = nullptr;
 // del contrato RAWINPUT de x64).
 namespace rawx {
 
-constexpr UINT kRidInput = 0x10000002;
+constexpr UINT kRidInput = 0x10000003;
 constexpr DWORD kRimTypeMouse = 0;
 constexpr DWORD kRimTypeKeyboard = 1;
 constexpr USHORT kRiMouseWheel = 0x0400;
@@ -107,11 +135,21 @@ static GetRawInputBufferFn oGetRawInputBuffer = nullptr;
 static std::atomic<bool> g_loggedRaw{false};
 static std::atomic<bool> g_loggedRawKbd{false};
 
+// Syscalls de win32u.dll (NTSTATUS = LONG, __stdcall en x64 == __fastcall ABI).
+using NtGetRawInputDataFn = LONG(__stdcall*)(HRAWINPUT, UINT, LPVOID, PUINT, UINT);
+using NtGetRawInputBufferFn = LONG(__stdcall*)(LPVOID, PUINT, UINT);
+
+// Tamanio minimo de un bloque RAWINPUT valido (header + mouse) y maximo de
+// blocks por buffer (defensa contra dwSize basura -> walk infinito/crash,
+// p.ej. al abrir el inventario cuando el buffer trae datos parciales).
+static constexpr UINT kMinRawBlockSize = 40;
+static constexpr LONG kMaxRawBlocks = 256;
+
 static void feedWheelRaw(int delta)
 {
     if (delta == 0)
         return;
-    g_gameUnits.fetch_add(delta);
+    wheelFeed(delta, SRC_RAW);
     bool expected = false;
     if (g_loggedRaw.compare_exchange_strong(expected, true))
         MC_LOG("[Wheel] raw input (GetRawInputData) source active");
@@ -168,11 +206,40 @@ static void gateRawInput(rawx::RawInput* raw)
     }
 }
 
+// Walk validado del buffer RAWINPUT: cada bloque debe caber entero dentro
+// del buffer y con dwSize plausible. Con la UI/inventario abierta el buffer
+// puede traer datos parciales/sin inicializar -> walk a ciegas = crash.
+static void handleRawBuffer(LPVOID data, UINT size, LONG blocks)
+{
+    if (!data || size == 0)
+        return;
+    rawx::RawInput* raw = (rawx::RawInput*)data;
+    const BYTE* end = (const BYTE*)data + size;
+
+    LONG limit = (blocks > 0 && blocks < kMaxRawBlocks) ? blocks : kMaxRawBlocks;
+    for (LONG i = 0; i < limit && (const BYTE*)raw < end; ++i)
+    {
+        // El header debe caber en el buffer antes de leer dwSize.
+        if ((const BYTE*)raw + sizeof(rawx::Header) > end)
+            break;
+
+        DWORD sz = raw->header.dwSize;
+        if (sz < kMinRawBlockSize ||
+            sz > size - (UINT)((const BYTE*)raw - (const BYTE*)data))
+            break;
+
+        parseRawMouse(raw);
+        gateRawInput(raw);
+        raw = (rawx::RawInput*)rawx::nextBlock(raw);
+    }
+}
+
 static UINT WINAPI hkGetRawInputData(HRAWINPUT hRawInput, UINT uiCommand, LPVOID pData,
                                      PUINT pcbSize, UINT cbSizeHeader)
 {
     UINT r = oGetRawInputData(hRawInput, uiCommand, pData, pcbSize, cbSizeHeader);
-    if (r != (UINT)-1 && pData && uiCommand == rawx::kRidInput)
+    // r = bytes copiados: validar que el bloque completo cabe antes de leer.
+    if (r != (UINT)-1 && r >= 40 && pData && uiCommand == rawx::kRidInput)
     {
         parseRawMouse((const rawx::RawInput*)pData);
         gateRawInput((rawx::RawInput*)pData);
@@ -183,17 +250,51 @@ static UINT WINAPI hkGetRawInputData(HRAWINPUT hRawInput, UINT uiCommand, LPVOID
 static UINT WINAPI hkGetRawInputBuffer(LPVOID pData, PUINT pcbSize)
 {
     UINT r = oGetRawInputBuffer(pData, pcbSize);
-    if (r != (UINT)-1 && r > 0 && pData && pcbSize && *pcbSize > 0)
+    // r = numero de estructuras escritas. El walk de cada bloque queda
+    // delimitado por r y validado por handleRawBuffer (dwSize sane).
+    if (r != (UINT)-1 && r > 0 && r < 256 && pData && pcbSize && *pcbSize > 0)
     {
-        // El buffer trae varios RAWINPUT empaquetados.
-        rawx::RawInput* raw = (rawx::RawInput*)pData;
-        const BYTE* end = (const BYTE*)pData + *pcbSize;
-        while ((const BYTE*)raw < end)
-        {
-            parseRawMouse(raw);
-            gateRawInput(raw);
-            raw = (rawx::RawInput*)rawx::nextBlock(raw);
-        }
+        bool expected = false;
+        if (g_loggedRaw.compare_exchange_strong(expected, true))
+            MC_LOG("[Wheel] raw input (GetRawInputData) source active");
+        handleRawBuffer(pData, *pcbSize, (LONG)r);
+    }
+    return r;
+}
+
+// --- Capa de syscall win32u.dll (NtUserGetRawInputData/Buffer) ---
+static NtGetRawInputDataFn oNtGetRawInputData = nullptr;
+static NtGetRawInputBufferFn oNtGetRawInputBuffer = nullptr;
+static LPVOID g_ntRawTarget = nullptr;
+static LPVOID g_ntRawBufTarget = nullptr;
+static std::atomic<bool> g_loggedNtRaw{false};
+
+static LONG __stdcall hkNtGetRawInputData(HRAWINPUT hRawInput, UINT uiCommand, LPVOID pData,
+                                          PUINT pcbSize, UINT cbSizeHeader)
+{
+    LONG r = oNtGetRawInputData(hRawInput, uiCommand, pData, pcbSize, cbSizeHeader);
+    if (r >= (LONG)kMinRawBlockSize && pData && uiCommand == rawx::kRidInput)
+    {
+        bool expected = false;
+        if (g_loggedNtRaw.compare_exchange_strong(expected, true))
+            MC_LOG("[Wheel] NtUserGetRawInputData source active");
+        parseRawMouse((const rawx::RawInput*)pData);
+        gateRawInput((rawx::RawInput*)pData);
+    }
+    return r;
+}
+
+static LONG __stdcall hkNtGetRawInputBuffer(LPVOID pData, PUINT pcbSize, UINT cbSizeHeader)
+{
+    LONG r = oNtGetRawInputBuffer(pData, pcbSize, cbSizeHeader);
+    // r = numero de estructuras escritas (semantica GetRawInputBuffer). Solo
+    // procesamos si r es plausible; el walk valida cada bloque.
+    if (r > 0 && r < kMaxRawBlocks && pData && pcbSize && *pcbSize > 0)
+    {
+        bool expected = false;
+        if (g_loggedNtRaw.compare_exchange_strong(expected, true))
+            MC_LOG("[Wheel] NtUserGetRawInputBuffer source active");
+        handleRawBuffer(pData, *pcbSize, r);
     }
     return r;
 }
@@ -219,12 +320,27 @@ static bool installRawInputHooks()
     if (s2 == MH_OK && g_rawBufTarget)
         MH_EnableHook(g_rawBufTarget);
 
-    bool ok = (s1 == MH_OK) || (s2 == MH_OK);
+    // Capa de syscall (win32u.dll): el stack de input de UWP/CoreWindow lee el
+    // RAWINPUT llamando directamente a NtUserGetRawInputData/Buffer en vez de
+    // los wrappers de user32. Es la via que funciona con la ventana ACTIVA.
+    MH_STATUS s3 = MH_CreateHookApiEx(L"win32u.dll", "NtUserGetRawInputData",
+                                      reinterpret_cast<LPVOID>(&hkNtGetRawInputData),
+                                      reinterpret_cast<LPVOID*>(&oNtGetRawInputData), &g_ntRawTarget);
+    MH_STATUS s4 = MH_CreateHookApiEx(L"win32u.dll", "NtUserGetRawInputBuffer",
+                                      reinterpret_cast<LPVOID>(&hkNtGetRawInputBuffer),
+                                      reinterpret_cast<LPVOID*>(&oNtGetRawInputBuffer), &g_ntRawBufTarget);
+    if (s3 == MH_OK && g_ntRawTarget)
+        MH_EnableHook(g_ntRawTarget);
+    if (s4 == MH_OK && g_ntRawBufTarget)
+        MH_EnableHook(g_ntRawBufTarget);
+
+    bool ok = (s1 == MH_OK) || (s2 == MH_OK) || (s3 == MH_OK) || (s4 == MH_OK);
     if (ok)
-        MC_LOG("[Wheel] GetRawInputData/Buffer hooks active (Data=%d Buffer=%d)",
-               (int)s1, (int)s2);
+        MC_LOG("[Wheel] raw input hooks active (user32 Data=%d Buffer=%d | win32u NtData=%d NtBuffer=%d)",
+               (int)s1, (int)s2, (int)s3, (int)s4);
     else
-        MC_LOG_ERROR("[Wheel] Raw input hooks failed (Data=%d Buffer=%d)", (int)s1, (int)s2);
+        MC_LOG_ERROR("[Wheel] Raw input hooks failed (Data=%d Buffer=%d NtData=%d NtBuffer=%d)",
+                     (int)s1, (int)s2, (int)s3, (int)s4);
     return ok;
 }
 
@@ -242,7 +358,7 @@ void addWinrtDelta(int wheelDelta)
 {
     if (wheelDelta == 0)
         return;
-    g_winrtUnits.fetch_add(wheelDelta);
+    wheelFeed(wheelDelta, SRC_WINRT);
     if (!g_loggedWinrt)
     {
         g_loggedWinrt = true;
@@ -250,11 +366,23 @@ void addWinrtDelta(int wheelDelta)
     }
 }
 
+void addWinrtDirectDelta(int wheelDelta)
+{
+    if (wheelDelta == 0)
+        return;
+    wheelFeed(wheelDelta, SRC_WINRT_DIRECT);
+    if (!g_loggedWinrt)
+    {
+        g_loggedWinrt = true;
+        MC_LOG("[Wheel] WinRT (direct) source active");
+    }
+}
+
 void addGameDelta(int wheelDelta)
 {
     if (wheelDelta == 0)
         return;
-    g_gameUnits.fetch_add(wheelDelta);
+    wheelFeed(wheelDelta, SRC_GAME);
     if (!g_loggedGame)
     {
         g_loggedGame = true;
@@ -263,29 +391,8 @@ void addGameDelta(int wheelDelta)
 }
 float consume()
 {
-    int gameUnits = g_gameUnits.exchange(0);
-    int winrtUnits = g_winrtUnits.exchange(0);
-    int llUnits = g_llUnits.exchange(0);
-
-    float value = 0.0f;
-    if (gameUnits != 0)
-    {
-        value = (float)gameUnits / 120.0f;
-    }
-    else if (winrtUnits != 0)
-    {
-        value = (float)winrtUnits / 120.0f;
-    }
-    else if (llUnits != 0)
-    {
-        value = (float)llUnits / 120.0f;
-        if (!g_loggedLL)
-        {
-            g_loggedLL = true;
-            MC_LOG("[Wheel] WH_MOUSE_LL source active");
-        }
-    }
-
+    int units = g_units.exchange(0);
+    float value = (float)units / 120.0f;
     if (value != 0.0f)
         g_lastValue = value;
     return value;
@@ -295,7 +402,42 @@ static void feedWheel(int delta)
 {
     if (delta == 0)
         return;
-    g_llUnits.fetch_add(delta);
+    wheelFeed(delta, SRC_LL);
+    if (!g_loggedLL)
+    {
+        g_loggedLL = true;
+        MC_LOG("[Wheel] WH_MOUSE_LL source active");
+    }
+}
+
+static void feedWheelMsg(int delta)
+{
+    if (delta == 0)
+        return;
+    wheelFeed(delta, SRC_MSG);
+    if (!g_loggedMsg)
+    {
+        g_loggedMsg = true;
+        MC_LOG("[Wheel] PeekMessageW/GetMessageW source active");
+    }
+}
+
+// El LL hook es GLOBAL: ve el wheel de TODAS las ventanas (la consola de
+// debug incluida). Alimentar el acumulador con scroll ajeno envenena el
+// dedup por fuentes y hace que el menu se scrollee solo; y tragarnos el
+// evento con el menu abierto mataba el scroll de la propia consola. Solo
+// procesamos el wheel que ocurre sobre la ventana del JUEGO.
+static bool wheelOverGameWindow(const POINT& pt)
+{
+    HWND under = WindowFromPoint(pt);
+    if (!under)
+        return false;
+    HWND consoleWnd = GetConsoleWindow();
+    if (consoleWnd && (under == consoleWnd || IsChild(consoleWnd, under)))
+        return false;
+    DWORD pid = 0;
+    GetWindowThreadProcessId(under, &pid);
+    return pid == GetCurrentProcessId();
 }
 
 static LRESULT CALLBACK LLMouseProc(int nCode, WPARAM wParam, LPARAM lParam)
@@ -304,7 +446,7 @@ static LRESULT CALLBACK LLMouseProc(int nCode, WPARAM wParam, LPARAM lParam)
     {
         const MSLLHOOKSTRUCT* info = reinterpret_cast<const MSLLHOOKSTRUCT*>(lParam);
         int delta = (short)HIWORD(info->mouseData);
-        if (delta != 0)
+        if (delta != 0 && wheelOverGameWindow(info->pt))
         {
             feedWheel(delta);
             if (mc::menu::visible())
@@ -314,14 +456,25 @@ static LRESULT CALLBACK LLMouseProc(int nCode, WPARAM wParam, LPARAM lParam)
     return CallNextHookEx(g_hook, nCode, wParam, lParam);
 }
 
+// Un WM_MOUSEWHEEL bombeado por nuestro proceso puede venir de la consola
+// de debug (HWND del mismo proceso): no alimenta el acumulador.
+static bool msgWheelIsForeign(const MSG* msg)
+{
+    if (!msg || !msg->hwnd)
+        return false;
+    HWND consoleWnd = GetConsoleWindow();
+    return consoleWnd && (msg->hwnd == consoleWnd || IsChild(consoleWnd, msg->hwnd));
+}
+
 static BOOL WINAPI hkPeekMessageW(LPMSG lpMsg, HWND hWnd, UINT wMsgFilterMin, UINT wMsgFilterMax,
                                   UINT wRemoveMsg)
 {
     BOOL r = oPeek(lpMsg, hWnd, wMsgFilterMin, wMsgFilterMax, wRemoveMsg);
-    if (r && lpMsg && lpMsg->message == WM_MOUSEWHEEL && (wRemoveMsg & PM_REMOVE))
+    if (r && lpMsg && lpMsg->message == WM_MOUSEWHEEL && (wRemoveMsg & PM_REMOVE) &&
+        !msgWheelIsForeign(lpMsg))
     {
         int delta = (short)HIWORD(lpMsg->wParam);
-        feedWheel(delta);
+        feedWheelMsg(delta);
         if (mc::menu::visible())
             lpMsg->message = WM_NULL;
     }
@@ -331,10 +484,10 @@ static BOOL WINAPI hkPeekMessageW(LPMSG lpMsg, HWND hWnd, UINT wMsgFilterMin, UI
 static BOOL WINAPI hkGetMessageW(LPMSG lpMsg, HWND hWnd, UINT wMsgFilterMin, UINT wMsgFilterMax)
 {
     BOOL r = oGet(lpMsg, hWnd, wMsgFilterMin, wMsgFilterMax);
-    if (r && lpMsg && lpMsg->message == WM_MOUSEWHEEL)
+    if (r && lpMsg && lpMsg->message == WM_MOUSEWHEEL && !msgWheelIsForeign(lpMsg))
     {
         int delta = (short)HIWORD(lpMsg->wParam);
-        feedWheel(delta);
+        feedWheelMsg(delta);
         if (mc::menu::visible())
             lpMsg->message = WM_NULL;
     }
@@ -423,11 +576,17 @@ bool install()
     // el RAWINPUT que el propio juego va a leer).
     installRawInputHooks();
 
+    // Hooks de mensajes: SIEMPRE. Cuando la ventana del juego esta ACTIVA el
+    // WH_MOUSE_LL no ve el wheel (el juego usa raw input / CoreWindow), pero
+    // si el bucle de mensajes del juego recibe WM_MOUSEWHEEL lo capturamos
+    // aqui. Con el acumulador g_msgUnits separado no hay doble conteo con el
+    // LL hook (consume() elige una unica fuente).
+    installMessageHooks();
+
     g_thread = CreateThread(nullptr, 0, WheelThread, nullptr, 0, &g_threadId);
     if (!g_thread)
     {
         MC_LOG_ERROR("[Wheel] CreateThread failed: %lu", GetLastError());
-        installMessageHooks();
     }
     else
     {
@@ -448,14 +607,20 @@ void uninstall()
         g_msgHooked = false;
     }
 
-    if (g_rawTarget || g_rawBufTarget)
+    if (g_rawTarget || g_rawBufTarget || g_ntRawTarget || g_ntRawBufTarget)
     {
         if (g_rawTarget)
             MH_DisableHook(g_rawTarget);
         if (g_rawBufTarget)
             MH_DisableHook(g_rawBufTarget);
+        if (g_ntRawTarget)
+            MH_DisableHook(g_ntRawTarget);
+        if (g_ntRawBufTarget)
+            MH_DisableHook(g_ntRawBufTarget);
         g_rawTarget = nullptr;
         g_rawBufTarget = nullptr;
+        g_ntRawTarget = nullptr;
+        g_ntRawBufTarget = nullptr;
     }
 
     if (g_thread)
@@ -467,8 +632,8 @@ void uninstall()
         g_threadId = 0;
     }
 
-    g_llUnits.store(0);
-    g_winrtUnits.store(0);
+    g_units.store(0);
+    g_lastSource.store(-1);
 }
 
 }
