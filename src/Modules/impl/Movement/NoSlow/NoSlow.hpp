@@ -12,6 +12,11 @@ public:
     void onTick() override;
     void drawSettings() override;
 
+    std::string suffix() const override
+    {
+        return onlyGround_ ? "Ground" : "All";
+    }
+
     nlohmann::json saveSettings() const override
     {
         return nlohmann::json{

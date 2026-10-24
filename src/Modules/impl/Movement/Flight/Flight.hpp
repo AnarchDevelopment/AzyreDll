@@ -37,6 +37,17 @@ public:
     nlohmann::json saveSettings() const override;
     void loadSettings(const nlohmann::json& j) override;
 
+    std::string suffix() const override
+    {
+        switch (mode_)
+        {
+        case kMotion: return "Motion";
+        case kPregame: return "Pregame";
+        case kJump: return "Jump";
+        default: return "";
+        }
+    }
+
 private:
     bool tickJump(LocalPlayer& local, float forward, float right);
     void jump(LocalPlayer& local, float forward, float right);

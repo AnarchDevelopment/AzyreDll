@@ -14,6 +14,11 @@ public:
     void onTick() override;
     void drawSettings() override;
 
+    std::string suffix() const override
+    {
+        return std::to_string(distance_) + "m";
+    }
+
     nlohmann::json saveSettings() const override
     {
         return nlohmann::json{

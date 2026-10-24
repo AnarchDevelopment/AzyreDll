@@ -39,6 +39,11 @@ public:
     nlohmann::json saveSettings() const override;
     void loadSettings(const nlohmann::json& j) override;
 
+    std::string suffix() const override
+    {
+        return mode_ == kFriction ? "Friction" : "Legit";
+    }
+
 private:
     void tickFriction(LocalPlayer& local);
     void tickLegit(LocalPlayer& local);

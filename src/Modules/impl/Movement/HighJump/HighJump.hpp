@@ -12,6 +12,13 @@ public:
     void onTick() override;
     void drawSettings() override;
 
+    std::string suffix() const override
+    {
+        char buf[16];
+        snprintf(buf, sizeof(buf), "%.2f", boost_);
+        return buf;
+    }
+
     nlohmann::json saveSettings() const override
     {
         return nlohmann::json{
