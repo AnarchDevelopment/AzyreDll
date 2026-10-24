@@ -1,11 +1,83 @@
 #pragma once
 
 #include <imgui.h>
+#include <cmath>
 
 namespace mc::theme {
 
 inline ImVec4 Accent(0.298f, 0.761f, 1.000f, 1.0f);
 inline ImVec4 AccentDeep(0.000f, 0.471f, 0.831f, 1.0f);
+
+// Segundo y tercer color del tema (Themes.rB / rC de Rise). Cuando el tema es
+// plano coinciden con Accent. AccentTri marca los temas de 3 colores.
+inline ImVec4 Accent2(0.298f, 0.761f, 1.000f, 1.0f);
+inline ImVec4 Accent3(0.298f, 0.761f, 1.000f, 1.0f);
+inline bool AccentTri = false;
+
+// Tema funcion "Rainbow" (Themes.TEST de Rise): el acento se calcula en
+// runtime con ColorUtil.aB y NO usa los colores estaticos.
+inline bool AccentRainbow = false;
+
+// ColorUtil.aB de Rise:
+//   Color.getHSBColor((ceil((t_ms + off) / 10.0) % 360.0) / 360.0, 0.6f, 1.0f)
+// donde off = (x + y) * 10 (getAccentColor de Themes.TEST). El hue cicla cada
+// ~3.6s y la posicion (x+y) desplaza el arcoiris en diagonal.
+inline ImVec4 rainbowAt(float x, float y)
+{
+    double tms = ImGui::GetTime() * 1000.0;
+    double b = std::ceil((tms + (double)(x + y) * 10.0) / 10.0);
+    double hue = std::fmod(b, 360.0) / 360.0;
+    float r, g, bl;
+    ImGui::ColorConvertHSVtoRGB((float)hue, 0.6f, 1.0f, r, g, bl);
+    return ImVec4(r, g, bl, 1.0f);
+}
+
+// getAccentColor de Rise: mezcla animada segun la posicion (x,y) y el tiempo
+// (getBlendFactor = sin(t/600 + x*0.005 + y*0.06)*0.5 + 0.5). Es el acento que
+// usan el ArrayList, categorias, nombres de modulos, etc.
+// NOTA: aceleramos ~2.5x el termino temporal porque nuestro Y esta en pixeles
+// crudos (Rise usa su resolucion escalada ~540px); asi el flujo se ve igual
+// de rapido en pantalla.
+inline ImVec4 AccentAt4(float x, float y)
+{
+    if (AccentRainbow)
+        return rainbowAt(x, y);
+
+    double tms = ImGui::GetTime() * 1000.0;
+    float f = (float)(std::sin(tms / 240.0 + x * 0.005 + y * 0.06) * 0.5 + 0.5);
+    auto mix = [](float a, float b, float k) { return a + (b - a) * k; };
+    float r, g, b;
+    if (AccentTri)
+    {
+        if (f <= 0.5f)
+        {
+            float k = f * 2.0f;
+            r = mix(Accent2.x, Accent.x, k);
+            g = mix(Accent2.y, Accent.y, k);
+            b = mix(Accent2.z, Accent.z, k);
+        }
+        else
+        {
+            float k = (f - 0.5f) * 2.0f;
+            r = mix(Accent3.x, Accent2.x, k);
+            g = mix(Accent3.y, Accent2.y, k);
+            b = mix(Accent3.z, Accent2.z, k);
+        }
+    }
+    else
+    {
+        r = mix(Accent.x, Accent2.x, f);
+        g = mix(Accent.y, Accent2.y, f);
+        b = mix(Accent.z, Accent2.z, f);
+    }
+    return ImVec4(r, g, b, 1.0f);
+}
+
+inline ImU32 AccentAtU32(float x, float y, float alpha = 1.0f)
+{
+    ImVec4 c = AccentAt4(x, y);
+    return ImGui::ColorConvertFloat4ToU32(ImVec4(c.x, c.y, c.z, alpha));
+}
 
 inline float WindowRounding = 8.0f;
 inline float ItemSpacingY = 6.0f;

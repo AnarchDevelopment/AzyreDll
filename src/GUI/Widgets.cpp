@@ -2,6 +2,7 @@
 
 #include "Framework/ColorUtils.hpp"
 #include "Framework/SolsticeWidgets.hpp"
+#include "Modules/impl/Interface/Style/sRise/RiseWidgets.hpp"
 #include "GUI/Theme.hpp"
 #include "Modules/impl/Interface/Interface.hpp"
 #include "Render/DX11.hpp"
@@ -160,6 +161,14 @@ bool CCombo(const char* label, int* current_item, const std::vector<std::string>
         for (const std::string& s : items)
             raw.push_back(s.c_str());
         return sw::Combo(label, current_item, raw.data(), (int)raw.size());
+    }
+    if (gui::style() == 2)
+    {
+        std::vector<const char*> raw;
+        raw.reserve(items.size());
+        for (const std::string& s : items)
+            raw.push_back(s.c_str());
+        return rw::Combo(label, current_item, raw.data(), (int)raw.size());
     }
     ImGuiWindow* window = ImGui::GetCurrentWindow();
     if (window->SkipItems)
@@ -575,6 +584,8 @@ bool Checkbox(const char* label, bool* v)
 {
     if (gui::style() == 1)
         return sw::Toggle(label, v);
+    if (gui::style() == 2)
+        return rw::Toggle(label, v);
     return ImGui::Checkbox(label, v);
 }
 
@@ -582,6 +593,8 @@ bool InputText(const char* label, char* buf, size_t size)
 {
     if (gui::style() == 1)
         return sw::TextInput(label, buf, size);
+    if (gui::style() == 2)
+        return rw::TextInput(label, buf, size);
     return ImGui::InputText(label, buf, size);
 }
 
@@ -589,6 +602,8 @@ bool ColorEdit3(const char* label, float* col3, ImGuiColorEditFlags flags)
 {
     if (gui::style() == 1)
         return sw::Color(label, col3, 3);
+    if (gui::style() == 2)
+        return rw::Color(label, col3, 3);
     return ImGui::ColorEdit3(label, col3, flags);
 }
 
@@ -596,6 +611,8 @@ bool ColorEdit4(const char* label, float* col4, ImGuiColorEditFlags flags)
 {
     if (gui::style() == 1)
         return sw::Color(label, col4, 4);
+    if (gui::style() == 2)
+        return rw::Color(label, col4, 4);
     return ImGui::ColorEdit4(label, col4, flags);
 }
 
@@ -603,6 +620,8 @@ bool CSlider(const char* label, float* v, float v_min, float v_max, const char* 
 {
     if (gui::style() == 1)
         return sw::Slider(label, v, v_min, v_max, format);
+    if (gui::style() == 2)
+        return rw::Slider(label, v, v_min, v_max, format);
     return SliderWinUI(label, v, v_min, v_max, format, false);
 }
 
@@ -610,6 +629,8 @@ bool CSlider(const char* label, int* v, int v_min, int v_max, const char* format
 {
     if (gui::style() == 1)
         return sw::SliderInt(label, v, v_min, v_max, format);
+    if (gui::style() == 2)
+        return rw::SliderInt(label, v, v_min, v_max, format);
     float fv = (float)*v;
     if (!SliderWinUI(label, &fv, (float)v_min, (float)v_max, format, true))
         return false;

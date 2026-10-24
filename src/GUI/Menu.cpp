@@ -12,6 +12,7 @@
 #include "Modules/impl/Interface/Interface.hpp"
 #include "Modules/impl/Interface/Style/sAzyre/sAzyre.hpp"
 #include "Modules/impl/Interface/Style/sSolstice/sSolstice.hpp"
+#include "Modules/impl/Interface/Style/sRise/sRise.hpp"
 #include "Render/DX11.hpp"
 #include "Render/D2D/D2D.hpp"
 #include "Render/BlurHelper/BlurHelper.hpp"
@@ -402,6 +403,8 @@ void render()
     // comparte; cada estilo maneja su propio backdrop y layout.
     if (gui::style() == 1)
         gui::sSolstice::render(g_anim);
+    else if (gui::style() == 2)
+        gui::sRise::render(g_anim);
     else
         gui::sAzyre::render(g_anim);
 }
@@ -841,8 +844,40 @@ void renderAzyre(float t)
                 ImVec2 mousePos = ImGui::GetIO().MousePos;
                 bool mouseInMenu = mousePos.x >= g_menuMin.x && mousePos.x <= g_menuMax.x &&
                                    mousePos.y >= g_menuMin.y && mousePos.y <= g_menuMax.y;
+
+                // [ScrollDBG]: cada razon por la que el scroll del menú NO
+                // aplica queda en el log en el momento del evento.
+                if (wheelY != 0.0f)
+                {
+                    static ULONGLONG lastScrollDbg = 0;
+                    ULONGLONG nowScrollDbg = GetTickCount64();
+                    if (nowScrollDbg - lastScrollDbg > 400ull)
+                    {
+                        lastScrollDbg = nowScrollDbg;
+                        MC_LOG("[ScrollDBG] w=%.2f inMenu=%d pos=(%.0f,%.0f) "
+                               "menu=(%.0f,%.0f)-(%.0f,%.0f) maxY=%.0f claimed=%d",
+                               wheelY, mouseInMenu ? 1 : 0, mousePos.x, mousePos.y,
+                               g_menuMin.x, g_menuMin.y, g_menuMax.x, g_menuMax.y,
+                               ImGui::GetScrollMaxY(),
+                               GImGui->WheelingWindowScrolledFrame == ImGui::GetFrameCount() ? 1 : 0);
+                    }
+                }
+
+                // Deferir al built-in de ImGui SOLO cuando una ventana viva
+                // (renderizada este frame) y distinta de la propia lista
+                // scrolleo de verdad. Los locks muertos ya se sueltan a fin
+                // de frame (presentBody), pero un child vivo con contenido
+                // scrolleable bajo el cursor (panel de settings) debe ganar.
+                ImGuiWindow* curWin = ImGui::GetCurrentWindow();
+                ImGuiWindow* wheelWin =
+                    GImGui->WheelingWindow ? GImGui->WheelingWindow : GImGui->HoveredWindow;
+                bool builtInTookIt =
+                    wheelWin && wheelWin->LastFrameActive == ImGui::GetFrameCount() &&
+                    (wheelWin == curWin ||
+                     GImGui->WheelingWindowScrolledFrame == ImGui::GetFrameCount());
+
                 if (wheelY != 0.0f && mouseInMenu && ImGui::GetScrollMaxY() > 0.0f &&
-                    GImGui->WheelingWindowScrolledFrame != ImGui::GetFrameCount())
+                    !builtInTookIt)
                 {
                     float step = ImTrunc(ImMin(5.0f * ImGui::GetFontSize(),
                                                ImGui::GetWindowHeight() * 0.67f));
@@ -1112,121 +1147,7 @@ void renderHudChrome()
     renderHudEditor();
 }
 
-namespace {
-
-// Glow coloreado: mismo falloff cubico por capas que widgets::SoftShadow,
-// pero con el color pasado (el acento de la notificacion).
-void toastGlow(ImDrawList* d, const ImVec2& min, const ImVec2& max,
-               ImU32 col, float strength, float spread, float rounding)
-{
-    const int layers = 9;
-    for (int i = 0; i < layers; ++i)
-    {
-        float t = (float)i / (float)(layers - 1);
-        float pad = spread * t;
-        float f = 1.0f - t;
-        f = f * f * f;
-        int a = (int)(strength * f);
-        if (a <= 0)
-            continue;
-        d->AddRectFilled(ImVec2(min.x - pad, min.y - pad),
-                         ImVec2(max.x + pad, max.y + pad),
-                         (col & 0x00FFFFFFu) | ((unsigned)a << 24), rounding + pad);
-    }
-}
-
-}
-
-// Estilo Solstice: la notificacion entra en diagonal desde la esquina
-// inferior derecha. La caja se divide en dos sectores: uno de color (accent)
-// que crece de izquierda a derecha con el progreso del tiempo y otro negro
-// con el tiempo restante, con un glow suave alrededor del sector de color.
-void renderToasts()
-{
-    ImGuiIO& io = ImGui::GetIO();
-    float sw = io.DisplaySize.x;
-    float sh = io.DisplaySize.y;
-    if (sw <= 0.0f || sh <= 0.0f)
-        return;
-
-    ModuleManager& mgr = ModuleManager::get();
-    mgr.tickNotifications(io.DeltaTime);
-    const auto& notifs = mgr.notifications();
-
-    ImDrawList* d = ImGui::GetForegroundDrawList();
-    ImFont* font = ImGui::GetFont();
-    const float fontSize = 20.0f;
-    float y = sh - 10.0f;
-
-    // Orden natural: la mas vieja queda en el slot inferior, la mas nueva
-    // entra por encima. El slot "sube" a medida que la notificacion se asienta,
-    // y las demas bajan en cascada cuando una sale.
-    for (const auto& n : notifs)
-    {
-        char buf[128];
-        if (n.hasState)
-            snprintf(buf, sizeof(buf), "%s  [%s]", n.text.c_str(), n.enabled ? "ON" : "OFF");
-        else
-            snprintf(buf, sizeof(buf), "%s", n.text.c_str());
-
-        ImVec2 ts = font->CalcTextSizeA(fontSize, FLT_MAX, 0.0f, buf);
-        float w = ts.x + 50.0f;
-        if (w < 200.0f)
-            w = 200.0f;
-        // La altura incluye 10px de separacion con la notificacion de arriba.
-        float h = ts.y + 30.0f;
-
-        float beginX = sw - w - 10.0f;
-        float endX = sw + w;
-        float x = endX + (beginX - endX) * n.slide;
-        y -= h * n.slide;
-        if (x > sw + w && y > sh + h)
-            continue;
-
-        float percentDone = n.timeShown / n.duration;
-        if (percentDone < 0.0f)
-            percentDone = 0.0f;
-        if (percentDone > 1.0f)
-            percentDone = 1.0f;
-
-        // Accent para ON y avisos sin estado, gris para OFF.
-        ImVec4 themeCol = theme::Accent;
-        if (n.hasState && !n.enabled)
-            themeCol = ImVec4(150.0f / 255.0f, 155.0f / 255.0f, 160.0f / 255.0f, 1.0f);
-        ImU32 accentCol = ImGui::ColorConvertFloat4ToU32(
-            ImVec4(themeCol.x, themeCol.y, themeCol.z, 1.0f));
-
-        float max = x + w;
-        ImVec2 progMax(x + w * percentDone + 6.0f, y + h - 10.0f);
-        if (progMax.x > max)
-            progMax.x = max;
-        if (progMax.x < x)
-            progMax.x = x;
-        ImVec2 bgMin(x + w * percentDone, y);
-        ImVec2 bgMax(x + w, y + h - 10.0f);
-
-        // Glow alrededor del sector de color, bajo los rellenos.
-        toastGlow(d, ImVec2(x, y), progMax, accentCol, 50.0f, 22.0f, 5.0f);
-
-        // Sector de color: crece con el progreso (clip evita redondear el borde
-        // derecho mientras avanza).
-        d->PushClipRect(ImVec2(x, y), ImVec2(x + w * percentDone, y + h - 10.0f), true);
-        d->AddRectFilled(ImVec2(x, y), progMax,
-                         ImGui::ColorConvertFloat4ToU32(
-                             ImVec4(themeCol.x, themeCol.y, themeCol.z, 0.7f)),
-                         5.0f);
-        d->PopClipRect();
-
-        // Sector negro: tiempo restante (solapa 6px sobre el color para
-        // transicion suave).
-        d->PushClipRect(bgMin, bgMax, true);
-        d->AddRectFilled(ImVec2(x + w * percentDone - 6.0f, y), bgMax,
-                         IM_COL32(0, 0, 0, 179), 5.0f);
-        d->PopClipRect();
-
-        d->AddText(font, fontSize, ImVec2(x + 10.0f, y + 10.0f),
-                   IM_COL32(255, 255, 255, 255), buf);
-    }
-}
+// Las notificaciones ahora las renderiza el modulo Notifications (modos
+// Azyre / Rise) via ModuleManager::onRender().
 
 }
