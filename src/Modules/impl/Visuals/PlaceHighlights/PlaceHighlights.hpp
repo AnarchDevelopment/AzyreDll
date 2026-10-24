@@ -20,6 +20,11 @@ public:
     void onRender() override;
     void drawSettings() override;
 
+    std::string suffix() const override
+    {
+        return filled_ ? "Filled" : "Outline";
+    }
+
 // Llamado desde el hook de BlockItem::useOn (hilo del juego).
 void addPlacedBlock(int x, int y, int z, int face);
 

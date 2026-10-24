@@ -53,7 +53,12 @@ void NameTags::onRender()
             name = "Player";
         bool fr = hasName && friends::isFriend(name);
 
-        Vec3 feet = smooth::entityPos(other.address(), other.pos());
+        // Ancla en el CENTRO horizontal (mPosition +0x0C) y pies (AABB +0xB4.y)
+        // — mismo encuadre del ESP: anclar la esquina +0xB4 dejaba la etiqueta
+        // medio bloque a un lado del modelo (el motor ancla el render en el
+        // centro +0x0C).
+        Vec3 anchor{other.posExact().x, other.pos().y, other.posExact().z};
+        Vec3 feet = smooth_ ? smooth::entityPos(other.address(), anchor) : anchor;
         float dist = distance3D(cam.pos, {feet.x, feet.y + 1.0f, feet.z});
         if (dist > maxDistance_ || dist < 0.5f)
             continue;
@@ -128,6 +133,7 @@ void NameTags::onRender()
 void NameTags::drawSettings()
 {
     widgets::Checkbox("Health##nt", &showHealth_);
+    widgets::Checkbox("Smooth##nt", &smooth_);
     widgets::Checkbox("Scale with distance##nt", &scaleDistance_);
     widgets::Checkbox("Blur background##nt", &blur_);
     widgets::CSlider("Font size##nt", &fontSize_, 10.0f, 24.0f, "%.0f");

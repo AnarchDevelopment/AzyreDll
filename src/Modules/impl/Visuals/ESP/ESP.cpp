@@ -213,7 +213,16 @@ void ESP::onRender()
         bool fr = friends::isFriend(n);
         ImU32 bC = fr ? friends::colorU32() : ImGui::ColorConvertFloat4ToU32(color_);
 
-        Vec3 feet = smooth::entityPos(other.address(), other.pos());
+        // Ancla en el CENTRO horizontal (mPosition +0x0C) y pies (AABB
+        // +0xB4.y), igual que el motor dibuja el modelo. Usar solo +0xB4
+        // desalineaba la caja -0.3 en x/z (encajaba por que la camara estaba
+        // igual de desfasada; al corregir la camara hay que corregirla aqui).
+        Vec3 anchor{other.posExact().x, other.pos().y, other.posExact().z};
+        // Smooth: interp prev→cur (lag ≈ medio intervalo) vs raw directo
+        // (puede saltar a 20Hz). Toggle para calibrar contra el modelo
+        // in-game: el desfase temporal se ve distinto según el ritmo real
+        // de updates del server.
+        Vec3 feet = smooth_ ? smooth::entityPos(other.address(), anchor) : anchor;
         float ht = other.height();
         float dist = distance3D(cam.pos, {feet.x, feet.y + 1.0f, feet.z});
         if (dist < 0.5f)
@@ -345,6 +354,7 @@ void ESP::drawSettings()
 {
     const char* styles[] = {"2D", "3D"};
     widgets::CCombo("Style##esp", &style_, styles, 2);
+    widgets::Checkbox("Smooth##esp", &smooth_);
     widgets::Checkbox("Box##esp", &box_);
     widgets::Checkbox("Name##esp", &name_);
     widgets::Checkbox("Distance##esp", &distance_);

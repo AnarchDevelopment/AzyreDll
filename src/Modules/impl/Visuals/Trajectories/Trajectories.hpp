@@ -19,6 +19,11 @@ public:
     void onRender() override;
     void drawSettings() override;
 
+    std::string suffix() const override
+    {
+        return autoItem_ ? "Auto" : "Custom";
+    }
+
     nlohmann::json saveSettings() const override
     {
         return nlohmann::json{

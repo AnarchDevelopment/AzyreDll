@@ -24,6 +24,11 @@ public:
     void onShutdown() override;
     void drawSettings() override;
 
+    std::string suffix() const override
+    {
+        return name_;
+    }
+
     nlohmann::json saveSettings() const override;
     void loadSettings(const nlohmann::json& j) override;
 

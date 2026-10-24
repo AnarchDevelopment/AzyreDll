@@ -21,6 +21,11 @@ public:
 
     void onRender() override;
     void drawSettings() override;
+
+    std::string suffix() const override
+    {
+        return profile_;
+    }
     void onCommand(const std::string& cmd) override;
 
     nlohmann::json saveSettings() const override;

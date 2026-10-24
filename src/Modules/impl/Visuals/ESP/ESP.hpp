@@ -14,6 +14,11 @@ public:
     void onRender() override;
     void drawSettings() override;
 
+    std::string suffix() const override
+    {
+        return style_ == 0 ? "2D" : "3D";
+    }
+
     nlohmann::json saveSettings() const override
     {
         return nlohmann::json{
@@ -28,6 +33,7 @@ public:
             {"shadowStrength", shadowStrength_},
             {"fov", fov_},
             {"color", {color_.x, color_.y, color_.z, color_.w}},
+            {"smooth", smooth_},
         };
     }
 
@@ -50,6 +56,7 @@ public:
             color_.z = j["color"][2].get<float>();
             color_.w = j["color"][3].get<float>();
         }
+        smooth_ = j.value("smooth", smooth_);
     }
 
 private:
@@ -62,6 +69,7 @@ private:
     float fillAlpha_ = 0.35f;
     bool shadow_ = true;
     float shadowStrength_ = 32.0f;
+    bool smooth_ = true;
     float fov_ = 110.0f;
     bool fovInited_ = false;
     ImVec4 color_ = ImVec4(0.78f, 0.82f, 0.90f, 1.0f);

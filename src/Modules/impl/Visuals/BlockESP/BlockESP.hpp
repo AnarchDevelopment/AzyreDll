@@ -24,6 +24,14 @@ public:
     void onRender() override;
     void drawSettings() override;
 
+    std::string suffix() const override
+    {
+        static const char* modes[] = {"Filled", "Outline", "Both"};
+        if (renderMode_ >= 0 && renderMode_ < 3)
+            return modes[renderMode_];
+        return "";
+    }
+
     nlohmann::json saveSettings() const override;
     void loadSettings(const nlohmann::json& j) override;
 
