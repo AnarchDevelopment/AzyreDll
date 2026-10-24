@@ -981,6 +981,49 @@ void pollThread()
 
 // ============ API publica ============
 
+bool completeAuthWithUrl(const std::string& urlOrCode)
+{
+    // Acepta: "http://localhost:8888/callback?code=X&state=...", el query
+    // "code=X&..." o el code a secas. Extrae code/error como el callback.
+    std::string s = urlOrCode;
+    for (char& c : s)
+    {
+        if (c == '\r' || c == '\n' || c == '\t' || c == '"' || c == '\'')
+            c = ' ';
+    }
+
+    std::string code;
+    std::string error;
+
+    size_t q = s.find('?');
+    if (q != std::string::npos)
+        s = s.substr(q + 1);
+
+    if (s.rfind("code=", 0) == 0 || s.find("&code=") != std::string::npos ||
+        s.find("&state=") != std::string::npos)
+    {
+        code = queryParam(s, "code");
+        error = queryParam(s, "error");
+    }
+    else if (!s.empty() && s.find(' ') == std::string::npos && s.find('/') == std::string::npos)
+    {
+        code = s; // code pegado a secas
+    }
+    else
+    {
+        return false;
+    }
+
+    if (code.empty() && error.empty())
+        return false;
+
+    // postToken bloquea unos segundos: no congelar el hilo de render.
+    std::thread([code, error]() {
+        handleCallback(code, error);
+    }).detach();
+    return true;
+}
+
 bool startServer()
 {
     std::unique_lock<std::mutex> lock(g_srvMu);

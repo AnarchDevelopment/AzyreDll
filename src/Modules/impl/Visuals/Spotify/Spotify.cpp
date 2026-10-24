@@ -375,9 +375,28 @@ void Spotify::drawSettings()
         ImGui::TextColored(ImVec4(0.95f, 0.65f, 0.25f, 1.0f), "Status: no credentials");
         break;
     case spotify::Status::WaitingAuth:
+    {
         ImGui::TextColored(ImVec4(0.95f, 0.85f, 0.35f, 1.0f),
                            "Status: waiting for authorization...");
+        // El navegador no vuelve a localhost:8888 dentro del AppContainer
+        // del juego sin exemption de loopback. Ofrecer la via manual: la
+        // barra de direcciones del navegador queda con el code despues del
+        // redirect fallido — copiar y pegar aqui.
+        ImGui::TextDisabled("Si el navegador no logra abrir localhost:8888:");
+        ImGui::TextDisabled("cmd (admin): CheckNetIsolation LoopbackExempt");
+        ImGui::TextDisabled("-a -n=Microsoft.MinecraftUWP_8wekyb3d8bbwe");
+        static char pastedUrl[512] = "";
+        widgets::InputText("##sppaste", pastedUrl, sizeof(pastedUrl));
+        ImGui::SameLine();
+        if (ImGui::Button("Complete##sp"))
+        {
+            std::string s = pastedUrl;
+            if (!spotify::completeAuthWithUrl(s))
+                ModuleManager::get().notifyInfo("Spotify: no code found in the pasted text");
+            pastedUrl[0] = '\0';
+        }
         break;
+    }
     case spotify::Status::Connected:
         ImGui::TextColored(ImVec4(0.20f, 0.85f, 0.45f, 1.0f), "Status: connected");
         break;

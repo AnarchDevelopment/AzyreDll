@@ -48,6 +48,14 @@ std::string lastError(); // ultimo fallo (token/API), vacio si no hay
 void startAuthFlow();
 void clearTokens(); // borra el token persistido (desconectar)
 
+// Fallback manual para cuando el navegador no puede volver al callback
+// (Minecraft UWP corre en un AppContainer: Windows bloquea el loopback
+// desde fuera salvo exemption). Acepta la URL de redireccion pegada
+// ("http://localhost:8888/callback?code=..."), el query suelto
+// ("code=...") o el code a secas. Devuelve false si no encontro code.
+// El intercambio corre en su propio hilo (bloquea unos segundos).
+bool completeAuthWithUrl(const std::string& urlOrCode);
+
 // Hilo que consulta /v1/me/player/currently-playing cada pollIntervalMs.
 void startPolling();
 void stopPolling();
