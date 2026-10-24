@@ -58,9 +58,8 @@ struct ScreenPos
 };
 
 // Ring buffer de posiciones pasadas (lo llena el sync cada tick):
-// Backtrack lo usa para apuntar a donde ESTABAN los players, no donde
-// estan. El ECS siempre mantiene el historial; los modules deciden si
-// lo aplican o no.
+// apuntar a donde ESTABAN los players, no donde estan. El ECS siempre
+// mantiene el historial; los modules deciden si lo aplican o no.
 struct HistoryPos
 {
     static constexpr int kMax = 100; // 5 segundos a 20 tps
