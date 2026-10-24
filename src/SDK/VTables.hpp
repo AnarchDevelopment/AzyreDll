@@ -15,7 +15,9 @@ constexpr uintptr_t ServerPlayer = 0xE6CDA8;
 constexpr uintptr_t MinecraftClient = 0xE44B28; /* Like ClientInstance */
 constexpr uintptr_t MoveInputHandler = 0xE618E8;
 constexpr uintptr_t PacketSender = 0xE699D0;
+constexpr uintptr_t BatchedPacketSender = 0xE69A00;
 constexpr uintptr_t ServerNetworkHandler = 0xE6BDA0;
+constexpr uintptr_t MovePlayerPacket = 0xE644F8;
 
 constexpr uintptr_t BlockSource = 0xEAEDD8;
 constexpr uintptr_t Block = 0xE7B470;
@@ -71,6 +73,15 @@ constexpr uintptr_t DropItemPacket = 0xE62BC0;
 constexpr uintptr_t ItemFrameDropItemPacket = 0xE69BA0;
 constexpr uintptr_t ReplaceSelectedItemPacket = 0xE6A320;
 constexpr uintptr_t ClientboundMapItemDataPacket = 0xE6A5D8;
+constexpr uintptr_t AnimatePacket = 0xE64498;
+// InteractPacket (VInteractPacket): usado por el cliente en el clic izquierdo
+// sobre una entidad; confirmado en sub_14004B9D0/sub_140397A20.
+constexpr uintptr_t InteractPacket = 0xE44C40;
+constexpr uintptr_t LevelEventPacket = 0xE69BD0;
+constexpr uintptr_t UpdateBlockPacket = 0xE6A2C0;
+constexpr uintptr_t PlayerActionPacket = 0xE63B58;
+constexpr uintptr_t PlayerInputPacket = 0xE63B28;
+constexpr uintptr_t MobEquipmentPacket = 0xE64528;
 
 constexpr uintptr_t BaseContainerScreen = 0xE4B408;
 constexpr uintptr_t ChestScreen = 0xE4BE40;
@@ -115,6 +126,24 @@ namespace LocalPlayer
     constexpr int ResetVelocity = 11;
     constexpr int Move = 14;
     constexpr int GetFriction = 20;
+    // sub_1404D4560 (slot 211): NO arma el MovePlayerPacket como se creia.
+    // Es el ORQUESTADOR de render — lee +0x0C (X de mPosition) como yaw y
+    // +0x14 (Z de mPosition) como pitch, arma dos Vec3 con el offset de
+    // altura del actor, llama a sub_1405EAE30(vtable, renderPos, posAlt,
+    // posFeet, 0, 0, 200) y devuelve si el resultado esta en {2,3}.
+    // Sub_1405EAE30 (DECOMPILADO, 100% confirmado): NO es una funcion de
+    // rotacion — es un VOXEL CAST / ClipHelper estilo Minecraft Java. Sus
+    // parametros 2 y 3 son los puntos Vec3 del rayo, convierte ambos a
+    // BlockPos con floor(), avanza al mas lejano en cada paso de rejilla y
+    // por cada celda llama a sub_1405E7620(blockSource, &hitByte, &pos) para
+    // leer el bloque, vtable+56 para el collision shape, vtable+320 para
+    // canCollide y vtable+456 para el HitResult. Ese +200 que sub_1404D4560
+    // le pasa es el MAXIMO DE Celdas del cast, no un yaw. El retorno es el
+    // HitResult (0=miss, 1..2..3=hit), por eso el caller hace (ret-2)<=1.
+    // DESCARTADO para bodyYaw/headYaw: no hay rotacion que escribir aqui.
+    constexpr int RenderOrchestrator = 211;
+    // sub_1404D4770 (slot 214): setter de NOMBRE (lee slot 1688, copia el
+    // string, llama a los slots 1112/1680 y 800 = setText). No toca rot.
     constexpr int ActuallyHurt = 67;
     constexpr int Hurt = 69;
 }
@@ -126,8 +155,19 @@ namespace BlockItem
 
 namespace GameMode
 {
-    constexpr int UseItemOnWrapper = 12;
-    constexpr int UseItemOn = 59;
+    // Vtable de GameMode (0xE8A1A0): 19 slots (0..18). El "slot 59" que
+    // habia aqui leia FUERA de la tabla (puntero basura) — eliminado.
+    constexpr int UseItemOnWrapper = 12; // sub_1405113F0 (candidato principal)
+    // Mismo slot mientras se confirma en IDA. Candidatos alternativos a
+    // GameMode::useItemOn (verificar decompilando y buscando la construccion
+    // del UseItemPacket — vtable 0xE6A020 escrita en buffer+0x10 — seguida
+    // del send): slot 9 sub_140511BC0, slot 10 sub_140511820,
+    // slot 11 sub_140511700, slot 15 sub_1405118A0. El caller de los
+    // ctores de UseItemPacket (0x5100F0/0x510270) ES el orquestador.
+    constexpr int UseItemOn = 12;
+    // Confirmado por REA en GameMode/CreativeMode/SurvivalMode: slot 14
+    // despacha sub_1405103D0(this, Player*, Actor*), la entrada de ataque.
+    constexpr int Attack = 14;
 }
 
 namespace UseItemPacket

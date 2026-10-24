@@ -73,6 +73,10 @@ struct ScanPacket
     uintptr_t local = 0;
     std::vector<uintptr_t> remotes;
     std::vector<uintptr_t> remotesAlt;
+    // Instancias de GameMode halladas por vtable (scanner).
+    uintptr_t gmSurvival = 0;
+    uintptr_t gmCreative = 0;
+    uintptr_t gmBase = 0;
 };
 
 struct ScannerState
@@ -100,6 +104,13 @@ ScanPacket runScanJob(bool localOnly)
     mem::ValidateFn validateLocal = actorValidator(vt::LocalPlayer, false);
     mem::ValidateFn validateRemote = actorValidator(vt::RemotePlayer, true);
     mem::ValidateFn validateRemoteAlt = actorValidator(vt::RemotePlayerAlt, true);
+    // Instancias de GameMode: la cadena level->SNH+0x20 resuelve otra cosa
+    // en servidores (gm=...valid=0 en el [SC]); el GameMode REAL es el que
+    // apunta a una de estas vtables (tecnica de searchGM.py). Validacion
+    // minima: legible.
+    mem::ValidateFn validateGm = [](uintptr_t p) {
+        return p && mem::isReadable(p, 0x100) != 0;
+    };
 
     std::vector<mem::VtableQuery> queries;
     if (localOnly)
@@ -116,6 +127,9 @@ ScanPacket runScanJob(bool localOnly)
             {vt::LocalPlayer, &validateLocal, 1},
             {vt::RemotePlayer, &validateRemote, 64},
             {vt::RemotePlayerAlt, &validateRemoteAlt, 64},
+            {vt::SurvivalMode, &validateGm, 1},
+            {vt::CreativeMode, &validateGm, 1},
+            {vt::GameMode, &validateGm, 1},
         };
     }
 
@@ -128,6 +142,15 @@ ScanPacket runScanJob(bool localOnly)
     {
         packet.remotes = std::move(out[1]);
         packet.remotesAlt = std::move(out[2]);
+    }
+    if (out.size() > 3)
+    {
+        if (!out[3].empty())
+            packet.gmSurvival = out[3][0];
+        if (out.size() > 4 && !out[4].empty())
+            packet.gmCreative = out[4][0];
+        if (out.size() > 5 && !out[5].empty())
+            packet.gmBase = out[5][0];
     }
     return packet;
 }
@@ -327,6 +350,12 @@ void Game::update()
             for (uintptr_t p : packet.remotesAlt)
                 addUnique(p);
 
+            // GameMode del scanner (fallback cuando la cadena no valida —
+            // en servidores resuelve otra cosa).
+            scannedGm_ = packet.gmSurvival ? packet.gmSurvival
+                        : packet.gmCreative ? packet.gmCreative
+                                            : packet.gmBase;
+
             // Anti-parpadeo: actores previos validos que el scan no vio se
             // conservan hasta 2 ciclos (reubicaciones temporales del heap).
             {
@@ -505,12 +534,26 @@ uintptr_t Game::blockSourceAddr() const
 
 uintptr_t Game::gameModeAddr() const
 {
-    if (!level_)
-        return 0;
-    uintptr_t snh = mem::read<uintptr_t>(level_ + off::chain::LevelNetworkHandler);
-    if (!snh)
-        return 0;
-    return mem::read<uintptr_t>(snh + off::chain::NetworkHandlerGameMode);
+    // Cadena clasica — SOLO si el objeto apunta a una vtable de GameMode
+    // real (en servidores snh+0x20 resuelve otra cosa: [SC] valid=0).
+    if (level_)
+    {
+        uintptr_t snh = mem::read<uintptr_t>(level_ + off::chain::LevelNetworkHandler);
+        if (snh)
+        {
+            uintptr_t gm = mem::read<uintptr_t>(snh + off::chain::NetworkHandlerGameMode);
+            if (gm && mem::isReadable(gm, sizeof(uintptr_t)))
+            {
+                uintptr_t v = mem::read<uintptr_t>(gm);
+                if (v == mem::resolve(vt::CreativeMode) ||
+                    v == mem::resolve(vt::SurvivalMode) ||
+                    v == mem::resolve(vt::GameMode))
+                    return gm;
+            }
+        }
+    }
+    // Instancia hallada por el scanner de vtables (searchGM.py style).
+    return scannedGm_;
 }
 
 }

@@ -2,6 +2,7 @@
 
 #include "Framework/Math.hpp"
 #include "Framework/Memory.hpp"
+#include "Features/Smoothing.hpp"
 #include "SDK/Classes/Client.hpp"
 #include "SDK/Classes/LocalPlayer.hpp"
 #include "SDK/Offsets.hpp"
@@ -26,8 +27,17 @@ struct CameraView
 inline CameraView computeView(const LocalPlayer& local, const Client& client, float eyeHeight)
 {
     CameraView cam;
-    Vec3 p = local.pos();
-    cam.pos = {p.x, p.y + eyeHeight, p.z};
+    // El ojo esta sobre el CENTRO horizontal del player (mPosition +0x0C) y
+    // a la altura de los PIES (AABB min +0xB4.y) + eyeHeight. Usar +0xB4
+    // tambien para x/z offseteaba la camara -0.3 (halfW): las cajas de
+    // ACTORES lo compensaban (tambien ancladas en +0xB4 -> se cancelaba) pero
+    // las de BLOQUES (coordenadas reales del mundo) quedaban desfasadas del
+    // render del juego. Se interpola la base por-frame (hand-off, QPC).
+    Vec3 feet = local.pos();       // +0x0C
+    Vec3 exact = local.posExact(); // +0x0C (centro x/z)
+    Vec3 base{exact.x, feet.y, exact.z};
+    base = smooth::interp(smooth::channel::Camera, base);
+    cam.pos = {base.x, base.y + eyeHeight, base.z};
     cam.yaw = local.yaw();
     cam.pitch = local.pitch();
 
@@ -63,11 +73,11 @@ inline CameraView computeView(const LocalPlayer& local, const Client& client, fl
 
     if (dot >= 0.0f)
     {
-        cam.pos = {p.x - pfx * pullBack, p.y + eyeHeight - pfy * pullBack, p.z - pfz * pullBack};
+        cam.pos = {base.x - pfx * pullBack, base.y + eyeHeight - pfy * pullBack, base.z - pfz * pullBack};
     }
     else
     {
-        cam.pos = {p.x + pfx * pullBack, p.y + eyeHeight + pfy * pullBack, p.z + pfz * pullBack};
+        cam.pos = {base.x + pfx * pullBack, base.y + eyeHeight + pfy * pullBack, base.z + pfz * pullBack};
         cam.yaw += 180.0f;
         cam.pitch = -cam.pitch;
     }
@@ -78,43 +88,24 @@ inline CameraView getCameraView(const LocalPlayer& local, const Client& client,
                                 float eyeHeight = off::gameconst::EyeHeight)
 {
     static int s_frame = -1;
-    static bool s_init = false;
-    static Vec3 s_prevRaw{};
-    static Vec3 s_lastRaw{};
-    static ULONGLONG s_changeMs = 0;
     static CameraView s_cached{};
+    static ULONGLONG s_lastGc = 0;
 
     int frame = ImGui::GetFrameCount();
     if (frame == s_frame)
         return s_cached;
 
     CameraView cam = computeView(local, client, eyeHeight);
-    Vec3 raw = cam.pos;
+
+    // La interpolacion por-frame de la base va en computeView (cubre 1ª y
+    // 2ª/3ª persona). No se suaviza el cam.pos completo: en 3ª persona el
+    // offset de orbita ya es continuo y no debe recibir lag extra.
     ULONGLONG now = GetTickCount64();
-
-    if (!s_init)
+    if (now - s_lastGc > 2000)
     {
-        s_prevRaw = raw;
-        s_lastRaw = raw;
-        s_changeMs = now;
-        s_init = true;
+        s_lastGc = now;
+        smooth::gc();
     }
-    else if (raw.x != s_lastRaw.x || raw.y != s_lastRaw.y || raw.z != s_lastRaw.z)
-    {
-        s_prevRaw = s_lastRaw;
-        s_lastRaw = raw;
-        s_changeMs = now;
-    }
-
-    float t = (float)(now - s_changeMs) / 50.0f;
-    if (t < 0.0f)
-        t = 0.0f;
-    if (t > 1.0f)
-        t = 1.0f;
-
-    cam.pos.x = s_prevRaw.x + (s_lastRaw.x - s_prevRaw.x) * t;
-    cam.pos.y = s_prevRaw.y + (s_lastRaw.y - s_prevRaw.y) * t;
-    cam.pos.z = s_prevRaw.z + (s_lastRaw.z - s_prevRaw.z) * t;
 
     s_cached = cam;
     s_frame = frame;

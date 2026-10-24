@@ -6,6 +6,7 @@
 #include "SDK/VTables.hpp"
 
 #include <cmath>
+#include <excpt.h>
 #include <string>
 
 namespace mc {
@@ -41,6 +42,18 @@ public:
             mem::read<float>(addr + off::player::PosX),
             mem::read<float>(addr + off::player::PosY),
             mem::read<float>(addr + off::player::PosZ),
+        };
+    }
+
+    // Posicion REAL del actor (mPosition, +0xC): la que escribe Actor::setPos.
+    // pos() devuelve la esquina MIN del AABB (+0xB4) — util para ESP pero no
+    // para logica de movimiento.
+    Vec3 posExact() const
+    {
+        return {
+            mem::read<float>(addr + off::player::PosTrueX),
+            mem::read<float>(addr + off::player::PosTrueY),
+            mem::read<float>(addr + off::player::PosTrueZ),
         };
     }
 
@@ -177,6 +190,27 @@ public:
         if (mem::rawRead(&hp, addr + off::player::Health, sizeof(hp)))
             return hp;
         return 0;
+    }
+
+    bool swing() const
+    {
+        if (!valid())
+            return false;
+
+        const uintptr_t fn = mem::resolve(off::fn::ActorSwing);
+        if (!fn)
+            return false;
+
+        __try
+        {
+            reinterpret_cast<void(__fastcall*)(void*)>(fn)(
+                reinterpret_cast<void*>(addr));
+            return true;
+        }
+        __except (EXCEPTION_EXECUTE_HANDLER)
+        {
+            return false;
+        }
     }
 
 protected:

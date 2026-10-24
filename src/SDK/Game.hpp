@@ -39,6 +39,9 @@ public:
     uintptr_t blockSourceAddr() const;
     BlockSource blockSource() const { return BlockSource(blockSourceAddr()); }
 
+    // GameMode del cliente: la cadena level->SNH+0x20 cuando valida; sino
+    // la instancia hallada por el scanner de vtables (en servidores la
+    // cadena resuelve otra cosa — [SC] gm=...valid=0).
     uintptr_t gameModeAddr() const;
     GameMode gameMode() const { return GameMode(gameModeAddr()); }
 
@@ -64,6 +67,7 @@ private:
     uintptr_t local_ = 0;
     uintptr_t client_ = 0;
     uintptr_t level_ = 0;
+    uintptr_t scannedGm_ = 0; // instancia GameMode del scanner de vtables
     bool installed_ = false;
     bool botFilter_ = false;
     size_t rawCount_ = 0;
