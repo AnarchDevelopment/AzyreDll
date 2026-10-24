@@ -34,7 +34,9 @@ void Watermark::onRender()
 
     ImDrawList* d = ImGui::GetForegroundDrawList();
 
-    if (style_ == 1)
+    if (style_ == 2)
+        renderRise(d);
+    else if (style_ == 1)
         renderSolstice(d);
     else
         renderAzyre(d, sw, sh, io);
@@ -148,12 +150,115 @@ void Watermark::renderSolstice(ImDrawList* d)
     }
 }
 
+// =============== MODO RISE (watermark de ModernInterface.java) ===============
+// Rise dibuja el nombre del cliente a 36px MEDIUM en (6, 6) con gradiente POR
+// CARACTER (ColorUtil.a: lerp(rA, rB, sin(i*0.095)*0.5+0.5)) y sombra; despues,
+// en la misma Y, el nombre de usuario a 18px en blanco alpha 170 con sombra
+// (o el Custom Client Name en color rB, sin sombra, si esta configurado).
+void Watermark::renderRise(ImDrawList* d)
+{
+    ImFont* font = dx11::riseFont();
+    if (!font)
+        font = ImGui::GetFont();
+
+    // rA/rB del tema. Para el tema funcion (Rainbow) se calculan en runtime
+    // como Themes.rA()/rB() = getAccentColor((0,0)) / ((0,50)).
+    auto rA = []() { return theme::AccentRainbow ? theme::rainbowAt(0.0f, 0.0f) : theme::Accent; };
+    auto rB = []() { return theme::AccentRainbow ? theme::rainbowAt(0.0f, 50.0f) : theme::Accent2; };
+
+    // Nombre del jugador (cacheado 1s, como el modo Azyre).
+    Game& game = Game::get();
+    ULONGLONG now = GetTickCount64();
+    static std::string playerName;
+    static ULONGLONG lastName = 0;
+    if (now - lastName > 1000)
+    {
+        playerName = game.localFound() ? game.localPlayer().name() : "";
+        lastName = now;
+    }
+
+    // Texto secundario: Custom Client Name (rB, sin sombra) o el nombre del
+    // jugador (blanco alpha 170, con sombra).
+    bool custom = (customName_[0] != '\0');
+    const char* second = custom ? customName_ : playerName.c_str();
+
+    const char* logo = "Azyre";
+    const float logoSz = 36.0f;
+    const float nameSz = 18.0f;
+
+    // Ancho del logo sumando caracter a caracter + 0.5 (como ColorUtil.a).
+    float logoW = 0.0f;
+    ImVec2 logoTs(0.0f, logoSz);
+    for (int i = 0; logo[i] != '\0'; ++i)
+    {
+        ImVec2 cs = font->CalcTextSizeA(logoSz, FLT_MAX, 0.0f, logo + i, logo + i + 1);
+        logoW += cs.x + 0.5f;
+        if (cs.y > logoTs.y)
+            logoTs.y = cs.y;
+    }
+
+    float secondW = 0.0f;
+    if (second && second[0] != '\0')
+        secondW = font->CalcTextSizeA(nameSz, FLT_MAX, 0.0f, second).x;
+
+    // (6, 6) como Rise; movable con el HUD editor.
+    ImVec2 size(logoW + 2.0f + secondW, logoTs.y);
+    hud::Registry::get().setConfigPath(config::baseDir() + "\\hud.json");
+    ImVec2 pos = hud::Registry::get().report("WatermarkRise", ImVec2(6.0f, 6.0f), size);
+
+    // Logo: gradiente por caracter con sombra (Font.b = drawStringWithShadow).
+    float x = pos.x;
+    for (int i = 0; logo[i] != '\0'; ++i)
+    {
+        const char* c = logo + i;
+        ImVec2 cs = font->CalcTextSizeA(logoSz, FLT_MAX, 0.0f, c, c + 1);
+
+        float f = sinf((float)i * 0.095f) * 0.5f + 0.5f;
+        ImVec4 a = rA();
+        ImVec4 b = rB();
+        ImVec4 colV(a.x + (b.x - a.x) * f,
+                    a.y + (b.y - a.y) * f,
+                    a.z + (b.z - a.z) * f, 1.0f);
+
+        ImU32 shadowCol = IM_COL32((int)(colV.x * 0.25f * 255.0f),
+                                   (int)(colV.y * 0.25f * 255.0f),
+                                   (int)(colV.z * 0.25f * 255.0f),
+                                   (int)(0.925f * 255.0f));
+        d->AddText(font, logoSz, ImVec2(x + 1.0f, pos.y + 1.0f), shadowCol, c, c + 1);
+        d->AddText(font, logoSz, ImVec2(x, pos.y),
+                   ImGui::ColorConvertFloat4ToU32(colV), c, c + 1);
+
+        x += cs.x + 0.5f;
+    }
+
+    // Texto secundario en 6 + anchoLogo + 2, misma Y (Font.b para el usuario,
+    // Font.a sin sombra para el Custom Client Name).
+    if (secondW > 0.0f)
+    {
+        ImVec2 secondPos(pos.x + logoW + 2.0f, pos.y);
+        if (custom)
+        {
+            d->AddText(font, nameSz, secondPos,
+                       ImGui::ColorConvertFloat4ToU32(rB()), second);
+        }
+        else
+        {
+            d->AddText(font, nameSz, ImVec2(secondPos.x + 1.0f, secondPos.y + 1.0f),
+                       IM_COL32(64, 64, 64, 170), second);
+            d->AddText(font, nameSz, secondPos,
+                       IM_COL32(255, 255, 255, 170), second);
+        }
+    }
+}
+
 void Watermark::drawSettings()
 {
-    const char* styles[] = {"Azyre", "Solstice"};
-    widgets::CCombo("Style##wm", &style_, styles, 2);
+    const char* styles[] = {"Azyre", "Solstice", "Rise"};
+    widgets::CCombo("Style##wm", &style_, styles, 3);
     if (style_ == 1)
         widgets::Checkbox("Glow##wm", &glow_);
+    if (style_ == 2)
+        widgets::InputText("Custom Name##wm", customName_, sizeof(customName_));
 }
 
 nlohmann::json Watermark::saveSettings() const
@@ -161,15 +266,18 @@ nlohmann::json Watermark::saveSettings() const
     return nlohmann::json{
         {"style", style_},
         {"glow", glow_},
+        {"customName", customName_},
     };
 }
 
 void Watermark::loadSettings(const nlohmann::json& j)
 {
     style_ = j.value("style", style_);
-    if (style_ < 0 || style_ > 1)
+    if (style_ < 0 || style_ > 2)
         style_ = 0;
     glow_ = j.value("glow", glow_);
+    std::string cn = j.value("customName", std::string());
+    snprintf(customName_, sizeof(customName_), "%s", cn.c_str());
 }
 
 MC_REGISTER_MODULE(Watermark);

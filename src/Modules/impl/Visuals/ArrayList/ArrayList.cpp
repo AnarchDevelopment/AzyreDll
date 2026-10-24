@@ -6,6 +6,7 @@
 #include "GUI/Theme.hpp"
 #include "GUI/Widgets.hpp"
 #include "Modules/ModuleManager.hpp"
+#include "Modules/impl/Interface/Interface.hpp"
 #include "Render/BlurHelper/BlurHelper.hpp"
 #include "Render/DX11.hpp"
 
@@ -38,6 +39,75 @@ float easeOutCubic(float t)
 {
     float inv = 1.0f - t;
     return 1.0f - inv * inv * inv;
+}
+
+std::string separateWords(const std::string& s)
+{
+    if (s.empty())
+        return s;
+    std::string out;
+    out.reserve(s.size() + 4);
+    for (size_t i = 0; i < s.size(); ++i)
+    {
+        char c = s[i];
+        if (i > 0)
+        {
+            char prev = s[i - 1];
+            char next = (i + 1 < s.size()) ? s[i + 1] : '\0';
+
+            bool lowerToUpper = (islower((unsigned char)prev) && isupper((unsigned char)c));
+            bool letterToDigit = (isalpha((unsigned char)prev) && isdigit((unsigned char)c));
+            bool acronymToWord = (isupper((unsigned char)prev) && isupper((unsigned char)c) && islower((unsigned char)next));
+
+            if (lowerToUpper || letterToDigit || acronymToWord)
+            {
+                out += ' ';
+            }
+        }
+        out += c;
+    }
+    return out;
+}
+
+std::string formatModuleName(const std::string& name, int charStyle)
+{
+    switch (charStyle)
+    {
+    case 0: // lowercase
+    {
+        std::string res = name;
+        for (char& c : res)
+            c = (char)tolower((unsigned char)c);
+        return res;
+    }
+    case 1: // lowercase spaced
+    {
+        std::string res = separateWords(name);
+        for (char& c : res)
+            c = (char)tolower((unsigned char)c);
+        return res;
+    }
+    case 2: // Normalcase
+        return name;
+    case 3: // Normalcase separated
+        return separateWords(name);
+    default:
+        return name;
+    }
+}
+
+std::string formatSuffix(const std::string& sfx, int charStyle)
+{
+    if (sfx.empty())
+        return sfx;
+    if (charStyle == 0 || charStyle == 1)
+    {
+        std::string res = sfx;
+        for (char& c : res)
+            c = (char)tolower((unsigned char)c);
+        return res;
+    }
+    return sfx;
 }
 
 // Glow por anillos concentricos (sustituto del AddShadowRect de Solstice):
@@ -99,8 +169,12 @@ ImVec4 ArrayList::rowColor(size_t idx, size_t total)
 // Color por fila estilo ColorUtils de Solstice: la fase avanza con el
 // tiempo y se desplaza con la Y (index = y*2). Usa la paleta global del
 // proyecto (Framework/ColorUtils, configurada desde el modulo Interface).
+// En el estilo Rise se usa el gradiente animado del tema seleccionado
+// (Themes.getAccentColor -> getBlendFactor segun la Y de la fila).
 ImVec4 ArrayList::solsticeColor(float y) const
 {
+    if (gui::style() == 2)
+        return theme::AccentAt4(0.0f, y);
     return ImGui::ColorConvertU32ToFloat4(colors::getThemedColor(y * 2.0f, 1.0f));
 }
 
@@ -152,9 +226,21 @@ void ArrayList::onRender()
         states.erase(m);
 
     // --- Filas visibles: anim > 0, ordenadas por ancho (las mas anchas arriba) ---
+    ImFont* hudFont = dx11::hudFont();
+    ImFont* riseF = dx11::riseFont();
+    bool usingHud = (style_ == 2) && solFont_ && hudFont != nullptr;
+    bool usingRise = (style_ == 3) && riseF != nullptr;
+    ImFont* font = usingHud ? hudFont : (usingRise ? riseF : ImGui::GetFont());
+    float fs = (style_ == 2) ? fontSize_
+                              : ((style_ == 3) ? riseFontSize_ : ImGui::GetFontSize());
+
     struct Row
     {
         const Module* m;
+        std::string nameStr;
+        std::string sfxStr;
+        float nameW;
+        float sfxW;
         float w;
         float h;
         float eased;
@@ -165,8 +251,18 @@ void ArrayList::onRender()
     {
         if (st.anim <= 0.001f)
             continue;
-        ImVec2 ts = ImGui::CalcTextSize(m->name().c_str());
-        rows.push_back({m, ts.x, ts.y + 7.0f, easeOutCubic(st.anim)});
+
+        std::string nameStr = formatModuleName(m->name(), charStyle_);
+        std::string sfxStr = suffixes_ ? formatSuffix(m->suffix(), charStyle_) : "";
+        std::string nameWithSpace = sfxStr.empty() ? nameStr : (nameStr + " ");
+
+        ImVec2 tsName = font->CalcTextSizeA(fs, FLT_MAX, 0.0f, nameWithSpace.c_str());
+        ImVec2 tsSfx = sfxStr.empty() ? ImVec2(0.0f, 0.0f) : font->CalcTextSizeA(fs, FLT_MAX, 0.0f, sfxStr.c_str());
+
+        float totalW = tsName.x + tsSfx.x;
+        float totalH = std::max(tsName.y, tsSfx.y);
+
+        rows.push_back({m, nameWithSpace, sfxStr, tsName.x, tsSfx.x, totalW, totalH + 7.0f, easeOutCubic(st.anim)});
     }
     std::sort(rows.begin(), rows.end(), [](const Row& a, const Row& b) { return a.w > b.w; });
 
@@ -179,10 +275,6 @@ void ArrayList::onRender()
         // Puerto del Arraylist de Solstice: texto right-aligned (cada fila
         // con su propio ancho), slide-in desde la derecha, color fluido por
         // fila, glow, sombra y las decoraciones Outline/Bar/Split.
-        ImFont* hudFont = dx11::hudFont();
-        bool usingHud = solFont_ && hudFont != nullptr;
-        ImFont* font = usingHud ? hudFont : ImGui::GetFont();
-        float fs = fontSize_;
         bool menuOpen = menu::visible();
         ImVec2 mouse = io.MousePos;
         bool hasBlur = solBlur_ && blur::wanted() && blur::ready() && blur::srv();
@@ -192,6 +284,10 @@ void ArrayList::onRender()
         struct SRow
         {
             const Module* m;
+            std::string nameStr;
+            std::string sfxStr;
+            float nameW;
+            float sfxW;
             float a;      // anim eased
             ImVec2 pos;   // posicion del texto (con slide)
             ImVec2 ts;    // tamano del texto
@@ -210,12 +306,16 @@ void ArrayList::onRender()
             if (visIdx_ == 1 && row.m->keybind() == 0)
                 continue;
 
-            ImVec2 ts = font->CalcTextSizeA(fs, FLT_MAX, 0.0f, row.m->name().c_str());
+            ImVec2 ts(row.w, row.h - 7.0f);
             float endX = anchor - ts.x;
             float x = sw + 14.0f + (endX - (sw + 14.0f)) * row.eased;
 
             SRow sr;
             sr.m = row.m;
+            sr.nameStr = row.nameStr;
+            sr.sfxStr = row.sfxStr;
+            sr.nameW = row.nameW;
+            sr.sfxW = row.sfxW;
             sr.a = row.eased;
             sr.ts = ts;
             sr.pos = ImVec2(x, y);
@@ -290,13 +390,26 @@ void ArrayList::onRender()
             }
 
             ImU32 textCol = colU32(sr, sr.a);
-            d->AddText(font, fs, sr.pos, textCol, sr.m->name().c_str());
+            ImU32 sfxCol = IM_COL32(165, 170, 180, (int)(255.0f * sr.a));
+
+            d->AddText(font, fs, sr.pos, textCol, sr.nameStr.c_str());
             if (solBold_ && !usingHud)
             {
                 // Bold por doble pasada con offset sub-pixel (solo para el
                 // font default; el hud font ya es bold).
                 d->AddText(font, fs, ImVec2(sr.pos.x + 0.7f, sr.pos.y), textCol,
-                           sr.m->name().c_str());
+                           sr.nameStr.c_str());
+            }
+
+            if (!sr.sfxStr.empty())
+            {
+                ImVec2 sfxPos(sr.pos.x + sr.nameW, sr.pos.y);
+                d->AddText(font, fs, sfxPos, sfxCol, sr.sfxStr.c_str());
+                if (solBold_ && !usingHud)
+                {
+                    d->AddText(font, fs, ImVec2(sfxPos.x + 0.7f, sfxPos.y), sfxCol,
+                               sr.sfxStr.c_str());
+                }
             }
 
             if (sr.hovered)
@@ -394,6 +507,104 @@ void ArrayList::onRender()
             float thick = (displayMode_ == 0) ? 2.0f : 4.0f;
             for (const LineSeg& l : lines)
                 d->AddLine(l.a, l.b, l.col, thick);
+        }
+        return;
+    }
+
+    if (style_ == 3)
+    {
+        // =============== MODO RISE (puerto de ModernInterface.java) ===============
+        // Filas alineadas a la derecha, ordenadas por ancho (mas anchas arriba),
+        // texto Product Sans con sombra en el color ANIMADO del tema, fondo
+        // oscuro (0,0,0,150) y barra de acento 2x9 en el borde derecho.
+        float textH = font->CalcTextSizeA(fs, FLT_MAX, 0.0f, "Ag").y;
+        float spacing = textH + 1.0f;       // moduleSpacing de Rise (font.height())
+        const float edge = 10.0f;           // edgeOffset
+        const float d2 = 2.0f;
+
+        bool menuOpen = menu::visible();
+        ImVec2 mouse = io.MousePos;
+        bool hasBlur = riseBlur_ && blur::wanted() && blur::ready() && blur::srv();
+
+        float y = edge;
+        for (const Row& row : rows)
+        {
+            if (row.m == this)
+                continue;
+            if (visIdx_ == 1 && row.m->keybind() == 0)
+                continue;
+
+            float a = row.eased;
+            float w = row.w;
+
+            // Slide-in desde la derecha + colapso vertical (Rise: animationTime)
+            float slideOff = (1.0f - a) * (w + 60.0f);
+            float x = (sw - edge - w) + slideOff;
+            float rH = spacing * a;
+            float rowTop = y - 3.0f;        // fondo sube 3px (Rise: d5 - 3.0)
+
+            // Color: default Fade = getAccentColor((0, y)) -> gradiente animado.
+            // Static en Rise usa rz().rA(): para el tema Rainbow es dinamico.
+            ImVec4 col;
+            if (riseColorMode_ == 0)
+                col = theme::AccentRainbow ? theme::rainbowAt(0.0f, 0.0f) : theme::Accent;
+            else if (riseColorMode_ == 2)
+                col = theme::AccentAt4(0.0f, 0.0f);         // Breathe
+            else
+                col = theme::AccentAt4(0.0f, y);            // Fade
+            ImU32 colU32 = ImGui::ColorConvertFloat4ToU32(ImVec4(col.x, col.y, col.z, a));
+
+            // Fondo (Background = Normal): rect negro alpha 150 (Themes.rK)
+            if (riseBg_)
+            {
+                ImVec2 bgMin(x - d2, rowTop);
+                ImVec2 bgMax(x - d2 + w + 5.0f, rowTop + rH);
+                if (hasBlur)
+                {
+                    ImVec2 uv0(bgMin.x / sw, bgMin.y / sh);
+                    ImVec2 uv1(bgMax.x / sw, bgMax.y / sh);
+                    d->AddImage(ImTextureRef((void*)blur::srv()), bgMin, bgMax, uv0, uv1,
+                                IM_COL32(255, 255, 255, (int)(255.0f * a)));
+                }
+                d->AddRectFilled(bgMin, bgMax, IM_COL32(0, 0, 0, (int)(150.0f * a)));
+            }
+
+            // Texto con drop shadow (Rise: drawStringWithShadow)
+            ImVec2 tp(x, y);
+            if (riseShadow_)
+            {
+                d->AddText(font, fs, ImVec2(tp.x + 1.0f, tp.y + 1.0f),
+                           IM_COL32(0, 0, 0, (int)(255.0f * a)), row.nameStr.c_str());
+                if (!row.sfxStr.empty())
+                    d->AddText(font, fs, ImVec2(tp.x + row.nameW + 4.0f, tp.y + 1.0f),
+                               IM_COL32(0, 0, 0, (int)(255.0f * a)), row.sfxStr.c_str());
+            }
+            d->AddText(font, fs, tp, colU32, row.nameStr.c_str());
+            if (!row.sfxStr.empty())
+                d->AddText(font, fs, ImVec2(tp.x + row.nameW + 3.0f, tp.y),
+                           IM_COL32(204, 204, 204, (int)(255.0f * a)), row.sfxStr.c_str());
+
+            // Sidebar: barra de acento 2x9 (radio 1) a la derecha del texto
+            if (riseSidebar_)
+            {
+                d->AddRectFilled(ImVec2(x + w + 2.0f, y - 1.5f),
+                                 ImVec2(x + w + 4.0f, y - 1.5f + 9.0f), colU32, 1.0f);
+            }
+
+            // Hover + click para togglear (consistente con el resto de modos)
+            if (mouse.x >= x - d2 && mouse.x <= x + w + 4.0f &&
+                mouse.y >= rowTop && mouse.y <= rowTop + rH)
+            {
+                d->AddRectFilled(ImVec2(x - d2, rowTop), ImVec2(x + w + 4.0f, rowTop + rH),
+                                 IM_COL32(255, 255, 255, (int)(18.0f * a)));
+                if (!menuOpen && ImGui::IsMouseClicked(0))
+                {
+                    if (Module* mod = ModuleManager::get().find(row.m->name()))
+                        mod->toggle();
+                }
+            }
+
+            y += rH;
         }
         return;
     }
@@ -509,8 +720,10 @@ void ArrayList::onRender()
                                      IM_COL32(16, 18, 22, (int)(255.0f * bgOpacity_ * row.eased)));
             }
 
-            // Sidebar: barra con el color de ESTE modulo
-            ImVec4 col = rowColor(idx, rows.size());
+            // Sidebar: barra con el color de ESTE modulo (en Rise, el gradiente
+            // animado del tema segun la Y de la fila).
+            ImVec4 col = (gui::style() == 2) ? theme::AccentAt4(0.0f, y)
+                                             : rowColor(idx, rows.size());
             ImU32 barCol = ImGui::ColorConvertFloat4ToU32(
                 ImVec4(col.x, col.y, col.z, row.eased));
 
@@ -523,7 +736,13 @@ void ArrayList::onRender()
             float tx = (outlineMode_ == 1) ? x0 + barW + padX : x0 + padX;
             d->AddText(ImVec2(tx, y + 3.0f),
                        IM_COL32(240, 242, 245, (int)(255 * row.eased)),
-                       row.m->name().c_str());
+                       row.nameStr.c_str());
+            if (!row.sfxStr.empty())
+            {
+                d->AddText(ImVec2(tx + row.nameW, y + 3.0f),
+                           IM_COL32(165, 170, 180, (int)(255 * row.eased)),
+                           row.sfxStr.c_str());
+            }
 
             y += row.h * row.eased;
         }
@@ -543,9 +762,16 @@ void ArrayList::onRender()
             widgets::AcrylicPanel(d, rMin, rMax, 4.0f, row.eased, sw, sh, 26.0f, 8.0f);
 
         d->AddRectFilled(ImVec2(rMax.x - 3.0f, y), ImVec2(rMax.x, y + row.h),
-                         theme::AccentU32(row.eased), 4.0f);
+                         (gui::style() == 2) ? theme::AccentAtU32(0.0f, y, row.eased)
+                                             : theme::AccentU32(row.eased), 4.0f);
         d->AddText(ImVec2(x0 + 7.0f, y + 3.0f),
-                   IM_COL32(240, 242, 245, (int)(255 * row.eased)), row.m->name().c_str());
+                   IM_COL32(240, 242, 245, (int)(255 * row.eased)), row.nameStr.c_str());
+        if (!row.sfxStr.empty())
+        {
+            d->AddText(ImVec2(x0 + 7.0f + row.nameW, y + 3.0f),
+                       IM_COL32(165, 170, 180, (int)(255 * row.eased)),
+                       row.sfxStr.c_str());
+        }
 
         y += (row.h + 4.0f) * row.eased;
     }
@@ -555,8 +781,12 @@ void ArrayList::onRender()
 
 void ArrayList::drawSettings()
 {
-    const char* styles[] = {"Azyre", "Typical", "Solstice"};
-    widgets::CCombo("Style##al", &style_, styles, 3);
+    const char* styles[] = {"Azyre", "Typical", "Solstice", "Rise"};
+    widgets::CCombo("Style##al", &style_, styles, 4);
+
+    const char* charStyles[] = {"lowercase", "lowercase spaced", "Normalcase", "Normalcase separated"};
+    widgets::CCombo("Character Style##al", &charStyle_, charStyles, 4);
+    widgets::Checkbox("Suffixs##al", &suffixes_);
 
     if (style_ == 1)
     {
@@ -597,6 +827,29 @@ void ArrayList::drawSettings()
         widgets::CSlider("Tamano fuente##al", &fontSize_, 12.0f, 36.0f, "%.0f");
         ImGui::Unindent();
     }
+    else if (style_ == 3)
+    {
+        ImGui::Indent();
+        const char* colorModes[] = {"Static", "Fade", "Breathe"};
+        widgets::CCombo("Color Mode##al", &riseColorMode_, colorModes, 3);
+        if (riseColorMode_ == 0)
+            ImGui::TextDisabled("(Static = accent plano)");
+        else if (riseColorMode_ == 2)
+            ImGui::TextDisabled("(Breathe = pulso global)");
+
+        const char* bgStyle[] = {"Off", "Normal"};
+        int bg = riseBg_ ? 1 : 0;
+        if (widgets::CCombo("Background##al", &bg, bgStyle, 2))
+            riseBg_ = bg == 1;
+        if (riseBg_)
+            widgets::Checkbox("Blur del fondo##al", &riseBlur_);
+
+        widgets::Checkbox("Drop Shadow##al", &riseShadow_);
+        widgets::Checkbox("Sidebar##al", &riseSidebar_);
+        ImGui::Separator();
+        widgets::CSlider("Tamano fuente##al", &riseFontSize_, 10.0f, 30.0f, "%.0f");
+        ImGui::Unindent();
+    }
 
     widgets::ColorEdit4("Accent##al", (float*)&theme::Accent);
 }
@@ -605,6 +858,8 @@ nlohmann::json ArrayList::saveSettings() const
 {
     return nlohmann::json{
         {"style", style_},
+        {"charStyle", charStyle_},
+        {"suffixes", suffixes_},
         {"outlineMode", outlineMode_},
         {"bgOpacity", bgOpacity_},
         {"barRounding", barRounding_},
@@ -621,6 +876,12 @@ nlohmann::json ArrayList::saveSettings() const
         {"solBold", solBold_},
         {"solFont", solFont_},
         {"fontSize", fontSize_},
+        {"riseColorMode", riseColorMode_},
+        {"riseBg", riseBg_},
+        {"riseShadow", riseShadow_},
+        {"riseSidebar", riseSidebar_},
+        {"riseBlur", riseBlur_},
+        {"riseFontSize", riseFontSize_},
         {"accent", {theme::Accent.x, theme::Accent.y, theme::Accent.z, theme::Accent.w}},
     };
 }
@@ -628,8 +889,12 @@ nlohmann::json ArrayList::saveSettings() const
 void ArrayList::loadSettings(const nlohmann::json& j)
 {
     style_ = j.value("style", style_);
-    if (style_ < 0 || style_ > 2)
+    if (style_ < 0 || style_ > 3)
         style_ = 0;
+    charStyle_ = j.value("charStyle", charStyle_);
+    if (charStyle_ < 0 || charStyle_ > 3)
+        charStyle_ = 2;
+    suffixes_ = j.value("suffixes", suffixes_);
     outlineMode_ = j.value("outlineMode", outlineMode_);
     bgOpacity_ = j.value("bgOpacity", bgOpacity_);
     barRounding_ = j.value("barRounding", barRounding_);
@@ -666,6 +931,18 @@ void ArrayList::loadSettings(const nlohmann::json& j)
         fontSize_ = 12.0f;
     if (fontSize_ > 36.0f)
         fontSize_ = 36.0f;
+    riseColorMode_ = j.value("riseColorMode", riseColorMode_);
+    if (riseColorMode_ < 0 || riseColorMode_ > 2)
+        riseColorMode_ = 1;
+    riseBg_ = j.value("riseBg", riseBg_);
+    riseShadow_ = j.value("riseShadow", riseShadow_);
+    riseSidebar_ = j.value("riseSidebar", riseSidebar_);
+    riseBlur_ = j.value("riseBlur", riseBlur_);
+    riseFontSize_ = j.value("riseFontSize", riseFontSize_);
+    if (riseFontSize_ < 10.0f)
+        riseFontSize_ = 10.0f;
+    if (riseFontSize_ > 30.0f)
+        riseFontSize_ = 30.0f;
     if (j.contains("accent") && j["accent"].is_array() && j["accent"].size() == 4)
     {
         theme::Accent.x = j["accent"][0].get<float>();
