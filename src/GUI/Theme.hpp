@@ -169,9 +169,9 @@ inline void apply()
 
     c[ImGuiCol_Tab] = ImVec4(0.176f, 0.176f, 0.180f, 1.00f);
     c[ImGuiCol_TabHovered] = ImVec4(Accent.x, Accent.y, Accent.z, 0.24f);
-    c[ImGuiCol_TabActive] = ImVec4(Accent.x, Accent.y, Accent.z, 0.20f);
-    c[ImGuiCol_TabUnfocused] = ImVec4(0.145f, 0.145f, 0.149f, 1.00f);
-    c[ImGuiCol_TabUnfocusedActive] = ImVec4(0.180f, 0.180f, 0.184f, 1.00f);
+    c[ImGuiCol_TabSelected] = ImVec4(Accent.x, Accent.y, Accent.z, 0.20f);
+    c[ImGuiCol_TabDimmed] = ImVec4(0.145f, 0.145f, 0.149f, 1.00f);
+    c[ImGuiCol_TabDimmedSelected] = ImVec4(0.180f, 0.180f, 0.184f, 1.00f);
 
     c[ImGuiCol_PlotLines] = Accent;
     c[ImGuiCol_PlotHistogram] = Accent;
