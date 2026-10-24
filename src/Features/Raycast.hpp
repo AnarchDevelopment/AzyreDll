@@ -9,6 +9,7 @@
 // raycast simplemente no encuentra nada (degradacion segura).
 // ============================================================================
 
+#include "Features/WorldChunks.hpp"
 #include "Framework/Math.hpp"
 #include "SDK/Classes/BlockSource.hpp"
 
@@ -67,6 +68,9 @@ inline RaycastHit raycastBlock(const BlockSource& bs, const Vec3& origin, const 
     for (int i = 0; i < kMaxSteps && t <= maxDist; ++i)
     {
         int id = bs.getBlockId(x, y, z);
+        if (id <= 0)
+            id = world::getBlockId(bs, x, y, z);
+
         if (id > 0)
         {
             h.hit = true;
