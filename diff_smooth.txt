@@ -1,0 +1,253 @@
+diff --git a/src/Features/Smoothing.hpp b/src/Features/Smoothing.hpp
+index b2247ca..268a2ec 100644
+--- a/src/Features/Smoothing.hpp
++++ b/src/Features/Smoothing.hpp
+@@ -2,66 +2,206 @@
+ 
+ #include "Framework/Math.hpp"
+ 
+-#include <imgui.h>
+ #include <windows.h>
++
++#include <cmath>
++#include <cstdint>
++#include <deque>
+ #include <unordered_map>
+ 
+ namespace mc::smooth {
+ 
+-inline Vec3 entityPos(uintptr_t addr, const Vec3& raw)
++// ============================================================================
++// Smoothing hibrido.
++//
++// CHASE-LERP (delayMs <= 0): interpola DESDE la posicion previa HACIA la
++// actual con alpha = tiempo_transcurrido / periodo_observado_del_actor.
++// Es lo que hace el motor para el render del modelo
++// (lerp(oldPos, currentPos, fracTick)): sigue al jugador SIN retraso neto
++// — llega justo cuando llega el proximo update. El periodo ADAPTATIVO
++// (media del intervalo real entre updates, 30..200ms) corrige los dos
++// defectos del lerp por cambio con t/50 fijo: con updates cada 50ms
++// justos t≈1 (casi sin suavizado → trabado) y con updates por frame
++// (camara 3ª orbitando) t≈0 (pegado al frame previo → desfase creciente).
++//
++// BUFFER DE HISTORIA (delayMs > 0): evalua la senal "delayMs en el
++// pasado" interpolando entre samples con timestamp. Para los casos que
++// QUIEREN retraso (ghost del Backtrack a 150ms = Animation LINEAR de
++// Rise; caja del Blink): movimiento continuo con lag constante, sin
++// importar el ritmo de updates.
++// ============================================================================
++
++// Canales dedicados (no colisionan con las addresses de entidades,
++// que usan su propia address como id).
++namespace channel {
++constexpr uintptr_t Camera = 0x0C4EE31;    // camara 1ª persona
++constexpr uintptr_t BlinkBox = 0x811E880; // caja del Blink (lastSent)
++} // namespace channel
++
++// Mascara del ghost del Backtrack (canal derivado de la address del
++// target, sin pisar el canal de entidades del ESP).
++constexpr uintptr_t kGhostMask = 0xB7AC37AFC0DEull;
++
++namespace detail {
++
++struct Sample
+ {
+-    struct Entry
+-    {
+-        Vec3 prevRaw{};
+-        Vec3 lastRaw{};
+-        ULONGLONG changeMs = 0;
+-        ULONGLONG seen = 0;
+-        bool valid = false;
+-    };
+-    static std::unordered_map<uintptr_t, Entry> s_state;
+-    static ULONGLONG s_lastClean = 0;
++    ULONGLONG t;
++    Vec3 pos;
++};
++
++struct Channel
++{
++    // Buffer de historia (delayMs > 0)
++    std::deque<Sample> samples;
++    ULONGLONG seen = 0;
++    // Chase-lerp (delayMs <= 0)
++    Vec3 prevRaw{};
++    Vec3 lastRaw{};
++    ULONGLONG changeMs = 0;
++    float period = 50.0f; // intervalo observado entre updates del actor
++    bool valid = false;
++};
++
++inline std::unordered_map<uintptr_t, Channel>& state()
++{
++    static std::unordered_map<uintptr_t, Channel> s;
++    return s;
++}
++
++constexpr size_t kMaxSamples = 24;
++
++} // namespace detail
++
++inline Vec3 value(uintptr_t id, const Vec3& raw, float delayMs = 50.0f)
++{
++    if (!std::isfinite(raw.x) || !std::isfinite(raw.y) || !std::isfinite(raw.z))
++        return raw;
+ 
+     ULONGLONG now = GetTickCount64();
+-    Entry& e = s_state[addr];
++    detail::Channel& ch = detail::state()[id];
++    ch.seen = now;
+ 
+-    if (!e.valid)
++    if (delayMs <= 0.0f)
+     {
+-        e.prevRaw = raw;
+-        e.lastRaw = raw;
+-        e.changeMs = now;
+-        e.valid = true;
+-    }
+-    else if (raw.x != e.lastRaw.x || raw.y != e.lastRaw.y || raw.z != e.lastRaw.z)
+-    {
+-        e.prevRaw = e.lastRaw;
+-        e.lastRaw = raw;
+-        e.changeMs = now;
++        // --- Chase-lerp: seguir al target en vivo, sin retraso neto ---
++        if (!ch.valid)
++        {
++            ch.prevRaw = raw;
++            ch.lastRaw = raw;
++            ch.changeMs = now;
++            ch.period = 50.0f;
++            ch.valid = true;
++            return raw;
++        }
++        if (raw.x != ch.lastRaw.x || raw.y != ch.lastRaw.y ||
++            raw.z != ch.lastRaw.z)
++        {
++            ULONGLONG interval = now - ch.changeMs;
++            if (interval > 1)
++            {
++                // Media movil del intervalo real entre updates: el alpha
++                // llega a ~1 justo cuando deberia llegar el proximo.
++                float obs = (float)interval;
++                if (obs < 30.0f)
++                    obs = 30.0f;
++                if (obs > 200.0f)
++                    obs = 200.0f;
++                ch.period += (obs - ch.period) * 0.35f;
++            }
++            ch.prevRaw = ch.lastRaw;
++            ch.lastRaw = raw;
++            ch.changeMs = now;
++        }
++
++        float t = (float)(now - ch.changeMs) / ch.period;
++        if (t < 0.0f)
++            t = 0.0f;
++        if (t > 1.0f)
++            t = 1.0f;
++        return {
++            ch.prevRaw.x + (ch.lastRaw.x - ch.prevRaw.x) * t,
++            ch.prevRaw.y + (ch.lastRaw.y - ch.prevRaw.y) * t,
++            ch.prevRaw.z + (ch.lastRaw.z - ch.prevRaw.z) * t,
++        };
+     }
+-    e.seen = now;
+ 
+-    float t = (float)(now - e.changeMs) / 50.0f;
+-    if (t < 0.0f)
+-        t = 0.0f;
+-    if (t > 1.0f)
+-        t = 1.0f;
++    // --- Buffer de historia: evaluar "delayMs en el pasado" ---
++    bool changed = ch.samples.empty() ||
++                   ch.samples.back().pos.x != raw.x ||
++                   ch.samples.back().pos.y != raw.y ||
++                   ch.samples.back().pos.z != raw.z;
++    bool timeNew = ch.samples.empty() || (now - ch.samples.back().t) >= 4;
++    if (changed || timeNew)
++        ch.samples.push_back({now, raw});
++
++    while (ch.samples.size() > detail::kMaxSamples)
++        ch.samples.pop_front();
++
++    ULONGLONG delay = (ULONGLONG)delayMs;
++    ULONGLONG target = (now > delay) ? now - delay : 0;
++
++    while (ch.samples.size() > 2 && ch.samples[1].t <= target)
++        ch.samples.pop_front();
+ 
+-    if (now - s_lastClean > 2000)
++    if (ch.samples.empty())
++        return raw;
++
++    if (ch.samples.size() == 1 || ch.samples.back().t <= target)
++        return ch.samples.back().pos;
++
++    if (target <= ch.samples.front().t)
++        return ch.samples.front().pos;
++
++    for (size_t i = 0; i + 1 < ch.samples.size(); ++i)
+     {
+-        s_lastClean = now;
+-        for (auto it = s_state.begin(); it != s_state.end();)
++        const detail::Sample& a = ch.samples[i];
++        const detail::Sample& b = ch.samples[i + 1];
++        if (a.t <= target && target < b.t)
+         {
+-            if (now - it->second.seen > 3000)
+-                it = s_state.erase(it);
+-            else
+-                ++it;
++            float span = (float)(b.t - a.t);
++            float alpha = span > 0.0f ? (float)(target - a.t) / span : 1.0f;
++            return {
++                a.pos.x + (b.pos.x - a.pos.x) * alpha,
++                a.pos.y + (b.pos.y - a.pos.y) * alpha,
++                a.pos.z + (b.pos.z - a.pos.z) * alpha,
++            };
+         }
+     }
++    return ch.samples.back().pos;
++}
++
++// Entidades (ESP/NameTags/Tracers): RENDER POS — la interpolacion exacta
++// del motor (lerp(prevPos@+0x18, pos@+0x0C, partialTick), con el reloj
++// del MinecraftClient::tick hook) aplicada a la geometria del caller.
++// Calza 1:1 con el modelo visible: cero arrastre, cero paro.
++// (Definida en Smoothing.cpp; fallback a raw si no hay datos.)
++Vec3 renderPos(uintptr_t actor, const Vec3& raw);
+ 
+-    return {
+-        e.prevRaw.x + (e.lastRaw.x - e.prevRaw.x) * t,
+-        e.prevRaw.y + (e.lastRaw.y - e.prevRaw.y) * t,
+-        e.prevRaw.z + (e.lastRaw.z - e.prevRaw.z) * t,
+-    };
++inline Vec3 entityPos(uintptr_t addr, const Vec3& raw)
++{
++    return renderPos(addr, raw);
++}
++
++inline void clear(uintptr_t id)
++{
++    auto& s = detail::state();
++    auto it = s.find(id);
++    if (it != s.end())
++        s.erase(it);
+ }
+ 
++inline void gc()
++{
++    ULONGLONG now = GetTickCount64();
++    auto& s = detail::state();
++    for (auto it = s.begin(); it != s.end();)
++    {
++        if (now - it->second.seen > 3000)
++            it = s.erase(it);
++        else
++            ++it;
++    }
+ }
++
++} // namespace mc::smooth
