@@ -32,18 +32,19 @@ static const char* kFontNames[] = {
 static const int kFontCount = 12;
 
 // --- Estado global del estilo de GUI ---
-int g_style = 0;             // 0 = Azyre, 1 = Solstice
+int g_style = 0;             // 0 = Azyre, 1 = Solstice, 2 = Rise
 int g_solsticeAnim = 0;      // 0 = Zoom, 1 = Bounce
 float g_solsticeEase = 18.0f;
 float g_solsticeBlur = 7.0f;
 int g_blurMode = 0;          // 0 = Native, 1 = Solstice (D2D)
+float g_riseScale = 1.0f;    // Escala de ventana de Rise (0.5 .. 2.0)
 
 } // namespace
 
 namespace gui {
 
 int style() { return g_style; }
-void setStyle(int s) { g_style = (s == 1) ? 1 : 0; }
+void setStyle(int s) { g_style = (s >= 0 && s <= 2) ? s : 0; }
 int solsticeAnim() { return g_solsticeAnim; }
 void setSolsticeAnim(int mode) { g_solsticeAnim = (mode == 1) ? 1 : 0; }
 float solsticeEase() { return g_solsticeEase; }
@@ -52,6 +53,8 @@ float solsticeBlur() { return g_solsticeBlur; }
 void setSolsticeBlur(float v) { g_solsticeBlur = v; }
 int blurMode() { return g_blurMode; }
 void setBlurMode(int mode) { g_blurMode = (mode == 1) ? 1 : 0; }
+float riseScale() { return g_riseScale; }
+void setRiseScale(float v) { g_riseScale = (v < 0.5f) ? 0.5f : (v > 2.0f ? 2.0f : v); }
 } // namespace gui
 
 InterfaceModule::InterfaceModule()
@@ -66,9 +69,9 @@ void InterfaceModule::drawSettings()
 {
     // ---- Estilo de la GUI ----
     ImGui::SeparatorText("GUI Style");
-    const char* styles[] = {"Azyre", "Solstice"};
+    const char* styles[] = {"Azyre", "Solstice", "Rise"};
     int cur = gui::style();
-    if (widgets::CCombo("Style##iface", &cur, styles, 2))
+    if (widgets::CCombo("Style##iface", &cur, styles, 3))
     {
         gui::setStyle(cur);
         config::saveAll();
@@ -120,6 +123,18 @@ void InterfaceModule::drawSettings()
         ImGui::Unindent();
     }
 
+    if (gui::style() == 2)
+    {
+        ImGui::Indent();
+        float rScale = gui::riseScale();
+        if (widgets::CSlider("UI Scale##iface_rise", &rScale, 0.6f, 1.5f, "%.2f"))
+        {
+            gui::setRiseScale(rScale);
+            config::saveAll();
+        }
+        ImGui::Unindent();
+    }
+
     // ---- Color de acento ----
     ImGui::SeparatorText("Accent Color");
     float col3[3] = {theme::Accent.x, theme::Accent.y, theme::Accent.z};
@@ -136,6 +151,12 @@ void InterfaceModule::drawSettings()
         theme::AccentDeep.x = col3[0] * 0.62f;
         theme::AccentDeep.y = col3[1] * 0.62f;
         theme::AccentDeep.z = col3[2] * 0.62f;
+
+        // Aceno plano: el gradiente animado de Rise queda neutro.
+        theme::Accent2 = ImVec4(col3[0], col3[1], col3[2], 1.0f);
+        theme::Accent3 = ImVec4(col3[0], col3[1], col3[2], 1.0f);
+        theme::AccentTri = false;
+        theme::AccentRainbow = false;
 
         theme::apply();
         config::saveAll();
@@ -172,6 +193,10 @@ void InterfaceModule::drawSettings()
             theme::AccentDeep.x = pc[0] * 0.62f;
             theme::AccentDeep.y = pc[1] * 0.62f;
             theme::AccentDeep.z = pc[2] * 0.62f;
+            theme::Accent2 = ImVec4(pc[0], pc[1], pc[2], 1.0f);
+            theme::Accent3 = ImVec4(pc[0], pc[1], pc[2], 1.0f);
+            theme::AccentTri = false;
+            theme::AccentRainbow = false;
             theme::apply();
             config::saveAll();
         }
@@ -248,6 +273,14 @@ nlohmann::json InterfaceModule::saveSettings() const
     j["accent_r"]       = theme::Accent.x;
     j["accent_g"]       = theme::Accent.y;
     j["accent_b"]       = theme::Accent.z;
+    j["accent2_r"]      = theme::Accent2.x;
+    j["accent2_g"]      = theme::Accent2.y;
+    j["accent2_b"]      = theme::Accent2.z;
+    j["accent3_r"]      = theme::Accent3.x;
+    j["accent3_g"]      = theme::Accent3.y;
+    j["accent3_b"]      = theme::Accent3.z;
+    j["accent_tri"]     = theme::AccentTri;
+    j["accent_rainbow"]  = theme::AccentRainbow;
     j["deep_r"]         = theme::AccentDeep.x;
     j["deep_g"]         = theme::AccentDeep.y;
     j["deep_b"]         = theme::AccentDeep.z;
@@ -262,6 +295,7 @@ nlohmann::json InterfaceModule::saveSettings() const
     j["sol_theme"]      = colors::theme();
     j["sol_speed"]      = colors::colorSpeed();
     j["sol_sat"]        = colors::saturation();
+    j["rise_scale"]     = gui::riseScale();
     return j;
 }
 
@@ -270,6 +304,14 @@ void InterfaceModule::loadSettings(const nlohmann::json& j)
     if (j.contains("accent_r")) theme::Accent.x    = j["accent_r"].get<float>();
     if (j.contains("accent_g")) theme::Accent.y    = j["accent_g"].get<float>();
     if (j.contains("accent_b")) theme::Accent.z    = j["accent_b"].get<float>();
+    if (j.contains("accent2_r")) theme::Accent2.x  = j["accent2_r"].get<float>();
+    if (j.contains("accent2_g")) theme::Accent2.y  = j["accent2_g"].get<float>();
+    if (j.contains("accent2_b")) theme::Accent2.z  = j["accent2_b"].get<float>();
+    if (j.contains("accent3_r")) theme::Accent3.x  = j["accent3_r"].get<float>();
+    if (j.contains("accent3_g")) theme::Accent3.y  = j["accent3_g"].get<float>();
+    if (j.contains("accent3_b")) theme::Accent3.z  = j["accent3_b"].get<float>();
+    if (j.contains("accent_tri")) theme::AccentTri = j["accent_tri"].get<bool>();
+    if (j.contains("accent_rainbow")) theme::AccentRainbow = j["accent_rainbow"].get<bool>();
     if (j.contains("deep_r"))   theme::AccentDeep.x = j["deep_r"].get<float>();
     if (j.contains("deep_g"))   theme::AccentDeep.y = j["deep_g"].get<float>();
     if (j.contains("deep_b"))   theme::AccentDeep.z = j["deep_b"].get<float>();
@@ -295,6 +337,8 @@ void InterfaceModule::loadSettings(const nlohmann::json& j)
         colors::setColorSpeed(j["sol_speed"].get<float>());
     if (j.contains("sol_sat"))
         colors::setSaturation(j["sol_sat"].get<float>());
+    if (j.contains("rise_scale"))
+        gui::setRiseScale(j["rise_scale"].get<float>());
     // NO tocar ImGui aqui: loadSettings corre en Bootstrap, ANTES del primer
     // Present donde ImGui::CreateContext() ocurre. ImGui::GetIO() con contexto
     // null = access violation. El primer Present ya aplica FontIndex:

@@ -6,7 +6,7 @@ namespace mc {
 // Selector global de estilo de GUI. El dispatch ocurre en menu::render().
 namespace gui {
 
-// 0 = Azyre (menu clasico), 1 = Solstice (GUI moderna con tabs).
+// 0 = Azyre (menu clasico), 1 = Solstice (GUI moderna con tabs), 2 = Rise (estilo Rise 6.9.5).
 int style();
 void setStyle(int s);
 
@@ -24,6 +24,10 @@ float solsticeEase();
 void setSolsticeEase(float v);
 float solsticeBlur(); // 0..10, alpha del backdrop
 void setSolsticeBlur(float v);
+
+// Settings del estilo Rise (persistidos por InterfaceModule):
+float riseScale();
+void setRiseScale(float v);
 
 } // namespace gui
 
