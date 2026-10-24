@@ -230,4 +230,8 @@ if(NOT MSVC)
     target_link_options(AzyreSDK PRIVATE -static -static-libgcc)
 endif()
 
+if(MSVC)
+    target_link_options(AzyreSDK PRIVATE "/MAP")
+endif()
+
 set_target_properties(AzyreSDK PROPERTIES OUTPUT_NAME "AzyreSDK")
