@@ -4,11 +4,10 @@
 
 namespace mc {
 
-// MotionBlur — port of Solstice's MotionBlur. The blur helper keeps a ring
-// of ghost frames (quarter-res captures of the last kGhostMax frames);
-// this module blends them over the screen with an exponential intensity
-// falloff. The smear appears naturally while moving: static scenes blend
-// into themselves and stay sharp.
+// MotionBlur — port of arst-motion-blur (https://github.com/arstnei0/arst-motion-blur).
+// Applies full-resolution EMA accumulation blur directly to the game backbuffer
+// before ImGui draws, ensuring full clarity (no pixelation) and zero interference
+// with game/HUD widgets.
 class MotionBlur : public Module
 {
 public:
@@ -20,12 +19,16 @@ public:
     void onRender() override;
     void drawSettings() override;
 
+    std::string suffix() const override
+    {
+        return std::to_string((int)strength_) + "%";
+    }
+
     nlohmann::json saveSettings() const override;
     void loadSettings(const nlohmann::json& j) override;
 
 private:
-    int maxFrames_ = 1;      // ghost frames to blend (1..20)
-    float intensity_ = 0.9f; // alpha of the most recent ghost (0.01..1)
+    float strength_ = 75.0f; // 1%..99% (exact arst-motion-blur logic: BlendFactor = strength / 100)
 };
 
 }
