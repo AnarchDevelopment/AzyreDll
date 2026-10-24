@@ -3,29 +3,43 @@
 #include "Modules/Module.hpp"
 
 #include "Framework/Math.hpp"
-#include "SDK/Offsets.hpp"
 
-#include <map>
-#include <vector>
 #include <windows.h>
 
 namespace mc {
 
-// Backtrack — LiquidBounce Legacy approach adapted for Bedrock.
-// Records entity positions passively every tick (read-only, zero crash
-// risk). On the attack click, momentarily sets the entity position to a
-// past position so the game's raycast and reach check pass against the
-// backtracked hitbox, then the game's own MoveActorAbsolutePacket from
-// the server restores the real position on the next network update.
+// Backtrack — "Legit Reach" (Rise 6.9.5) para Bedrock, edicion sin hooks.
 //
-// Key differences from LiquidBounce Modern (which we can't do): Modern
-// intercepts and delays incoming packets, so the entity NATURALLY stays
-// at its old position. Without an incoming packet hook, we approximate
-// the effect by writing/letting-restore in the same window.
+// La version anterior parcheaba los slots 6/15 de la vtable de RemotePlayer
+// durante el hold, con tres problemas mortales:
+//   1. Los detours corrian en el GAME thread, fuera de TODA guardia SEH
+//      (cualquier falta = crash duro del juego, no module-disable).
+//   2. RemotePlayerAlt (0xE64588) esta a 0x18 bytes de RemotePlayer
+//      (0xE645A0): los slots parcheados eran alcanzados por objetos Alt
+//      como sus slots 9/18 — funciones virtuales DISTINTAS llamadas a
+//      traves de detours con firma mismatch -> deref invalido -> crash.
+//   3. menu::visible() solo cubre el menu del cheat: los clicks en el
+//      INVENTARIO del juego contaban como "ataques" -> holds (y patches de
+//      vtable) arrancaban mientras la UI llamaba virtuales.
 //
-// "Smart" mode (default): only applies the backtrack when the past
-// position was CLOSER to the player than the current one — prevents
-// useless backtracking when the target is running toward you.
+// Esta edicion NO hookea ni parchea nada:
+//   * Todo vive en el render thread (onTick 20Hz = maquina de estados,
+//     onRender por frame = refresh del freeze + ghost), cubierto por las
+//     guardias SEH del ModuleManager: una falta desactiva el modulo, nunca
+//     tumba el juego.
+//   * El freeze reescribe el estado del actor cada frame via mem::rawWrite
+//     (VirtualQuery + SEH): mPosition (+0x0C), el target de red del moveTo
+//     (+0xD08) y el AABB COMPLETO trasladado geometricamente al anchor —
+//     los offsets del box se leen del propio actor vivo, asi el hitbox
+//     queda siempre consistente (el bug del enfoque original de writes).
+//   * "attacking" exige el cursor del sistema OCULTO (GetCursorInfo, como
+//     InventoryWalk): los clicks en inventario/contenedor/chat/pause no
+//     inician holds y cualquier hold activo se despacha al abrir pantalla.
+//
+// Se conserva la semantica LegitReach de Rise: ventana min..max, max hold
+// de maxPingSpoof ms, smart (suelta si la real quedo mas cerca), guard de
+// teleport, dispatch con snap-back al soltar y el "Render Real Location"
+// (caja en la posicion real, encuadre + suavizado del ESP).
 class Backtrack : public Module
 {
 public:
@@ -33,33 +47,48 @@ public:
 
     void onEnable() override;
     void onDisable() override;
+    void onShutdown() override;
     void onTick() override;
     void onRender() override;
     void drawSettings() override;
+
+    std::string suffix() const override
+    {
+        return std::to_string((int)maxPingSpoof_) + "ms";
+    }
 
     nlohmann::json saveSettings() const override;
     void loadSettings(const nlohmann::json& j) override;
 
 private:
-    struct Entry
-    {
-        Vec3 pos;
-        ULONGLONG tick;
-    };
+    // Ajustes (LegitReach.java: maxPingSpoof 50..10000, ventana 2.5..6.0)
+    float maxPingSpoof_ = 1000.0f; // ms maximos de hold (blink) por ataque
+    float minDist_ = 2.5f;         // el target debe estar al menos a esta dist
+    float maxDist_ = 6.0f;         // despacha si la posicion real supera esto
+    bool smart_ = true;            // soltar si la real esta mas cerca que la shown
+    bool renderReal_ = true;       // Render Real Location (realTargetBoundingBox)
 
-    // Historial por direccion del actor.
-    std::map<uintptr_t, std::vector<Entry>> history_;
-    static constexpr int kMaxHistory = 40;
+    // Hold activo. Todo el estado vive en el render thread: sin atomics.
+    uintptr_t holdAddr_ = 0;
+    ULONGLONG holdStart_ = 0;
+    Vec3 anchor_{};   // posicion visible donde el target queda clavado
+    Vec3 realPos_{};  // realTargetPosition de LegitReach (paquete-exacto)
 
-    int ticks_ = 3;         // cuanto atras rebobinar (1 tick ~ 50ms)
-    bool smart_ = true;     // solo aplicar si la pos vieja esta mas cerca
-    bool visualize_ = true; // dibujar la caja backtrack
-    float minDist_ = 2.0f;  // distancia minima al target
-    float maxDist_ = 3.0f;  // distancia maxima al target
+    // Render Real Location — la caja se dibuja siempre que hay target.
+    // Encuadre y suavizado IDENTICOS al ESP: anchor en espacio de pies
+    // (+0xB4), altura height() (+0xD4) y smooth::interp (hand-off seamless,
+    // QPC, sin delay). El buffer de historia de 150ms que usaba antes
+    // desfasaba la caja 150ms respecto al modelo.
+    Vec3 ghostPos_{};
+    bool hasTarget_ = false;
 
-    bool prevClick_ = false;
-    Vec3 lastAppliedPos_ = {};
-    bool hasApplied_ = false;
+    // Diagnostico en drawSettings
+    uintptr_t lastTargetAddr_ = 0;
+    float lastTargetDist_ = 0.0f;
+    bool lastAttacking_ = false;
+
+    // Dispatch de Rise: snap-back a la posicion real + fin del hold.
+    void releaseHold();
 };
 
 }
