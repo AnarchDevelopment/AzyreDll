@@ -21,6 +21,11 @@ public:
     void onDisable() override;
     void drawSettings() override;
 
+    std::string suffix() const override
+    {
+        return std::to_string(staff_.size());
+    }
+
     nlohmann::json saveSettings() const override;
     void loadSettings(const nlohmann::json& j) override;
 
@@ -28,9 +33,11 @@ public:
     void onPlayerJoined(const ecs::PlayerJoined& ev);
     void onPlayerLeft(const ecs::PlayerLeft& ev);
 
+    // Consulta publica (la usa el Radar para pintar el staff en rojo).
+    bool isStaff(const std::string& name) const;
+
 private:
     void alert(const std::string& name, bool joined);
-    bool isStaff(const std::string& name) const;
 
     std::set<std::string> staff_;
     bool alertJoin_ = true;

@@ -24,6 +24,11 @@ public:
     void onTick() override;
     void drawSettings() override;
 
+    std::string suffix() const override
+    {
+        return toolMode_ == 0 ? "Auto" : "Any";
+    }
+
     nlohmann::json saveSettings() const override
     {
         return nlohmann::json{
