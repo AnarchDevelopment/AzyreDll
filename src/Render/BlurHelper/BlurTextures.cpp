@@ -11,9 +11,9 @@ BlurTex g_btTiny;
 BlurTex g_btGaussA;
 BlurTex g_btGaussB;
 BlurTex g_btProxy;
-BlurTex g_ghostRing[detail::kGhostMax];
-int g_ghostCursor = 0;
-int g_ghostFilled = 0;
+BlurTex g_mbPrev;
+BlurTex g_mbSwap;
+bool g_mbHasHistory = false;
 
 } // namespace mc::blur::detail
 
@@ -105,10 +105,9 @@ void release()
     releaseBlurTex(g_btGaussA);
     releaseBlurTex(g_btGaussB);
     releaseBlurTex(g_btProxy);
-    for (int i = 0; i < detail::kGhostMax; ++i)
-        releaseBlurTex(g_ghostRing[i]);
-    g_ghostCursor = 0;
-    g_ghostFilled = 0;
+    releaseBlurTex(g_mbPrev);
+    releaseBlurTex(g_mbSwap);
+    g_mbHasHistory = false;
 }
 
 bool ensure()
@@ -130,7 +129,9 @@ bool ensure()
         g_btSmall.tex && g_btSmall.w == wSmall && g_btSmall.h == hSmall &&
         g_btTiny.tex && g_btTiny.w == wTiny && g_btTiny.h == hTiny &&
         g_btGaussA.tex && g_btGaussB.tex &&
-        g_btProxy.tex && g_btProxy.w == (UINT)g_displayW && g_btProxy.h == (UINT)g_displayH)
+        g_btProxy.tex && g_btProxy.w == (UINT)g_displayW && g_btProxy.h == (UINT)g_displayH &&
+        g_mbPrev.tex && g_mbPrev.w == (UINT)g_displayW && g_mbPrev.h == (UINT)g_displayH &&
+        g_mbSwap.tex && g_mbSwap.w == (UINT)g_displayW && g_mbSwap.h == (UINT)g_displayH)
         return true;
 
     release();
@@ -177,20 +178,26 @@ bool ensure()
     g_btProxy.w = (UINT)g_displayW;
     g_btProxy.h = (UINT)g_displayH;
 
-    // Ghost ring de MotionBlur a 1/4 de pantalla (20 frames ~10MB a 1080p).
-    for (int i = 0; i < detail::kGhostMax; ++i)
+    // MotionBlur (arst-motion-blur): texturas de acumulación y swap a resolución completa
+    if (!createBlurTex((UINT)g_displayW, (UINT)g_displayH, fmt,
+                       &g_mbPrev.tex, &g_mbPrev.rtv, &g_mbPrev.srv))
     {
-        if (!createBlurTex(wQuarter, hQuarter, fmt, &g_ghostRing[i].tex,
-                           &g_ghostRing[i].rtv, &g_ghostRing[i].srv))
-        {
-            release();
-            return false;
-        }
-        g_ghostRing[i].w = wQuarter;
-        g_ghostRing[i].h = hQuarter;
+        release();
+        return false;
     }
-    g_ghostCursor = 0;
-    g_ghostFilled = 0;
+    g_mbPrev.w = (UINT)g_displayW;
+    g_mbPrev.h = (UINT)g_displayH;
+
+    if (!createBlurTex((UINT)g_displayW, (UINT)g_displayH, fmt,
+                       &g_mbSwap.tex, &g_mbSwap.rtv, &g_mbSwap.srv))
+    {
+        release();
+        return false;
+    }
+    g_mbSwap.w = (UINT)g_displayW;
+    g_mbSwap.h = (UINT)g_displayH;
+    g_mbHasHistory = false;
+
     return true;
 }
 

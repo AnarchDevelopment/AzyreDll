@@ -44,7 +44,8 @@ void release()
     g_captureW = g_captureH = 0;
 }
 
-ID3D11ShaderResourceView* find(ID3D11RenderTargetView* boundRtv, bool* outFlip)
+ID3D11ShaderResourceView* find(ID3D11RenderTargetView* boundRtv, bool* outFlip,
+                               bool useSwapChain)
 {
     static bool s_logInfo = false;
     static bool s_logGetBuffer = false;
@@ -77,14 +78,19 @@ ID3D11ShaderResourceView* find(ID3D11RenderTargetView* boundRtv, bool* outFlip)
     // (MotionBlur::CopyBackbufferToSRV) — funciona tambien con backbuffers
     // flip-model en este juego. La textura conserva el formato del
     // backbuffer (CopyResource lo exige) y el SRV usa formato tipado.
+    // SUSPENDIDA con pantallas del juego abiertas (useSwapChain=false):
+    // ninguna operacion sobre el swap chain durante la composicion XAML.
     // ------------------------------------------------------------------
     ID3D11Texture2D* bb = nullptr;
-    hr = g_swapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)&bb);
-    if (FAILED(hr))
+    if (useSwapChain)
     {
-        BD_LOG_ONCE(s_logGetBuffer, "[Backdrop] GetBuffer failed: 0x%08X", hr);
+        hr = g_swapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)&bb);
+        if (FAILED(hr))
+        {
+            BD_LOG_ONCE(s_logGetBuffer, "[Backdrop] GetBuffer failed: 0x%08X", hr);
+        }
     }
-    else
+    if (useSwapChain && SUCCEEDED(hr))
     {
         D3D11_TEXTURE2D_DESC bd = {};
         bb->GetDesc(&bd);

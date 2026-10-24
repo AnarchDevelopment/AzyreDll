@@ -10,6 +10,7 @@ ID3D11PixelShader* g_blurPS = nullptr;
 ID3D11PixelShader* g_copyPS = nullptr;
 ID3D11PixelShader* g_compositePS = nullptr;
 ID3D11PixelShader* g_glassPS = nullptr;
+ID3D11PixelShader* g_motionBlurPS = nullptr;
 ID3D11BlendState* g_blurBlend = nullptr;
 ID3D11Buffer* g_blurCB = nullptr;
 ID3D11SamplerState* g_blurSampler = nullptr;
@@ -238,6 +239,37 @@ float4 PSGlass(VSOut input) : SV_Target
 }
 )";
 
+// Motion blur shader (lógica exacta de arst-motion-blur:
+// https://github.com/arstnei0/arst-motion-blur):
+// fragColor = mix(texture(DiffuseSampler, texCoord), texture(PrevSampler, texCoord), BlendFactor);
+// fragColor.w = 1.0;
+static const char* kMotionBlurPS = R"(
+Texture2D currentTex : register(t0);
+Texture2D prevTex : register(t1);
+SamplerState srcSamp : register(s0);
+cbuffer BlurParams : register(b0)
+{
+    float4 TexelDir;
+    float4 TintOpacity;
+    float4 RectBounds;
+    float4 GlassParams;
+    float4 GlassAlpha;
+    float4 MotionBlurParams; // (BlendFactor, 0, 0, 0)
+};
+struct VSOut
+{
+    float4 pos : SV_Position;
+    float2 uv : TEXCOORD0;
+};
+float4 PSMotionBlur(VSOut input) : SV_Target
+{
+    float3 cur = currentTex.Sample(srcSamp, input.uv).rgb;
+    float3 prev = prevTex.Sample(srcSamp, input.uv).rgb;
+    float3 col = lerp(cur, prev, MotionBlurParams.x);
+    return float4(col, 1.0f);
+}
+)";
+
 static bool g_shadersTried = false;
 
 bool ok()
@@ -256,6 +288,7 @@ void release()
     if (g_glassPS) { g_glassPS->Release(); g_glassPS = nullptr; }
     if (g_compositePS) { g_compositePS->Release(); g_compositePS = nullptr; }
     if (g_copyPS) { g_copyPS->Release(); g_copyPS = nullptr; }
+    if (g_motionBlurPS) { g_motionBlurPS->Release(); g_motionBlurPS = nullptr; }
     if (g_blurVS) { g_blurVS->Release(); g_blurVS = nullptr; }
     g_shadersTried = false;
     g_shadersOk = false;
@@ -381,9 +414,29 @@ bool ensure()
     if (!ok)
         return false;
 
+    if (FAILED(D3DCompile(kMotionBlurPS, (SIZE_T)strlen(kMotionBlurPS), nullptr, nullptr, nullptr,
+                          "PSMotionBlur", "ps_4_0", 0, 0, &blob, &err)))
+    {
+        MC_LOG_ERROR("[Backdrop] MotionBlur PS compile failed%s%s", err ? " - " : "",
+                     err ? (const char*)err->GetBufferPointer() : "");
+        if (err) err->Release();
+        if (blob) blob->Release();
+        return false;
+    }
+    hr = g_device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(),
+                                     nullptr, &g_motionBlurPS);
+    if (FAILED(hr))
+    {
+        BD_LOG_ONCE(s_logPs, "[Backdrop] CreatePixelShader (motion blur) failed: 0x%08X", hr);
+        ok = false;
+    }
+    blob->Release();
+    if (!ok)
+        return false;
+
     D3D11_BUFFER_DESC cbd = {};
     cbd.Usage = D3D11_USAGE_DYNAMIC;
-    cbd.ByteWidth = 80;
+    cbd.ByteWidth = 96; // 6 x float4 (24 floats)
     cbd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
     cbd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
     hr = g_device->CreateBuffer(&cbd, nullptr, &g_blurCB);

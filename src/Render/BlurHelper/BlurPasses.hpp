@@ -7,6 +7,10 @@ namespace mc::blur::passes {
 // Copia fullscreen via pipeline propio (sin ImGui ad-hoc draw data).
 void copy(ID3D11ShaderResourceView* src, ID3D11RenderTargetView* dst, UINT w, UINT h);
 
+// MotionBlur (arst-motion-blur): mix(cur, prev, blendFactor)
+void motionBlur(ID3D11ShaderResourceView* cur, ID3D11ShaderResourceView* prev,
+                ID3D11RenderTargetView* dst, UINT w, UINT h, float blendFactor);
+
 // Gaussiano separable de 9 taps: dirX/dirY (1,0) horizontal, (0,1) vertical.
 void gauss(ID3D11ShaderResourceView* src, ID3D11RenderTargetView* dst,
            UINT w, UINT h, float dirX, float dirY);

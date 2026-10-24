@@ -37,11 +37,10 @@ extern BlurTex g_btGaussA;   // ping-pong gaussiano a 1/16
 extern BlurTex g_btGaussB;   // resultado final del blur
 extern BlurTex g_btProxy;    // render proxy full-res (experimental)
 
-// Ghost ring de MotionBlur: capturas del frame a 1/4 en anillo rotatorio.
-constexpr int kGhostMax = 20;
-extern BlurTex g_ghostRing[kGhostMax];
-extern int g_ghostCursor;  // proximo slot a escribir
-extern int g_ghostFilled;  // frames validos en el anillo (0..kGhostMax)
+// MotionBlur (lógica arst-motion-blur: acumulación full-res EMA)
+extern BlurTex g_mbPrev;       // Frame acumulado anterior a resolución completa
+extern BlurTex g_mbSwap;       // Buffer temporal para blend/swap a resolución completa
+extern bool g_mbHasHistory;    // Indica si g_mbPrev contiene datos válidos del frame previo
 
 // Propiedad de BlurShaders.cpp.
 extern ID3D11VertexShader* g_blurVS;
@@ -49,6 +48,7 @@ extern ID3D11PixelShader* g_blurPS;
 extern ID3D11PixelShader* g_copyPS;
 extern ID3D11PixelShader* g_compositePS;
 extern ID3D11PixelShader* g_glassPS;
+extern ID3D11PixelShader* g_motionBlurPS;
 extern ID3D11BlendState* g_blurBlend;
 extern ID3D11Buffer* g_blurCB;
 extern ID3D11SamplerState* g_blurSampler;

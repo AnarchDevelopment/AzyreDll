@@ -26,6 +26,50 @@ void copy(ID3D11ShaderResourceView* src, ID3D11RenderTargetView* dst, UINT w, UI
     g_context->PSSetShaderResources(0, 1, &src);
     g_context->PSSetSamplers(0, 1, &g_blurSampler);
     g_context->Draw(3, 0);
+    ID3D11ShaderResourceView* nullSrv = nullptr;
+    g_context->PSSetShaderResources(0, 1, &nullSrv);
+}
+
+void motionBlur(ID3D11ShaderResourceView* cur, ID3D11ShaderResourceView* prev,
+                ID3D11RenderTargetView* dst, UINT w, UINT h, float blendFactor)
+{
+    if (!g_motionBlurPS || !cur || !prev || !dst)
+        return;
+
+    // Buffer de 96 bytes (24 floats): blendFactor en float 20 (MotionBlurParams.x)
+    float params[24] = {};
+    params[0] = 1.0f / (float)w;
+    params[1] = 1.0f / (float)h;
+    params[20] = blendFactor;
+
+    D3D11_MAPPED_SUBRESOURCE mapped = {};
+    if (FAILED(g_context->Map(g_blurCB, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped)))
+        return;
+    memcpy(mapped.pData, params, sizeof(params));
+    g_context->Unmap(g_blurCB, 0);
+
+    D3D11_VIEWPORT vp = {};
+    vp.Width = (FLOAT)w;
+    vp.Height = (FLOAT)h;
+    vp.MaxDepth = 1.0f;
+
+    g_context->OMSetRenderTargets(1, &dst, nullptr);
+    g_context->OMSetBlendState(nullptr, nullptr, 0xFFFFFFFF);
+    g_context->OMSetDepthStencilState(nullptr, 0);
+    g_context->RSSetViewports(1, &vp);
+    g_context->RSSetState(g_blurRS);
+    g_context->IASetInputLayout(nullptr);
+    g_context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    g_context->VSSetShader(g_blurVS, nullptr, 0);
+    g_context->PSSetShader(g_motionBlurPS, nullptr, 0);
+    g_context->PSSetConstantBuffers(0, 1, &g_blurCB);
+    ID3D11ShaderResourceView* srvs[2] = {cur, prev};
+    g_context->PSSetShaderResources(0, 2, srvs);
+    g_context->PSSetSamplers(0, 1, &g_blurSampler);
+    g_context->Draw(3, 0);
+
+    ID3D11ShaderResourceView* nullSrvs[2] = {nullptr, nullptr};
+    g_context->PSSetShaderResources(0, 2, nullSrvs);
 }
 
 void gauss(ID3D11ShaderResourceView* src, ID3D11RenderTargetView* dst,

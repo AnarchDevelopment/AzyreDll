@@ -4,6 +4,8 @@
 #include "Framework/Hook.hpp"
 #include "Framework/Log.hpp"
 #include "Features/ECS/ECS.hpp"
+#include "Features/Rotation.hpp"
+#include "Features/RotationHelper.hpp"
 #include "GUI/Menu.hpp"
 #include "GUI/Theme.hpp"
 #include "Input/InputSystem.hpp"
@@ -24,6 +26,8 @@
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <imgui_impl_dx11.h>
+
+#include <atomic>
 
 namespace mc::dx11 {
 
@@ -56,6 +60,7 @@ static ImFont* sehLoadFont(ImFontAtlas* fonts, void* data, int size, float px)
 
 static ImFont* g_hudFont = nullptr;
 static ImFont* g_gameFont = nullptr;
+static ImFont* g_riseFont = nullptr;
 
 ImFont* hudFont()
 {
@@ -66,6 +71,12 @@ ImFont* hudFont()
 ImFont* gameFont()
 {
     return g_gameFont;
+}
+
+// Product Sans regular — la usa el estilo Rise (como Rise real).
+ImFont* riseFont()
+{
+    return g_riseFont;
 }
 
 static void LoadAllFonts(ImFontAtlas* fonts)
@@ -151,6 +162,28 @@ static void LoadAllFonts(ImFontAtlas* fonts)
         }
     }
 
+    // Product Sans regular a 16px — la usa el estilo Rise (font oficial de Rise).
+    {
+        HRSRC res = FindResourceW(g_module, MAKEINTRESOURCEW(IDR_PRODUCT_SANS), RT_RCDATA);
+        if (res)
+        {
+            HGLOBAL hg = LoadResource(g_module, res);
+            if (hg)
+            {
+                DWORD fsize = SizeofResource(g_module, res);
+                void* data = LockResource(hg);
+                if (data && fsize)
+                {
+                    g_riseFont = sehLoadFont(fonts, data, (int)fsize, 16.0f);
+                    if (g_riseFont)
+                        MC_LOG("[Font] Product-Sans-16: OK (rise font)");
+                    else
+                        MC_LOG_ERROR("[Font] Product-Sans-16: FAILED");
+                }
+            }
+        }
+    }
+
     MC_LOG("[Font] Atlas: %zu fonts loaded", fonts->Fonts.size());
 }
 typedef HRESULT(__stdcall* PresentFunc)(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT Flags);
@@ -173,6 +206,43 @@ static void** g_pSwapChainVTable = nullptr;
 static HWND g_Hwnd = nullptr;
 static float g_DisplayWidth = 0;
 static float g_DisplayHeight = 0;
+
+// --- Unlock FPS (DXGI) ---
+static std::atomic<bool> g_unlockFps{false};
+static std::atomic<bool> g_allowTearing{true};
+
+void setUnlockFps(bool v) { g_unlockFps.store(v, std::memory_order_relaxed); }
+bool unlockFps() { return g_unlockFps.load(std::memory_order_relaxed); }
+void setAllowTearing(bool v) { g_allowTearing.store(v, std::memory_order_relaxed); }
+bool allowTearing() { return g_allowTearing.load(std::memory_order_relaxed); }
+
+float swapchainRefreshHz()
+{
+    if (!g_pSwapChain)
+        return 0.0f;
+    DXGI_SWAP_CHAIN_DESC desc{};
+    if (FAILED(g_pSwapChain->GetDesc(&desc)))
+        return 0.0f;
+    if (desc.BufferDesc.RefreshRate.Denominator == 0)
+        return 0.0f;
+    float hz = (float)desc.BufferDesc.RefreshRate.Numerator /
+               (float)desc.BufferDesc.RefreshRate.Denominator;
+    // En swapchains de composicion (UWP XAML) el refresh del desc suele
+    // venir 0/0 o un valor sentinela: solo se reporta si es creible.
+    if (hz < 20.0f || hz > 500.0f)
+        return 0.0f;
+    return hz;
+}
+
+bool swapchainTearingSupported()
+{
+    if (!g_pSwapChain)
+        return false;
+    DXGI_SWAP_CHAIN_DESC desc{};
+    if (FAILED(g_pSwapChain->GetDesc(&desc)))
+        return false;
+    return (desc.Flags & DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING) != 0;
+}
 
 static void CreateRenderTarget(IDXGISwapChain* pSwapChain)
 {
@@ -235,8 +305,40 @@ static void renderQuadToCurrentRT(ID3D11ShaderResourceView* srv, UINT w, UINT h)
     IM_DELETE(dl);
 }
 
-static HRESULT __stdcall HookedPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT Flags)
+// Cursor del sistema visible con nuestro menu cerrado y la ventana del
+// juego enfocada = una pantalla del JUEGO abierta (inventario, contenedor,
+// chat, pause): el frame se presenta por el path de composicion XAML. Con
+// el foco en otra ventana (alt-tab) el cursor tambien es visible pero no
+// hay pantalla del juego — no hay que congelar nada.
+//
+// Solo aplica DENTRO de un mundo (localFound): en el menu principal del
+// juego la captura completa del backbuffer es la via probada (los logs
+// "Clone capture ok" nacen ahi) y es la unica fuente de blur para los
+// widgets — sin esto el blur solo existia "donde hay world".
+static bool gameScreenOpen()
 {
+    if (!Game::get().localFound())
+        return false; // menus del juego sin mundo: pipeline completo
+    if (mc::menu::visible() || mc::menu::hudEditing())
+        return false;
+    if (g_Hwnd && GetForegroundWindow() != g_Hwnd)
+        return false;
+    CURSORINFO ci{};
+    ci.cbSize = sizeof(ci);
+    if (!GetCursorInfo(&ci))
+        return true;
+    return (ci.flags & CURSOR_SHOWING) != 0;
+}
+
+// Overlay envenenado: la recuperacion de la guardia fallo tambien — el hook
+// queda en passthrough limpio (sin re-init en cascada), el juego sigue vivo.
+static bool g_overlayDead = false;
+
+static void presentBody(IDXGISwapChain* pSwapChain)
+{
+    if (g_overlayDead)
+        return;
+
     if (!g_Initialized)
     {
         MC_LOG("[VTable] ========================================");
@@ -335,14 +437,43 @@ static HRESULT __stdcall HookedPresent(IDXGISwapChain* pSwapChain, UINT SyncInte
         }
 
         ModuleManager::get().onFrame(ImGui::GetIO().DeltaTime);
+        // Advance the shared local model-rotation helper every Present. Its
+        // lifetime must not depend on Scaffold being enabled: KillAura and
+        // other combat modules use the same render-scoped model hook.
+        rotation_helper::updateClientRotation();
+
+        // NOTA (rotaciones visuales): se probo escribir el par de render
+        // (+0x44/+0x48) para girar solo el modelo — MUEVE LA CAMARA: en
+        // este build camara y modelo comparten el render rot (no hay un
+        // campo separado en +0x38..+0x7C). La unica aplicacion segura es
+        // el hook del MovePlayerPacket (ChatHook::applyRotation) —
+        // rotacion 100% server-side, igual que Solstice.
+
         // Los paneles acrilicos de los widgets registran sus rects este frame;
         // el BlurHelper los compone en el backbuffer (shader Glass) en runPass.
         mc::blur::beginAcrylic();
         ModuleManager::get().onRender();
         menu::handleInput();
         menu::render();
-        menu::renderToasts();
         menu::renderHudChrome();
+
+        // ImGui mantiene un LOCK de wheeling (g.WheelingWindow): la ventana
+        // que lo toma se queda con TODOS los eventos de wheel hasta que el
+        // mouse se mueve de golpe o venza el timer (~16s). Si esa ventana
+        // dejo de existir (cambio de estilo de GUI, drawer cerrado, child
+        // reciclado), sigue "scrolleando en la nada" y se come el wheel de
+        // TODA la GUI — marcaba WheelingWindowScrolledFrame cada frame y los
+        // scrolls custom se saltaban solos. Soltar locks muertos: a estas
+        // alturas del frame, toda ventana viva ya hizo Begin/End.
+        if (GImGui && GImGui->WheelingWindow &&
+            GImGui->WheelingWindow->LastFrameActive != ImGui::GetFrameCount())
+        {
+            GImGui->WheelingWindow = nullptr;
+            GImGui->WheelingWindowStartFrame = -1;
+            GImGui->WheelingWindowScrolledFrame = -1;
+            GImGui->WheelingWindowReleaseTimer = 0.0f;
+            GImGui->WheelingWindowWheelRemainder = ImVec2(0.0f, 0.0f);
+        }
 
         ImGui::EndFrame();
         ImGui::Render();
@@ -350,26 +481,34 @@ static HRESULT __stdcall HookedPresent(IDXGISwapChain* pSwapChain, UINT SyncInte
         // Blur del frame del juego cuando algo lo usa. Con el menu abierto va
         // a full rate; en juego se limita a ~30Hz.
             mc::blur::setDisplaySize(g_DisplayWidth, g_DisplayHeight);
-            mc::blur::identifyGameBbRTV(g_originalRenderTargetView);
+
+            // Pantalla del juego abierta (inventario, cofre, chat, pause): el
+            // frame llega por el path de composicion XAML. El pase sigue
+            // corriendo (blur en vivo para los widgets) pero en modo seguro:
+            // sin tocar el swap chain ni escribir el backbuffer, y sin
+            // reclamar el RT de la UI como backbuffer del juego.
+            bool gameScreen = gameScreenOpen();
+            if (!gameScreen)
+                mc::blur::identifyGameBbRTV(g_originalRenderTargetView);
 
             // El composite Mica debe correr a FULL RATE durante TODO el fade
             // (incluido el de cierre): con el menu visible() en false y solo
             // el throttle de 33ms, los frames alternan frost/sin-frost durante
             // la animacion de cierre = parpadeo.
             bool fadeActive = mc::menu::animationAlpha() > 0.001f;
-            bool bdWanted = mc::blur::wanted() || fadeActive;
+            bool bdWanted = mc::blur::wanted() || fadeActive || mc::blur::motionBlurEnabled();
             mc::blur::setRecording(bdWanted);
-            mc::blur::armProxy(bdWanted);
+            mc::blur::armProxy(bdWanted && !gameScreen);
             if (bdWanted)
             {
                 static ULONGLONG lastPassMs = 0;
                 ULONGLONG nowMs = GetTickCount64();
                 // MotionBlur graba a full rate: los ghosts deben ser frames
                 // consecutivos o el trail queda entrecortado.
-                if (mc::menu::visible() || fadeActive || mc::blur::ghostRecording() ||
+                if (mc::menu::visible() || fadeActive || mc::blur::motionBlurEnabled() ||
                     mc::blur::hasAcrylic() || nowMs - lastPassMs >= 33ull)
                 {
-                    mc::blur::runPass(g_originalRenderTargetView);
+                    mc::blur::runPass(g_originalRenderTargetView, !gameScreen);
                     lastPassMs = nowMs;
                 }
             }
@@ -429,40 +568,107 @@ static HRESULT __stdcall HookedPresent(IDXGISwapChain* pSwapChain, UINT SyncInte
             g_originalDepthStencilView = nullptr;
         }
     }
+}
 
-    return oPresent(pSwapChain, SyncInterval, Flags);
+// Guardia SEH del hook de Present: el hook corre DENTRO del path de
+// composicion XAML del juego (Windows.UI.Xaml -> game -> Present), donde
+// cualquier excepcion que escape cruza un boundary WinRT noexcept y mata el
+// proceso con fail-fast SIN dejar log. Con la guardia, una falta = frame de
+// overlay saltado + reporte [Guard][Present] con el stack del culpable;
+// el juego sigue presentando (oPresent SIEMPRE se llama).
+static int presentGuardFilter(EXCEPTION_POINTERS* ep)
+{
+    mc::log::reportGuard("Present", ep);
+    return EXCEPTION_EXECUTE_HANDLER;
+}
+
+static int resizeGuardFilter(EXCEPTION_POINTERS* ep)
+{
+    mc::log::reportGuard("Resize", ep);
+    return EXCEPTION_EXECUTE_HANDLER;
+}
+
+static HRESULT __stdcall HookedPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT Flags)
+{
+    __try
+    {
+        presentBody(pSwapChain);
+    }
+    __except (presentGuardFilter(GetExceptionInformation()))
+    {
+        // Dejar a ImGui en estado coherente: la falta pudo ocurrir entre
+        // NewFrame y EndFrame y el proximo frame debe poder arrancar.
+        __try
+        {
+            if (ImGui::GetCurrentContext() && GImGui && GImGui->WithinFrameScope)
+            {
+                ImGui::EndFrame();
+            }
+        }
+        __except (EXCEPTION_EXECUTE_HANDLER)
+        {
+            g_overlayDead = true;
+        }
+    }
+
+    // Unlock FPS: SyncInterval=0 salta el vsync/cap del compositor. Si el
+    // swapchain soporta tearing, la bandera evita que el compositor vuelva
+    // a encolar el frame (DXGI_PRESENT_ALLOW_TEARING requiere que el
+    // swapchain se haya creado con ALLOW_TEARING).
+    UINT sync = SyncInterval;
+    UINT flags = Flags;
+    if (g_unlockFps.load(std::memory_order_relaxed))
+    {
+        sync = 0;
+        if (g_allowTearing.load(std::memory_order_relaxed) && swapchainTearingSupported())
+            flags |= DXGI_PRESENT_ALLOW_TEARING;
+    }
+
+    return oPresent(pSwapChain, sync, flags);
 }
 
 static HRESULT __stdcall HookedResizeBuffers(IDXGISwapChain* pSwapChain, UINT BufferCount, UINT Width, UINT Height,
                                              DXGI_FORMAT NewFormat, UINT SwapChainFlags)
 {
-    MC_LOG("[VTable] ResizeBuffers called - Width: %d, Height: %d", Width, Height);
-
-    mc::blur::onResize();
-
-    if (g_pd3dDeviceContext)
+    __try
     {
-        g_pd3dDeviceContext->OMSetRenderTargets(0, nullptr, nullptr);
+        MC_LOG("[VTable] ResizeBuffers called - Width: %d, Height: %d", Width, Height);
+
+        mc::blur::onResize();
+
+        if (g_pd3dDeviceContext)
+        {
+            g_pd3dDeviceContext->OMSetRenderTargets(0, nullptr, nullptr);
+        }
+
+        if (g_mainRenderTargetView)
+        {
+            g_mainRenderTargetView->Release();
+            g_mainRenderTargetView = nullptr;
+        }
     }
-
-    if (g_mainRenderTargetView)
+    __except (resizeGuardFilter(GetExceptionInformation()))
     {
-        g_mainRenderTargetView->Release();
-        g_mainRenderTargetView = nullptr;
     }
 
     HRESULT hr = oResizeBuffers(pSwapChain, BufferCount, Width, Height, NewFormat, SwapChainFlags);
 
-    if (g_Initialized && SUCCEEDED(hr))
+    __try
     {
-        CreateRenderTarget(pSwapChain);
-
-        if (g_pd3dDeviceContext)
+        if (g_Initialized && SUCCEEDED(hr))
         {
-            g_DisplayWidth = (float)Width;
-            g_DisplayHeight = (float)Height;
-            ImGui::GetIO().DisplaySize = ImVec2(g_DisplayWidth, g_DisplayHeight);
+            CreateRenderTarget(pSwapChain);
+
+            if (g_pd3dDeviceContext)
+            {
+                g_DisplayWidth = (float)Width;
+                g_DisplayHeight = (float)Height;
+                ImGui::GetIO().DisplaySize = ImVec2(g_DisplayWidth, g_DisplayHeight);
+            }
         }
+    }
+    __except (resizeGuardFilter(GetExceptionInformation()))
+    {
     }
 
     return hr;

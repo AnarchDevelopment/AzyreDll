@@ -27,7 +27,8 @@ namespace {
 bool g_broken = false;       // SEH desactivo el pase para siempre
 bool g_hasContent = false;   // gaussB tiene un blur valido del frame actual
 bool g_debugCompositeRaw = false; // F11: componer la captura RAW sin blur
-bool g_ghostRecording = false;    // MotionBlur: capturar frames al anillo
+bool g_mbEnabled = false;          // MotionBlur (arst-motion-blur) activo
+float g_mbStrength = 0.75f;        // Factor de blur (0..0.99)
 bool g_menuGlass = true;          // composite Glass del menu (off en modo Solstice)
 
 // Paneles acrilicos de los widgets registrados este frame (hilo de Present,
@@ -40,7 +41,7 @@ struct AcrylicRect
 };
 std::vector<AcrylicRect> g_acrylic;
 
-void passBody(ID3D11RenderTargetView* boundRtv)
+void passBody(ID3D11RenderTargetView* boundRtv, bool allowWrites)
 {
     if (!detail::g_context || !detail::g_swapChain)
         return;
@@ -51,7 +52,7 @@ void passBody(ID3D11RenderTargetView* boundRtv)
     static bool s_logPassOk = false;
 
     bool flip = false;
-    ID3D11ShaderResourceView* src = capture::find(boundRtv, &flip);
+    ID3D11ShaderResourceView* src = capture::find(boundRtv, &flip, allowWrites);
     if (!src)
     {
         g_hasContent = false;
@@ -68,16 +69,55 @@ void passBody(ID3D11RenderTargetView* boundRtv)
     passes::StateBag bag;
     passes::save(bag);
 
-    // Ghost ring de MotionBlur: captura del frame a 1/4, SIEMPRE antes de
-    // la cadena (puede ser lo unico que se necesita en juego).
-    if (g_ghostRecording && detail::g_ghostFilled >= 0)
+    // ------------------------------------------------------------------
+    // MotionBlur (arst-motion-blur): procesa el frame del juego a resolución
+    // completa ANTES de que se dibuje cualquier widget o HUD de ImGui.
+    // Solo afecta al juego: cuando el menú está abierto se pausa y resetea.
+    // ------------------------------------------------------------------
+    bool menuOpen = mc::menu::visible() || mc::menu::animationAlpha() > 0.001f;
+    if (g_mbEnabled && !menuOpen && detail::g_mbPrev.rtv && detail::g_mbSwap.rtv)
     {
-        detail::BlurTex& g = detail::g_ghostRing[detail::g_ghostCursor];
-        if (g.rtv)
-            passes::copy(src, g.rtv, g.w, g.h);
-        detail::g_ghostCursor = (detail::g_ghostCursor + 1) % detail::kGhostMax;
-        if (detail::g_ghostFilled < detail::kGhostMax)
-            ++detail::g_ghostFilled;
+        UINT dispW = (UINT)detail::g_displayW;
+        UINT dispH = (UINT)detail::g_displayH;
+        float factor = std::clamp(g_mbStrength, 0.0f, 0.99f);
+
+        if (!detail::g_mbHasHistory)
+        {
+            if (detail::g_captureTex)
+                detail::g_context->CopyResource(detail::g_mbPrev.tex, detail::g_captureTex);
+            else
+                passes::copy(src, detail::g_mbPrev.rtv, dispW, dispH);
+            detail::g_mbHasHistory = true;
+        }
+        else
+        {
+            // Pass 1: blend del frame actual (src) y el previo acumulado (g_mbPrev) hacia swap
+            passes::motionBlur(src, detail::g_mbPrev.srv, detail::g_mbSwap.rtv, dispW, dispH, factor);
+
+            // Pass 2: actualizar el buffer acumulado previo con el resultado actual
+            detail::g_context->CopyResource(detail::g_mbPrev.tex, detail::g_mbSwap.tex);
+
+            // Pass 3: volcar el frame con MotionBlur al backbuffer real del
+            // juego — suspendido con pantallas del juego abiertas.
+            if (allowWrites)
+            {
+                ID3D11Texture2D* bb = nullptr;
+                if (SUCCEEDED(detail::g_swapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)&bb)))
+                {
+                    ID3D11RenderTargetView* bbRtv = nullptr;
+                    if (SUCCEEDED(detail::g_device->CreateRenderTargetView(bb, nullptr, &bbRtv)) && bbRtv)
+                    {
+                        passes::copy(detail::g_mbSwap.srv, bbRtv, dispW, dispH);
+                        bbRtv->Release();
+                    }
+                    bb->Release();
+                }
+            }
+        }
+    }
+    else if (menuOpen)
+    {
+        detail::g_mbHasHistory = false;
     }
 
     // Con el menu cerrado y sin modulos que quieran el backdrop, el ghost es
@@ -114,12 +154,17 @@ void passBody(ID3D11RenderTargetView* boundRtv)
     passes::copy(detail::g_btQuarter.srv, detail::g_btSmall.rtv, detail::g_btSmall.w,
                  detail::g_btSmall.h);
 
-    // Gaussiano separable a 1/8, UNA iteracion H/V (sigma ~14px a resolucion
-    // completa, FWHM ~32px): la version "escarchada" original. La doble
-    // iteracion (~19px) resultaba un poco dura para el gusto.
+    // Gaussiano separable a 1/8, DOS iteraciones H/V: sigma ~19px a
+    // resolucion completa — el frost de una sola iteracion (~14px) se veia
+    // demasiado debil detras de los widgets. El resultado sigue en GaussB
+    // (lo consumen srv() y los composites).
     if (shaders::ok())
     {
         passes::gauss(detail::g_btSmall.srv, detail::g_btGaussA.rtv, detail::g_btGaussA.w,
+                      detail::g_btGaussA.h, 1.0f, 0.0f);
+        passes::gauss(detail::g_btGaussA.srv, detail::g_btGaussB.rtv, detail::g_btGaussB.w,
+                      detail::g_btGaussB.h, 0.0f, 1.0f);
+        passes::gauss(detail::g_btGaussB.srv, detail::g_btGaussA.rtv, detail::g_btGaussA.w,
                       detail::g_btGaussA.h, 1.0f, 0.0f);
         passes::gauss(detail::g_btGaussA.srv, detail::g_btGaussB.rtv, detail::g_btGaussB.w,
                       detail::g_btGaussB.h, 0.0f, 1.0f);
@@ -130,7 +175,11 @@ void passBody(ID3D11RenderTargetView* boundRtv)
         // backbuffer (el del juego puede ser null en Present).
         bool compMenu = (menuAnim > 0.001f) && g_menuGlass;
         bool compWidgets = !g_acrylic.empty();
-        if (compMenu || compWidgets)
+        // Con una pantalla del juego abierta no se escribe NADA al
+        // backbuffer: los composites Glass/Mica quedan suspendidos. Los
+        // widgets acrilicos siguen mostrando blur en vivo porque dibujan
+        // srv() en su propia draw list (la cadena sigue corriendo).
+        if (allowWrites && (compMenu || compWidgets))
         {
             // F11: componer la RAW (contenido conocido-bueno) aisla el
             // composite de la cadena de blur.
@@ -256,13 +305,13 @@ void shutdown()
     g_hasContent = false;
 }
 
-void runPass(ID3D11RenderTargetView* boundRtv)
+void runPass(ID3D11RenderTargetView* boundRtv, bool allowBackbufferWrites)
 {
     if (g_broken)
         return;
     __try
     {
-        passBody(boundRtv);
+        passBody(boundRtv, allowBackbufferWrites);
     }
     __except (EXCEPTION_EXECUTE_HANDLER)
     {
@@ -280,8 +329,8 @@ bool wanted()
     if (mc::menu::visible())
         return true;
 
-    // MotionBlur: el anillo de ghosts necesita el pase cada frame.
-    if (g_ghostRecording)
+    // MotionBlur: acumulación EMA necesita el pase cada frame.
+    if (g_mbEnabled)
         return true;
 
     // Widgets acrilicos registrados este frame (PlayerList, etc).
@@ -331,33 +380,34 @@ void* captureSrv()
     return (void*)capture::persistentSrv();
 }
 
-void setGhostRecording(bool on)
+void setMotionBlurEnabled(bool on)
 {
-    if (g_ghostRecording == on)
+    if (g_mbEnabled == on)
         return;
-    g_ghostRecording = on;
+    g_mbEnabled = on;
     if (!on)
-        detail::g_ghostFilled = 0;
-    MC_LOG("[Backdrop] Ghost recording %s", on ? "ON" : "OFF");
+        resetMotionBlur();
+    MC_LOG("[Backdrop] MotionBlur %s", on ? "ON" : "OFF");
 }
 
-bool ghostRecording()
+bool motionBlurEnabled()
 {
-    return g_ghostRecording;
+    return g_mbEnabled;
 }
 
-// SRV del frame capturado hace `age` frames (1 = el anterior).
-void* ghostSrv(int age)
+void setMotionBlurStrength(float strength)
 {
-    if (age < 1 || age > detail::g_ghostFilled || age > detail::kGhostMax)
-        return nullptr;
-    int slot = (detail::g_ghostCursor - age + detail::kGhostMax * 2) % detail::kGhostMax;
-    return (void*)detail::g_ghostRing[slot].srv;
+    g_mbStrength = strength;
 }
 
-int ghostFilled()
+float motionBlurStrength()
 {
-    return detail::g_ghostFilled;
+    return g_mbStrength;
+}
+
+void resetMotionBlur()
+{
+    detail::g_mbHasHistory = false;
 }
 
 void identifyGameBbRTV(ID3D11RenderTargetView* rtv)
@@ -382,6 +432,8 @@ void clearRing()
 
 void* takeProxyFrame()
 {
+    if (g_mbEnabled && !mc::menu::visible())
+        return nullptr;
     return (void*)rtwatch::proxyFrameSrv();
 }
 

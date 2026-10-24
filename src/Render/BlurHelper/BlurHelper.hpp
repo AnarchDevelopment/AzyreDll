@@ -35,7 +35,12 @@ void* srv();          // textura blureada (nullptr = sin contenido: usar dim)
 void* captureSrv();   // captura RAW sin blur (debug F9)
 
 // ---- integracion con el Present hook (dx11) ----
-void runPass(ID3D11RenderTargetView* boundRtv);
+// allowBackbufferWrites=false (pantalla del juego abierta: el frame se
+// presenta por el path XAML): la cadena de captura+blur SIGUE corriendo
+// (los widgets acrilicos mantienen su blur en vivo) pero sin tocar el
+// swap chain — sin GetBuffer/CopyResource del backbuffer y sin los
+// composites Glass/Mica escritos al backbuffer.
+void runPass(ID3D11RenderTargetView* boundRtv, bool allowBackbufferWrites = true);
 void identifyGameBbRTV(ID3D11RenderTargetView* rtv);
 void setRecording(bool on);
 void armProxy(bool on);
@@ -62,13 +67,20 @@ void setMenuGlass(bool on);
 // gaussB — separa "composite dibuja" vs "cadena de blur rota".
 void setDebugCompositeRaw(bool on);
 
-// ---- MotionBlur (anillo de ghost frames a 1/4 de pantalla) ----
-// El modulo enciende la grabacion: cada Present copia el frame capturado
-// al anillo rotatorio (kGhostMax = 20 slots). ghostSrv(age) devuelve la
-// captura de hace `age` frames (1 = el anterior) para pintarla encima.
-void setGhostRecording(bool on);
-bool ghostRecording();
-void* ghostSrv(int age);
-int ghostFilled();
+// ---- MotionBlur (lógica arst-motion-blur: acumulación full-res EMA) ----
+// El módulo aplica acumulación exponencial sobre el backbuffer a resolución
+// completa ANTES de que se dibuje el HUD o ImGui, garantizando nitidez total
+// y evitando cualquier interferencia con los widgets del juego o del cliente.
+void setMotionBlurEnabled(bool on);
+bool motionBlurEnabled();
+void setMotionBlurStrength(float strength);
+float motionBlurStrength();
+void resetMotionBlur();
+
+// Stubs de compatibilidad legacy
+inline void setGhostRecording(bool on) { setMotionBlurEnabled(on); }
+inline bool ghostRecording() { return motionBlurEnabled(); }
+inline void* ghostSrv(int) { return nullptr; }
+inline int ghostFilled() { return 0; }
 
 }
