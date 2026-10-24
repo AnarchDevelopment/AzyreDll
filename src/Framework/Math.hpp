@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Modules/impl/Visuals/Zoom/ZoomFov.hpp"
+
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -127,6 +129,10 @@ inline AimAngles calcAngles(const Vec3& from, const Vec3& to)
 inline bool worldToScreen(const Vec3& world, const Vec3& cam, float yaw, float pitch,
                           float fovDeg, float screenW, float screenH, Vec3& out)
 {
+    // El modulo Zoom multiplica el FOV del juego por un factor: la proyeccion
+    // tiene que usar el mismo FOV efectivo o los overlays se descuadran.
+    fovDeg *= zoomFovFactor();
+
     float yR = deg2rad(yaw);
     float pR = deg2rad(pitch);
     float cosY = std::cos(yR), sinY = std::sin(yR);
