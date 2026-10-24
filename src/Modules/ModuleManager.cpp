@@ -3,6 +3,7 @@
 #include "Commands/CommandManager.hpp"
 #include "Config/Config.hpp"
 #include "Framework/Log.hpp"
+#include "SDK/Game.hpp"
 
 #include <imgui.h>
 #include <windows.h>
@@ -184,6 +185,10 @@ Module* ModuleManager::add(std::unique_ptr<Module> module)
     return raw;
 }
 
+// Serial unico y monotomico para las notificaciones (lo usa el modo Rise de
+// Notifications para llevar la cola de "una a la vez").
+static long long s_nextNotifId = 1;
+
 void ModuleManager::notify(const std::string& text, bool enabled, float duration)
 {
     if (quiet_)
@@ -194,6 +199,7 @@ void ModuleManager::notify(const std::string& text, bool enabled, float duration
     n.enabled = enabled;
     n.hasState = true;
     n.duration = duration;
+    n.id = s_nextNotifId++;
     notifs_.push_back(std::move(n));
     if (notifs_.size() > 8)
         notifs_.erase(notifs_.begin());
@@ -206,6 +212,7 @@ void ModuleManager::notifyInfo(const std::string& text, float duration)
     n.enabled = true;
     n.hasState = false;
     n.duration = duration;
+    n.id = s_nextNotifId++;
     notifs_.push_back(std::move(n));
     if (notifs_.size() > 8)
         notifs_.erase(notifs_.begin());
@@ -283,6 +290,19 @@ void ModuleManager::handleKeybinds()
         edge[k] = down[k] && !wasDown[k];
         up[k] = !down[k] && wasDown[k];
         wasDown[k] = down[k];
+    }
+
+    // Vanilla chat is outside ImGui, so WantTextInput is not sufficient. The
+    // client screen stack is checked without virtual dispatch; while the
+    // ChatScreen vtable is on top, keybinds must not toggle or capture keys.
+    if (Game::get().client().chatOpen())
+    {
+        if (binding_)
+        {
+            for (int k = 0; k < 256; ++k)
+                bindPrev_[k] = down[k];
+        }
+        return;
     }
 
     if (binding_)

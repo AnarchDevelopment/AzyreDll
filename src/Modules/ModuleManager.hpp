@@ -21,6 +21,9 @@ public:
         // desde la esquina inferior derecha y la salida al vencer.
         float slide = 0.0f;
         bool isTimeUp = false;
+        // Serial unico: lo usa el modo Rise de Notifications para saber cual
+        // es la "actual" (Rise muestra una a la vez, con cola).
+        long long id = -1;
     };
 
     static ModuleManager& get();

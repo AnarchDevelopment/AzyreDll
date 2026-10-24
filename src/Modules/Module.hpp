@@ -49,6 +49,8 @@ public:
     const std::string& description() const { return description_; }
     Category category() const { return category_; }
 
+    virtual std::string suffix() const { return ""; }
+
     int keybind() const { return keybind_; }
     void setKeybind(int key) { keybind_ = key; }
 
