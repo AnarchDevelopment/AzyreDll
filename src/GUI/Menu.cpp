@@ -13,6 +13,7 @@
 #include "Modules/impl/Interface/Style/sAzyre/sAzyre.hpp"
 #include "Modules/impl/Interface/Style/sSolstice/sSolstice.hpp"
 #include "Modules/impl/Interface/Style/sRise/sRise.hpp"
+#include "Modules/impl/Interface/Style/sGlass/sGlass.hpp"
 #include "Render/DX11.hpp"
 #include "Render/D2D/D2D.hpp"
 #include "Render/BlurHelper/BlurHelper.hpp"
@@ -382,8 +383,9 @@ void render()
 {
     theme::apply();
 
-    // En modo Solstice el vidrio lo hace D2D: apagar el composite Glass nativo.
-    blur::setMenuGlass(gui::blurMode() == 0);
+    // Solstice and Glass draw their own acrylic surfaces; avoid the native
+    // compositor using the classic menu's cached rectangle for those styles.
+    blur::setMenuGlass(gui::blurMode() == 0 && gui::style() != 3);
 
     float dt = ImGui::GetIO().DeltaTime;
     float speed = dt * 9.0f;
@@ -405,6 +407,8 @@ void render()
         gui::sSolstice::render(g_anim);
     else if (gui::style() == 2)
         gui::sRise::render(g_anim);
+    else if (gui::style() == 3)
+        gui::sGlass::render(g_anim);
     else
         gui::sAzyre::render(g_anim);
 }

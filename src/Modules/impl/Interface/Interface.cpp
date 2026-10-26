@@ -32,19 +32,21 @@ static const char* kFontNames[] = {
 static const int kFontCount = 12;
 
 // --- Estado global del estilo de GUI ---
-int g_style = 0;             // 0 = Azyre, 1 = Solstice, 2 = Rise
+int g_style = 0;             // 0 = Azyre, 1 = Solstice, 2 = Rise, 3 = Glass
 int g_solsticeAnim = 0;      // 0 = Zoom, 1 = Bounce
 float g_solsticeEase = 18.0f;
 float g_solsticeBlur = 7.0f;
 int g_blurMode = 0;          // 0 = Native, 1 = Solstice (D2D)
 float g_riseScale = 1.0f;    // Escala de ventana de Rise (0.5 .. 2.0)
+float g_glassOpacity = 0.78f;
+int g_glassMotion = 0;
 
 } // namespace
 
 namespace gui {
 
 int style() { return g_style; }
-void setStyle(int s) { g_style = (s >= 0 && s <= 2) ? s : 0; }
+void setStyle(int s) { g_style = (s >= 0 && s <= 3) ? s : 0; }
 int solsticeAnim() { return g_solsticeAnim; }
 void setSolsticeAnim(int mode) { g_solsticeAnim = (mode == 1) ? 1 : 0; }
 float solsticeEase() { return g_solsticeEase; }
@@ -55,6 +57,10 @@ int blurMode() { return g_blurMode; }
 void setBlurMode(int mode) { g_blurMode = (mode == 1) ? 1 : 0; }
 float riseScale() { return g_riseScale; }
 void setRiseScale(float v) { g_riseScale = (v < 0.5f) ? 0.5f : (v > 2.0f ? 2.0f : v); }
+float glassOpacity() { return g_glassOpacity; }
+void setGlassOpacity(float v) { g_glassOpacity = (v < 0.0f) ? 0.0f : (v > 1.0f ? 1.0f : v); }
+int glassMotion() { return g_glassMotion; }
+void setGlassMotion(int mode) { g_glassMotion = (mode < 0 || mode > 2) ? 0 : mode; }
 } // namespace gui
 
 InterfaceModule::InterfaceModule()
@@ -69,9 +75,9 @@ void InterfaceModule::drawSettings()
 {
     // ---- Estilo de la GUI ----
     ImGui::SeparatorText("GUI Style");
-    const char* styles[] = {"Azyre", "Solstice", "Rise"};
+    const char* styles[] = {"Azyre", "Solstice", "Rise", "Glass"};
     int cur = gui::style();
-    if (widgets::CCombo("Style##iface", &cur, styles, 3))
+    if (widgets::CCombo("Style##iface", &cur, styles, 4))
     {
         gui::setStyle(cur);
         config::saveAll();
@@ -132,6 +138,26 @@ void InterfaceModule::drawSettings()
             gui::setRiseScale(rScale);
             config::saveAll();
         }
+        ImGui::Unindent();
+    }
+
+    if (gui::style() == 3)
+    {
+        ImGui::Indent();
+        float opacity = gui::glassOpacity();
+        if (widgets::CSlider("Glass Opacity##iface_glass", &opacity, 0.25f, 0.95f, "%.2f"))
+        {
+            gui::setGlassOpacity(opacity);
+            config::saveAll();
+        }
+        const char* motions[] = {"Fluid", "Spring", "Reduced"};
+        int motion = gui::glassMotion();
+        if (widgets::CCombo("Motion##iface_glass", &motion, motions, 3))
+        {
+            gui::setGlassMotion(motion);
+            config::saveAll();
+        }
+        ImGui::TextDisabled("Backdrop blur uses the live DX11 frame capture.");
         ImGui::Unindent();
     }
 
@@ -296,6 +322,8 @@ nlohmann::json InterfaceModule::saveSettings() const
     j["sol_speed"]      = colors::colorSpeed();
     j["sol_sat"]        = colors::saturation();
     j["rise_scale"]     = gui::riseScale();
+    j["glass_opacity"]  = gui::glassOpacity();
+    j["glass_motion"]   = gui::glassMotion();
     return j;
 }
 
@@ -339,6 +367,10 @@ void InterfaceModule::loadSettings(const nlohmann::json& j)
         colors::setSaturation(j["sol_sat"].get<float>());
     if (j.contains("rise_scale"))
         gui::setRiseScale(j["rise_scale"].get<float>());
+    if (j.contains("glass_opacity"))
+        gui::setGlassOpacity(j["glass_opacity"].get<float>());
+    if (j.contains("glass_motion"))
+        gui::setGlassMotion(j["glass_motion"].get<int>());
     // NO tocar ImGui aqui: loadSettings corre en Bootstrap, ANTES del primer
     // Present donde ImGui::CreateContext() ocurre. ImGui::GetIO() con contexto
     // null = access violation. El primer Present ya aplica FontIndex:
