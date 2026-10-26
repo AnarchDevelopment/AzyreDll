@@ -600,6 +600,11 @@ bool Scaffold::tickPlace(const LocalPlayer& lp,
     }
     failStreak_ = 0;
 
+    // Actor::swing performs the local hand animation and emits the normal
+    // AnimatePacket (action 1), so this checkbox covers both client and server.
+    if (swing_)
+        (void)mlp.swing();
+
     static ULONGLONG s_lastOk = 0;
     ULONGLONG now = GetTickCount64();
     lastPlaceMs_ = now;
@@ -749,6 +754,7 @@ nlohmann::json Scaffold::saveSettings() const
         {"towerMode", towerMode_},
         {"towerSpeed", towerSpeed_},
         {"allowMovement", allowMovement_},
+        {"swing", swing_},
         {"switchDelayMs", switchDelayMs_},
         {"rotateMode", rotateMode_},
         {"tellyLead", tellyLead_},
@@ -789,6 +795,7 @@ void Scaffold::loadSettings(const nlohmann::json& j)
     if (towerSpeed_ > 20.0f)
         towerSpeed_ = 20.0f;
     allowMovement_ = j.value("allowMovement", allowMovement_);
+    swing_ = j.value("swing", swing_);
     switchDelayMs_ = j.value("switchDelayMs", switchDelayMs_);
     rotateMode_ = j.value("rotateMode", rotateMode_);
     if (rotateMode_ < 0)
@@ -832,6 +839,7 @@ void Scaffold::drawSettings()
     widgets::CSlider("Range##sc", &range_, 0.0f, 10.0f, "%.0f");
     widgets::Checkbox("Lock Y##sc", &lockY_);
     widgets::Checkbox("Avoid underplace##sc", &avoidUnderplace_);
+    widgets::Checkbox("Swing##sc", &swing_);
     ImGui::Separator();
     const char* towers[] = {"Vanilla", "Velocity", "Clip"};
     widgets::CCombo("Tower mode##sc", &towerMode_, towers, 3);

@@ -70,6 +70,7 @@ private:
     int towerMode_ = 0; // 0=Vanilla, 1=Velocity, 2=Clip
     float towerSpeed_ = 8.5f;
     bool allowMovement_ = false;
+    bool swing_ = false;
     int switchDelayMs_ = 0;
     int rotateMode_ = 0; // 0=None, 1=Normal, 2=Down, 3=Backwards, 4=Reverse
     float tellyLead_ = 0.25f;  // predicción XZ de aterrizaje (s)
