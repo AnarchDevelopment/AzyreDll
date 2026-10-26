@@ -33,8 +33,12 @@ using MatrixStackPushFn = void*(__fastcall*)(void* stack, uintptr_t out[2]);
 using MatrixTranslateFn = void*(__fastcall*)(void* matrix, float x, float y, float z);
 using MatrixRotateFn = void*(__fastcall*)(void* matrix, float radians,
     float axisX, float axisY, float axisZ);
+using SwingMatrixTransformFn = double(__fastcall*)(uintptr_t progress, void* actor,
+    float partialTick, void* matrix);
 ItemInHandDrawFn g_originalItemInHandDraw = nullptr;
 void* g_itemInHandDrawTarget = nullptr;
+SwingMatrixTransformFn g_originalSwingMatrixTransform = nullptr;
+void* g_swingMatrixTransformTarget = nullptr;
 MatrixStackPushFn g_matrixStackPush = nullptr;
 MatrixTranslateFn g_matrixTranslate = nullptr;
 MatrixRotateFn g_matrixRotate = nullptr;
@@ -166,6 +170,59 @@ struct MatrixStackScope
     ~MatrixStackScope() { pop(); }
 };
 
+double __fastcall swingMatrixTransformDetour(uintptr_t progress, void* actor,
+    float partialTick, void* matrix)
+{
+    const auto original = g_originalSwingMatrixTransform;
+    if (!original)
+        return 0.0;
+
+    const uintptr_t caller = reinterpret_cast<uintptr_t>(_ReturnAddress());
+    const uintptr_t expectedCaller = mem::resolve(off::fn::ItemInHandSwingTransformReturn);
+    const uintptr_t actorAddress = reinterpret_cast<uintptr_t>(actor);
+    const double result = original(progress, actor, partialTick, matrix);
+
+    if (!g_smallItemsActive.load(std::memory_order_relaxed) ||
+        !actorAddress || actorAddress != Game::get().localAddr() ||
+        caller != expectedCaller || !matrix || !g_matrixTranslate ||
+        !mem::isReadable(reinterpret_cast<uintptr_t>(matrix), 64))
+        return result;
+
+    // Transform the explicit hand-pose matrix passed by sub_1402FB690.
+    // This keeps Small Items out of the shared global render matrix stack.
+    g_matrixTranslate(matrix, 0.5f, -0.2f, -0.6f);
+    return result;
+}
+
+bool installSwingMatrixTransformHook()
+{
+    if (g_swingMatrixTransformTarget)
+        return true;
+
+    const uintptr_t transformAddress = mem::resolve(off::fn::ItemInHandSwingTransform);
+    const uintptr_t translateAddress = mem::resolve(off::fn::RenderMatrixTranslate);
+    if (!transformAddress || !translateAddress ||
+        !mem::isReadable(transformAddress, 16) || !mem::isReadable(translateAddress, 16))
+    {
+        MC_LOG_ERROR("[Animations] Hand-pose transform functions are unavailable");
+        return false;
+    }
+
+    g_matrixTranslate = reinterpret_cast<MatrixTranslateFn>(translateAddress);
+    void* target = reinterpret_cast<void*>(transformAddress);
+    if (!hook::create(target, reinterpret_cast<void*>(&swingMatrixTransformDetour),
+            reinterpret_cast<void**>(&g_originalSwingMatrixTransform)))
+    {
+        g_matrixTranslate = nullptr;
+        MC_LOG_ERROR("[Animations] Failed to install hand-pose transform hook");
+        return false;
+    }
+
+    g_swingMatrixTransformTarget = target;
+    MC_LOG("[Animations] hand-pose transform hook installed @ %p", target);
+    return true;
+}
+
 float interpolatedSwingProgress(uintptr_t actor, float partialTick)
 {
     constexpr uintptr_t previousProgressOffset = 0xDE8;
@@ -199,21 +256,15 @@ __int64 __fastcall itemInHandDrawDetour(void* renderer, void* actor,
     if (!firstPersonLocalDraw)
         return original(renderer, actor, renderState, hand, partialTick);
 
-    const bool smallItems = g_smallItemsActive.load(std::memory_order_relaxed);
     const bool customAngle = g_customSwingAngleActive.load(std::memory_order_relaxed) &&
         (!g_onlyOnBlockSwingAngle.load(std::memory_order_relaxed) ||
             isHoldingItemAndBlocking(actorAddress));
-    if ((!smallItems && !customAngle) || !g_matrixStackPush)
+    if (!customAngle || !g_matrixStackPush)
         return original(renderer, actor, renderState, hand, partialTick);
 
     MatrixStackScope matrixScope;
     if (!matrixScope.push())
         return original(renderer, actor, renderState, hand, partialTick);
-
-    if (smallItems && g_matrixTranslate)
-    {
-        g_matrixTranslate(reinterpret_cast<void*>(matrixScope.matrix), 0.5f, -0.2f, -0.6f);
-    }
 
     if (customAngle && g_matrixRotate)
     {
@@ -240,25 +291,22 @@ bool installItemInHandDrawHook()
 
     const uintptr_t drawAddress = mem::resolve(off::fn::ItemInHandDraw);
     const uintptr_t pushAddress = mem::resolve(off::fn::RenderMatrixStackPush);
-    const uintptr_t translateAddress = mem::resolve(off::fn::RenderMatrixTranslate);
     const uintptr_t rotateAddress = mem::resolve(off::fn::RenderMatrixRotate);
-    if (!drawAddress || !pushAddress || !translateAddress || !rotateAddress ||
+    if (!drawAddress || !pushAddress || !rotateAddress ||
         !mem::isReadable(drawAddress, 16) || !mem::isReadable(pushAddress, 16) ||
-        !mem::isReadable(translateAddress, 16) || !mem::isReadable(rotateAddress, 16))
+        !mem::isReadable(rotateAddress, 16))
     {
         MC_LOG_ERROR("[Animations] Item render transform functions are unavailable");
         return false;
     }
 
     g_matrixStackPush = reinterpret_cast<MatrixStackPushFn>(pushAddress);
-    g_matrixTranslate = reinterpret_cast<MatrixTranslateFn>(translateAddress);
     g_matrixRotate = reinterpret_cast<MatrixRotateFn>(rotateAddress);
     void* target = reinterpret_cast<void*>(drawAddress);
     if (!hook::create(target, reinterpret_cast<void*>(&itemInHandDrawDetour),
             reinterpret_cast<void**>(&g_originalItemInHandDraw)))
     {
         g_matrixStackPush = nullptr;
-        g_matrixTranslate = nullptr;
         g_matrixRotate = nullptr;
         MC_LOG_ERROR("[Animations] Failed to install item render transform hook");
         return false;
@@ -272,8 +320,10 @@ bool installItemInHandDrawHook()
 void publishRenderSettings(bool moduleEnabled, bool smallItems, bool customAngle,
     bool onlyOnBlock, float angle)
 {
-    g_smallItemsActive.store(moduleEnabled && smallItems, std::memory_order_relaxed);
-    g_customSwingAngleActive.store(moduleEnabled && customAngle, std::memory_order_relaxed);
+    g_smallItemsActive.store(moduleEnabled && smallItems && g_swingMatrixTransformTarget,
+        std::memory_order_relaxed);
+    g_customSwingAngleActive.store(moduleEnabled && customAngle && g_itemInHandDrawTarget,
+        std::memory_order_relaxed);
     g_onlyOnBlockSwingAngle.store(onlyOnBlock, std::memory_order_relaxed);
     g_swingAngleDegrees.store(angle, std::memory_order_relaxed);
 }
@@ -389,8 +439,9 @@ void Animations::onEnable()
 {
     g_swingTime.store(std::clamp(swingTime_, 0, 20), std::memory_order_relaxed);
     g_active.store(installSwingDurationHook(), std::memory_order_relaxed);
-    const bool renderHookAvailable = installItemInHandDrawHook();
-    publishRenderSettings(renderHookAvailable, smallItems_, customSwingAngle_,
+    installSwingMatrixTransformHook();
+    installItemInHandDrawHook();
+    publishRenderSettings(true, smallItems_, customSwingAngle_,
         onlyOnBlockSwingAngle_, swingAngle_);
     publishBlockSettings(installHumanoidModelAnimationSetupHook() && thirdPersonBlock_,
         onlyOnBlock_, blockXRotation_, blockYRotation_, blockZRotation_);
@@ -416,8 +467,14 @@ void Animations::onShutdown()
         g_itemInHandDrawTarget = nullptr;
         g_originalItemInHandDraw = nullptr;
         g_matrixStackPush = nullptr;
-        g_matrixTranslate = nullptr;
         g_matrixRotate = nullptr;
+    }
+    if (g_swingMatrixTransformTarget)
+    {
+        hook::remove(g_swingMatrixTransformTarget);
+        g_swingMatrixTransformTarget = nullptr;
+        g_originalSwingMatrixTransform = nullptr;
+        g_matrixTranslate = nullptr;
     }
     if (g_modelAnimationSetupTarget)
     {
@@ -507,7 +564,7 @@ void Animations::loadSettings(const nlohmann::json& j)
     if (enabled())
     {
         g_swingTime.store(swingTime_, std::memory_order_relaxed);
-        publishRenderSettings(enabled() && g_itemInHandDrawTarget, smallItems_,
+        publishRenderSettings(enabled(), smallItems_,
             customSwingAngle_, onlyOnBlockSwingAngle_, swingAngle_);
         publishBlockSettings(thirdPersonBlock_, onlyOnBlock_, blockXRotation_,
             blockYRotation_, blockZRotation_);

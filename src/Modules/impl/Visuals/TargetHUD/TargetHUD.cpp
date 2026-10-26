@@ -1,255 +1,363 @@
 #include "TargetHUD.hpp"
-#include "GUI/Widgets.hpp"
 
-#include "Features/ECS/ECS.hpp"
+#include "Features/Friends.hpp"
+#include "Features/HudRegistry.hpp"
 #include "Framework/Math.hpp"
 #include "GUI/Menu.hpp"
-#include "Features/HudRegistry.hpp"
 #include "GUI/Theme.hpp"
+#include "GUI/Widgets.hpp"
+#include "Modules/ModuleManager.hpp"
+#include "Modules/impl/Combat/KillAura/KillAura.hpp"
 #include "Render/BlurHelper/BlurHelper.hpp"
+#include "Render/DX11.hpp"
+#include "Render/ResourceSprites.hpp"
 #include "SDK/Camera.hpp"
 #include "SDK/Game.hpp"
+#include "resource.h"
 
 #include <imgui.h>
+#include <d3d11.h>
 #include <windows.h>
 
+#include <algorithm>
+#include <array>
+#include <cfloat>
+#include <cmath>
 #include <cstdio>
 
 namespace mc {
 
 TargetHUD::TargetHUD()
-    : Module("TargetHUD", "Info card of your current target", Category::Visuals, 0)
+    : Module("TargetHUD", "Solstice-style target information card", Category::Visuals, 0)
 {
     markHasSettings();
 }
 
-void TargetHUD::findTarget(Game& game, const LocalPlayer& local)
+TargetHUD::~TargetHUD()
 {
-    auto& reg = ecs::get().registry;
+    releaseSkinTexture();
+}
 
-    // Mantener target actual si sigue vivo y en rango
-    if (targetAddr_ != 0)
+void TargetHUD::releaseSkinTexture()
+{
+    if (skinSrv_)
     {
-        Actor actor(targetAddr_);
-        if (actor.valid())
+        static_cast<ID3D11ShaderResourceView*>(skinSrv_)->Release();
+        skinSrv_ = nullptr;
+    }
+    skinHash_ = 0;
+}
+
+void TargetHUD::onShutdown()
+{
+    releaseSkinTexture();
+    skinOwner_ = 0;
+}
+
+void TargetHUD::updateSkinTexture(const Actor& actor)
+{
+    if (skinOwner_ != actor.address())
+    {
+        releaseSkinTexture();
+        skinOwner_ = actor.address();
+    }
+
+    std::array<uint8_t, off::skin::PixelBytes> pixels{};
+    if (!actor.skinRgba(pixels))
+        return;
+
+    uint64_t hash = 1469598103934665603ull;
+    for (uint8_t byte : pixels)
+    {
+        hash ^= byte;
+        hash *= 1099511628211ull;
+    }
+    if (skinSrv_ && hash == skinHash_)
+        return;
+
+    ID3D11Device* device = static_cast<ID3D11Device*>(dx11::d3dDevice());
+    if (!device)
+        return;
+
+    // The front face is only 8x8 texels in the skin atlas. Composite the hat
+    // layer, then expand each source texel 8x with nearest-neighbor sampling
+    // so ImGui's linear sampler does not blur the small face crop.
+    std::array<uint8_t, off::skin::PixelBytes> facePixels{};
+    std::array<std::array<uint8_t, 4>, 64> faceTexels{};
+    for (int y = 0; y < 8; ++y)
+    {
+        for (int x = 0; x < 8; ++x)
         {
-            Vec3 tEye = {actor.pos().x, actor.pos().y + actor.height() * 0.9f, actor.pos().z};
-            float dist = distance3D(local.pos(), tEye);
-            if (dist <= range_)
+            const size_t baseOffset = (static_cast<size_t>(y + 8) * 64 + (x + 8)) * 4;
+            const size_t overlayOffset = (static_cast<size_t>(y + 8) * 64 + (x + 40)) * 4;
+            auto& out = faceTexels[static_cast<size_t>(y) * 8 + x];
+            const unsigned alpha = pixels[overlayOffset + 3];
+            const unsigned inverseAlpha = 255u - alpha;
+            for (size_t channel = 0; channel < 3; ++channel)
             {
-                lastSeen_ = GetTickCount64();
-                return;
+                out[channel] = static_cast<uint8_t>(
+                    (static_cast<unsigned>(pixels[overlayOffset + channel]) * alpha +
+                     static_cast<unsigned>(pixels[baseOffset + channel]) * inverseAlpha + 127u) /
+                    255u);
             }
+            out[3] = std::max(pixels[baseOffset + 3], pixels[overlayOffset + 3]);
         }
-        targetAddr_ = 0;
     }
-
-    // Buscar nuevo target
-    Vec3 eye = local.eyePos();
-    float myYaw = local.yaw();
-    float myPitch = local.pitch();
-
-    float bestScore = 1e9f;
-    uintptr_t best = 0;
-
-    for (const Actor& actor : game.remotePlayers())
+    for (int y = 0; y < 64; ++y)
     {
-        if (!actor.valid())
-            continue;
-
-        Vec3 tEye = {actor.pos().x, actor.pos().y + actor.height() * 0.9f, actor.pos().z};
-        float dist = distance3D(eye, tEye);
-        if (dist > range_ || dist < 0.1f)
-            continue;
-
-        AimAngles a = calcAngles(eye, tEye);
-        float yawDiff = angleDiff(myYaw, a.yaw);
-        float pitchDiff = a.pitch - myPitch;
-        if (std::fabs(yawDiff) > fov_ * 0.5f || std::fabs(pitchDiff) > fov_ * 0.5f)
-            continue;
-
-        float score = std::fabs(yawDiff) + std::fabs(pitchDiff);
-        if (score < bestScore)
+        for (int x = 0; x < 64; ++x)
         {
-            bestScore = score;
-            best = actor.address();
+            const auto& texel = faceTexels[static_cast<size_t>(y / 8) * 8 + (x / 8)];
+            const size_t offset = (static_cast<size_t>(y) * 64 + x) * 4;
+            std::copy(texel.begin(), texel.end(), facePixels.begin() + offset);
         }
     }
 
-    if (best != 0)
+    D3D11_TEXTURE2D_DESC desc{};
+    desc.Width = 64;
+    desc.Height = 64;
+    desc.MipLevels = 1;
+    desc.ArraySize = 1;
+    desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    desc.SampleDesc.Count = 1;
+    desc.Usage = D3D11_USAGE_IMMUTABLE;
+    desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+
+    D3D11_SUBRESOURCE_DATA init{};
+    init.pSysMem = facePixels.data();
+    init.SysMemPitch = 64 * 4;
+
+    ID3D11Texture2D* texture = nullptr;
+    ID3D11ShaderResourceView* view = nullptr;
+    if (SUCCEEDED(device->CreateTexture2D(&desc, &init, &texture)) && texture)
     {
-        targetAddr_ = best;
-        lastSeen_ = GetTickCount64();
+        if (SUCCEEDED(device->CreateShaderResourceView(texture, nullptr, &view)) && view)
+        {
+            if (skinSrv_)
+                static_cast<ID3D11ShaderResourceView*>(skinSrv_)->Release();
+            skinSrv_ = view;
+            skinHash_ = hash;
+        }
+        texture->Release();
     }
-    else if (targetAddr_ != 0)
-    {
-        if (GetTickCount64() - lastSeen_ > 2000)
-            targetAddr_ = 0;
-    }
+}
+
+void TargetHUD::findTarget(const LocalPlayer& local)
+{
+    targetAddr_ = 0;
+    Module* auraModule = ModuleManager::get().find("KillAura");
+    if (!auraModule || !auraModule->enabled())
+        return;
+
+    auto* aura = static_cast<KillAura*>(auraModule);
+    const uintptr_t candidate = aura->targetAddress();
+    if (!candidate || candidate == local.address())
+        return;
+
+    Actor actor(candidate);
+    const float currentHealth = actor.currentHealth();
+    if (!actor.valid() || currentHealth == 0.0f ||
+        (currentHealth < 0.0f && actor.maxHealth() <= 0.0f))
+        return;
+    targetAddr_ = candidate;
 }
 
 void TargetHUD::onRender()
 {
     Game& game = Game::get();
-    if (!game.localFound())
-        return;
-
-    if (menu::hudEditing())
+    if (!game.localFound() || menu::hudEditing())
         return;
 
     LocalPlayer local = game.localPlayer();
-    findTarget(game, local);
+    if (!local.isLocal())
+        return;
+    findTarget(local);
 
-    float dt = ImGui::GetIO().DeltaTime;
-    bool showing = (targetAddr_ != 0);
-    float target = showing ? 1.0f : 0.0f;
-    anim_ += (target - anim_) * (dt * 8.0f);
+    const float dt = std::clamp(ImGui::GetIO().DeltaTime, 0.0f, 0.1f);
+    const bool showing = targetAddr_ != 0;
+    const float targetAnim = showing ? 1.0f : 0.0f;
+    anim_ += (targetAnim - anim_) * std::min(1.0f, dt * 10.0f);
     if (anim_ < 0.01f)
         return;
-    if (anim_ > 0.99f)
-        anim_ = 1.0f;
 
     if (!showing)
         return;
 
     Actor actor(targetAddr_);
     if (!actor.valid())
+    {
+        targetAddr_ = 0;
         return;
+    }
 
-    // Read data directly from the Actor (real-time)
-    std::string n = actor.name();
-    if (n.empty())
-        n = "Player";
-    targetName_ = n;
+    targetName_ = actor.name();
+    if (targetName_.empty())
+        targetName_ = "Player";
 
-    // Health: 0x220 es MAX health. El current health en Bedrock vive en
-    // ActorAttributeComponent (pointer chain), no en un field directo.
-    // Pendiente: offset o component pointer del health actual.
-    int hp = 20; // fallback hasta tener el offset del current health
-    (void)hp;
-    float dist = distance3D(local.pos(), actor.pos());
+    maxHealth_ = actor.maxHealth();
+    if (maxHealth_ < 1.0f || maxHealth_ > 2048.0f)
+        maxHealth_ = 20.0f;
+    const float currentHealth = actor.currentHealth();
+    if (displayedTarget_ != actor.address())
+    {
+        health_ = currentHealth >= 0.0f
+            ? std::clamp(currentHealth, 0.0f, maxHealth_)
+            : maxHealth_;
+        displayedTarget_ = actor.address();
+    }
+    else if (currentHealth >= 0.0f && std::isfinite(currentHealth))
+    {
+        const float clampedHealth = std::clamp(currentHealth, 0.0f, maxHealth_);
+        health_ += (clampedHealth - health_) * std::min(1.0f, dt * 10.0f);
+        if (std::fabs(clampedHealth - health_) < 0.05f)
+            health_ = clampedHealth;
+    }
 
-    // Lerp health
-    float healthFloat = (float)hp;
-    lerpedHealth_ += (healthFloat - lerpedHealth_) * (dt * 10.0f);
-    if (std::fabs(healthFloat - lerpedHealth_) < 0.1f)
-        lerpedHealth_ = healthFloat;
-
+    updateSkinTexture(actor);
     drawCard(local, actor, dt);
 }
 
 void TargetHUD::drawCard(const LocalPlayer& local, const Actor& actor, float dt)
 {
     (void)dt;
-
-    auto& reg = ecs::get().registry;
-    entt::entity targetEntity = ecs::get().findByAddress(actor.address());
-    bool fr = (targetEntity != entt::null) && reg.all_of<ecs::IsFriend>(targetEntity);
-    (void)fr;
-
-    float a = anim_;
-    std::string n = targetName_;
-    if (n.empty())
-        n = "Player";
-
-    int displayHealth = (int)std::round(lerpedHealth_);
-    float dist = distance3D(local.pos(), actor.pos());
+    const float s = scale_;
+    const float a = anim_;
+    const float fullW = 240.0f * s;
+    const float fullH = 74.0f * s;
+    const float w = fullW * a;
+    const float h = fullH * a;
+    if (w < 1.0f || h < 1.0f)
+        return;
 
     ImGuiIO& io = ImGui::GetIO();
-    ImVec2 disp = io.DisplaySize;
-    ImDrawList* d = ImGui::GetForegroundDrawList();
-    bool hasBlur = blur::wanted() && blur::ready() && blur::srv();
+    const ImVec2 display = io.DisplaySize;
+    ImDrawList* draw = ImGui::GetBackgroundDrawList();
+    const ImVec2 defaultPos(display.x * 0.5f - fullW * 0.5f,
+                            display.y * 0.5f - fullH * 0.5f);
+    const ImVec2 panelPos = hud::Registry::get().report(
+        "TargetHUD", defaultPos, ImVec2(fullW, fullH));
+    const ImVec2 boxMin(panelPos.x + (fullW - w) * 0.5f,
+                        panelPos.y + (fullH - h) * 0.5f);
+    const ImVec2 boxMax(boxMin.x + w, boxMin.y + h);
+    const float radius = 12.0f * s * a;
+    const float pad = 12.5f * s * a;
+    const bool hasBlur = blur::wanted() && blur::ready() && blur::srv();
 
-    // --- Layout ---
-    float s = scale_;
-    float w = 240.0f * s * a;
-    float h = 68.0f * s * a;
-    float barH = 6.0f * s;
-    float padX = 16.0f * s;
-    float padY = 10.0f * s;
-
-    ImVec2 boxMin(disp.x * 0.5f - w * 0.5f, disp.y * 0.62f);
-    ImVec2 boxMax(boxMin.x + w, boxMin.y + h);
-
-    hud::Registry::get().report("TargetHUD", boxMin, ImVec2(w, h));
-
-    // --- Background ---
-    widgets::SoftShadow(d, boxMin, boxMax, 8.0f * s, 30.0f * a, 8.0f);
-
-    if (hasBlur)
+    widgets::SoftShadow(draw, boxMin, boxMax, radius, 24.0f * a, 8.0f * s);
+    if (hasBlur && display.x > 0.0f && display.y > 0.0f)
     {
-        ImVec2 uv0(boxMin.x / disp.x, boxMin.y / disp.y);
-        ImVec2 uv1(boxMax.x / disp.x, boxMax.y / disp.y);
-        d->AddImageRounded(ImTextureRef((void*)blur::srv()),
-                           boxMin, boxMax, uv0, uv1,
-                           IM_COL32(255, 255, 255, (int)(255.0f * a)), 8.0f * s);
-        d->AddRectFilled(boxMin, boxMax, IM_COL32(12, 14, 18, (int)(60.0f * a)), 8.0f * s);
+        const ImVec2 uv0(boxMin.x / display.x, boxMin.y / display.y);
+        const ImVec2 uv1(boxMax.x / display.x, boxMax.y / display.y);
+        draw->AddImageRounded(ImTextureRef(blur::srv()), boxMin, boxMax, uv0, uv1,
+                              IM_COL32(255, 255, 255, static_cast<int>(255.0f * a)), radius);
+        draw->AddRectFilled(boxMin, boxMax,
+                            IM_COL32(8, 10, 16, static_cast<int>(95.0f * a)), radius);
     }
     else
-        d->AddRectFilled(boxMin, boxMax, IM_COL32(16, 18, 22, (int)(230.0f * a)), 8.0f * s);
+        draw->AddRectFilled(boxMin, boxMax,
+                            IM_COL32(10, 12, 18, static_cast<int>(232.0f * a)), radius);
 
-    // Friend check
-    bool isFriend = friends::isFriend(n);
-    ImU32 accent = isFriend ? friends::colorU32() : theme::AccentU32(a);
+    const ImU32 accent = friends::isFriend(targetName_)
+        ? friends::colorU32()
+        : theme::AccentU32(a);
+    draw->AddRectFilled(boxMin, ImVec2(boxMin.x + 3.0f * s * a, boxMax.y), accent, radius);
+    draw->AddRect(boxMin, boxMax,
+                  IM_COL32(255, 255, 255, static_cast<int>(28.0f * a)), radius, 0, 1.0f * s);
 
-    // Accent bar
-    d->AddRectFilled(boxMin, ImVec2(boxMin.x + 3.0f * s, boxMax.y), accent, 0.0f);
+    const float headSize = 55.0f * s * a;
+    const ImVec2 headMin(boxMin.x + pad, boxMin.y + (h - headSize) * 0.5f);
+    const ImVec2 headMax(headMin.x + headSize, headMin.y + headSize);
+    if (skinSrv_)
+    {
+        const ImTextureRef texture(skinSrv_);
+        draw->AddImageRounded(texture, headMin, headMax,
+                              ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f),
+                              IM_COL32(255, 255, 255, static_cast<int>(255.0f * a)),
+                              10.0f * s * a);
+    }
+    else if (void* head = resources::srv(IDR_STEVE_HEAD))
+    {
+        draw->AddImageRounded(ImTextureRef(head), headMin, headMax,
+                              ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f),
+                              IM_COL32(255, 255, 255, static_cast<int>(255.0f * a)),
+                              10.0f * s * a);
+    }
 
-    // Border
-    d->AddRect(boxMin, boxMax, IM_COL32(255, 255, 255, (int)(18.0f * a)), 8.0f * s, 0, 1.0f);
+    const float contentX = headMax.x + 12.0f * s * a;
+    const float rightPad = 12.0f * s * a;
+    const float contentRight = boxMax.x - rightPad;
+    const float textSize = fontSize_ * s * a;
+    const float titleY = boxMin.y + 9.0f * s * a;
+    const ImU32 textWhite = IM_COL32(245, 247, 250, static_cast<int>(255.0f * a));
+    draw->AddText(nullptr, textSize, ImVec2(contentX, titleY), textWhite,
+                  targetName_.c_str());
 
-    // --- Name + Health ---
-    char title[96];
-    if (showHealth_)
-        snprintf(title, sizeof(title), "%s  [%d]", n.c_str(), displayHealth);
-    else
-        snprintf(title, sizeof(title), "%s", n.c_str());
-
-    d->AddText(ImVec2(boxMin.x + padX + 3.0f * s, boxMin.y + padY),
-               IM_COL32(240, 242, 245, (int)(255.0f * a)), title);
-
+    const float distance = distance3D(local.pos(), actor.pos());
+    const float localHealth = local.currentHealth();
+    const bool winning = localHealth >= 0.0f && health_ >= 0.0f && localHealth >= health_;
+    const char* status = localHealth < 0.0f ? "Status unavailable"
+        : (winning ? "Winning" : "Losing");
+    const float statusY = titleY + 23.0f * s * a;
+    if (showStatus_)
+    {
+        const ImU32 statusColor = localHealth < 0.0f
+            ? IM_COL32(185, 190, 202, static_cast<int>(220.0f * a))
+            : winning
+            ? IM_COL32(140, 225, 170, static_cast<int>(245.0f * a))
+            : IM_COL32(240, 142, 142, static_cast<int>(245.0f * a));
+        draw->AddText(nullptr, 13.0f * s * a, ImVec2(contentX, statusY), statusColor, status);
+    }
     if (showDistance_)
     {
-        char db[32];
-        snprintf(db, sizeof(db), "%.1fm", dist);
-        d->AddText(ImVec2(boxMin.x + padX + 3.0f * s, boxMin.y + padY + 18.0f * s),
-                   IM_COL32(170, 175, 185, (int)(200.0f * a)), db);
+        char distanceText[24]{};
+        std::snprintf(distanceText, sizeof(distanceText), "%.1fm", distance);
+        const ImVec2 distanceSize = ImGui::GetFont()->CalcTextSizeA(
+            12.0f * s * a, FLT_MAX, 0.0f, distanceText);
+        draw->AddText(nullptr, 12.0f * s * a,
+                      ImVec2(contentRight - distanceSize.x, statusY),
+                      IM_COL32(185, 190, 202, static_cast<int>(220.0f * a)), distanceText);
     }
 
-    // --- Health bar ---
     if (showHealth_)
     {
-        ImVec2 barMin(boxMin.x + padX + 3.0f * s, boxMax.y - barH - padY * 0.5f);
-        ImVec2 barMax(boxMax.x - padX, boxMax.y - padY * 0.5f);
+        const float barH = 13.0f * s * a;
+        const ImVec2 barMin(contentX, boxMax.y - 12.0f * s * a - barH);
+        const ImVec2 barMax(contentRight, barMin.y + barH);
+        draw->AddRectFilled(barMin, barMax,
+                            IM_COL32(100, 100, 110, static_cast<int>(170.0f * a)),
+                            8.0f * s * a);
 
-        d->AddRectFilled(barMin, barMax, IM_COL32(0, 0, 0, (int)(180.0f * a)), 3.0f);
-
-        float frac = clampf(lerpedHealth_ / 20.0f, 0.0f, 1.0f);
-        if (frac > 0.001f)
+        const float healthPct = std::clamp(health_ / maxHealth_, 0.0f, 1.0f);
+        const ImVec2 healthMax(barMin.x + (barMax.x - barMin.x) * healthPct, barMax.y);
+        ImVec4 start = theme::Accent;
+        ImVec4 end = theme::AccentTri ? theme::Accent3 : theme::Accent2;
+        start.w *= a;
+        end.w *= a;
+        if (healthPct > 0.01f)
         {
-            ImVec2 fillMax(barMin.x + (barMax.x - barMin.x) * frac, barMax.y);
-            ImU32 col = frac > 0.5f
-                            ? IM_COL32(40, 220, 80, (int)(255 * a))
-                            : IM_COL32(240, 80, 40, (int)(255 * a));
-            d->AddRectFilled(barMin, fillMax, col, 3.0f);
-
-            // Shimmer edge
-            d->AddRectFilled(ImVec2(fillMax.x - 1, barMin.y),
-                             ImVec2(fillMax.x + 1, barMax.y),
-                             IM_COL32(255, 255, 255, (int)(80.0f * a)), 0.0f);
+            draw->PushClipRect(barMin, healthMax, true);
+            draw->AddRectFilledMultiColor(barMin, barMax,
+                ImGui::ColorConvertFloat4ToU32(start), ImGui::ColorConvertFloat4ToU32(end),
+                ImGui::ColorConvertFloat4ToU32(end), ImGui::ColorConvertFloat4ToU32(start));
+            draw->PopClipRect();
         }
+        char healthText[32]{};
+        std::snprintf(healthText, sizeof(healthText), "%.0f / %.0f", health_, maxHealth_);
+        draw->AddText(nullptr, 10.0f * s * a,
+                      ImVec2(barMin.x + 5.0f * s * a, barMin.y + 1.0f * s * a),
+                      IM_COL32(255, 255, 255, static_cast<int>(240.0f * a)), healthText);
     }
 }
 
 void TargetHUD::drawSettings()
 {
-    widgets::CSlider("Range##th", &range_, 2.0f, 16.0f, "%.1f");
-    widgets::CSlider("FOV##th", &fov_, 5.0f, 120.0f, "%.0f");
+    widgets::CSlider("Font Size##th", &fontSize_, 12.0f, 32.0f, "%.0f px");
     widgets::CSlider("Scale##th", &scale_, 0.5f, 2.0f, "%.1f");
-    widgets::Checkbox("Health bar##th", &showHealth_);
+    widgets::Checkbox("Health##th", &showHealth_);
+    widgets::Checkbox("Status##th", &showStatus_);
     widgets::Checkbox("Distance##th", &showDistance_);
 }
 
 MC_REGISTER_MODULE(TargetHUD);
 
-}
+} // namespace mc
