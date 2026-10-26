@@ -14,10 +14,9 @@ namespace mc {
 // durante el hold, con tres problemas mortales:
 //   1. Los detours corrian en el GAME thread, fuera de TODA guardia SEH
 //      (cualquier falta = crash duro del juego, no module-disable).
-//   2. RemotePlayerAlt (0xE64588) esta a 0x18 bytes de RemotePlayer
-//      (0xE645A0): los slots parcheados eran alcanzados por objetos Alt
-//      como sus slots 9/18 — funciones virtuales DISTINTAS llamadas a
-//      traves de detours con firma mismatch -> deref invalido -> crash.
+//   2. 0xE64588 es la vtable secundaria de VRegionListener dentro de
+//      RemotePlayer (+0xFD8), no una vtable de Actor. Sus slots se solapan
+//      con RemotePlayer y no se deben tratar como jugadores independientes.
 //   3. menu::visible() solo cubre el menu del cheat: los clicks en el
 //      INVENTARIO del juego contaban como "ataques" -> holds (y patches de
 //      vtable) arrancaban mientras la UI llamaba virtuales.

@@ -18,6 +18,7 @@ public:
     void onEnable() override;
     void onTick() override;
     void onFrame(float dt) override;
+    void onRender() override;
     void onDisable() override;
     void drawSettings() override;
 
@@ -25,8 +26,10 @@ public:
     nlohmann::json saveSettings() const override;
     void loadSettings(const nlohmann::json& j) override;
 
+    uintptr_t targetAddress() const { return targetAddress_; }
+
 private:
-    bool selectTarget(const Actor& local, Actor& target, float& yaw, float& pitch) const;
+    bool selectTarget(const Actor& local, Actor& target, float& yaw, float& pitch);
     void clearTarget();
 
     float range_ = 4.0f;
@@ -46,10 +49,14 @@ private:
     bool swingDelay_ = false;
     bool attackThroughWalls_ = true;
     bool autoDisableOnDimensionChange_ = true;
+    bool targetRing_ = true;
+    bool coloredSigmaRing_ = true;
     bool debug_ = false;
     uint64_t multiTargetCursor_ = 0;
+    uintptr_t targetAddress_ = 0;
     uintptr_t lastDimension_ = 0;
     std::chrono::steady_clock::time_point lastSwing_{};
+    std::chrono::steady_clock::time_point lastAttackAttempt_{};
     std::unordered_map<uintptr_t, std::chrono::steady_clock::time_point>
         lastTargetAttacks_;
     std::chrono::steady_clock::time_point lastAttack_{};

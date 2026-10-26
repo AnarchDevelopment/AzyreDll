@@ -7,9 +7,13 @@
 #include "Framework/Log.hpp"
 #include "Framework/Math.hpp"
 #include "GUI/Menu.hpp"
+#include "GUI/Theme.hpp"
 #include "GUI/Widgets.hpp"
+#include "SDK/Camera.hpp"
 #include "SDK/Game.hpp"
 #include "SDK/Offsets.hpp"
+#include "Features/Smoothing.hpp"
+#include "Framework/Memory.hpp"
 
 #include <imgui.h>
 #include <windows.h>
@@ -28,6 +32,7 @@ constexpr float kMinDistance = 0.1f;
 constexpr float kTargetEyeHeight = 0.85f;
 constexpr unsigned kRotationLifetimeMs = 120;
 constexpr unsigned kFlickRotationLifetimeMs = 180;
+constexpr int kSigmaRingSegments = 64;
 
 struct TargetCandidate
 {
@@ -61,6 +66,42 @@ float horizontalSpeed(const Actor& actor)
     return std::sqrt(velocity.x * velocity.x + velocity.z * velocity.z);
 }
 
+ImVec4 sigmaRingColor(float angle, double nowMs, bool colored)
+{
+    if (!colored)
+        return ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
+
+    const float blend = (std::sin(static_cast<float>(nowMs * 0.002) + angle) + 1.0f) * 0.5f;
+    const ImVec4& a = theme::Accent;
+    const ImVec4& b = theme::AccentTri ? theme::Accent3 : theme::Accent2;
+    return ImVec4(a.x + (b.x - a.x) * blend,
+                  a.y + (b.y - a.y) * blend,
+                  a.z + (b.z - a.z) * blend, 1.0f);
+}
+
+ImU32 sigmaRingU32(float angle, double nowMs, bool colored, int alpha)
+{
+    ImVec4 color = sigmaRingColor(angle, nowMs, colored);
+    color.w = static_cast<float>(alpha) / 255.0f;
+    return ImGui::ColorConvertFloat4ToU32(color);
+}
+
+void writeSigmaRingQuad(ImDrawList* draw, const ImVec2 points[4],
+                        const ImU32 colors[4])
+{
+    const ImVec2 uv = ImGui::GetFontTexUvWhitePixel();
+    draw->PrimReserve(6, 4);
+    const ImDrawIdx base = static_cast<ImDrawIdx>(draw->_VtxCurrentIdx);
+    for (int i = 0; i < 4; ++i)
+        draw->PrimWriteVtx(points[i], uv, colors[i]);
+    draw->PrimWriteIdx(base);
+    draw->PrimWriteIdx(static_cast<ImDrawIdx>(base + 1));
+    draw->PrimWriteIdx(static_cast<ImDrawIdx>(base + 2));
+    draw->PrimWriteIdx(base);
+    draw->PrimWriteIdx(static_cast<ImDrawIdx>(base + 2));
+    draw->PrimWriteIdx(static_cast<ImDrawIdx>(base + 3));
+}
+
 } // namespace
 
 KillAura::KillAura()
@@ -71,8 +112,9 @@ KillAura::KillAura()
 }
 
 bool KillAura::selectTarget(const Actor& local, Actor& target,
-                            float& yaw, float& pitch) const
+                            float& yaw, float& pitch)
 {
+    targetAddress_ = 0;
     if (!local.valid() || !local.isLocal())
         return false;
 
@@ -88,8 +130,10 @@ bool KillAura::selectTarget(const Actor& local, Actor& target,
 
     for (const Actor& candidate : Game::get().remotePlayersSnapshot())
     {
+        const float candidateHealth = candidate.currentHealth();
         if (!candidate.valid() || candidate.address() == local.address() ||
-            candidate.health() <= 0)
+            candidateHealth == 0.0f ||
+            (candidateHealth < 0.0f && candidate.maxHealth() <= 0.0f))
             continue;
 
         const std::string name = candidate.name();
@@ -143,6 +187,7 @@ bool KillAura::selectTarget(const Actor& local, Actor& target,
     }
 
     target = candidates[selected].actor;
+    targetAddress_ = target.address();
     yaw = candidates[selected].yaw;
     pitch = candidates[selected].pitch;
     return true;
@@ -159,6 +204,7 @@ void KillAura::onEnable()
     lastDimension_ = Game::get().levelAddr();
     lastAttack_ = {};
     lastSwing_ = {};
+    lastAttackAttempt_ = {};
     multiTargetCursor_ = 0;
     lastTargetAttacks_.clear();
     nextAttackDelayMs_ = 1000.0f / clampf(cps_, 1.0f, 30.0f);
@@ -168,6 +214,7 @@ void KillAura::onFrame(float /*dt*/)
 {
     if (!Game::get().localFound() || menu::visible() || ImGui::GetIO().WantCaptureMouse)
     {
+        targetAddress_ = 0;
         clearTarget();
         return;
     }
@@ -194,10 +241,97 @@ void KillAura::onFrame(float /*dt*/)
                      headYaw_ ? 90.0f : 0.0f);
 }
 
+void KillAura::onRender()
+{
+    if (!targetRing_ || targetAddress_ == 0 || !Game::get().localFound())
+        return;
+
+    Actor target(targetAddress_);
+    const float targetHealth = target.currentHealth();
+    if (!target.valid() || targetHealth == 0.0f ||
+        (targetHealth < 0.0f && target.maxHealth() <= 0.0f))
+        return;
+
+    ImGuiIO& io = ImGui::GetIO();
+    const float screenW = io.DisplaySize.x;
+    const float screenH = io.DisplaySize.y;
+    if (screenW <= 0.0f || screenH <= 0.0f)
+        return;
+
+    LocalPlayer local = Game::get().localPlayer();
+    const CameraView camera = getCameraView(local, Game::get().client());
+    const float fov = readGameFov();
+
+    // Rise interpolates the entity origin between game updates. Reuse Azyre's
+    // shared renderer interpolation so the ring remains attached to its model.
+    const Vec3 raw = target.pos();
+    const Vec3 exact = target.posExact();
+    Vec3 anchor{exact.x, raw.y, exact.z};
+    const Vec3 feet = smooth::entityPos(target.address(), anchor);
+    float width = off::gameconst::PlayerWidth;
+    float actorWidth = 0.0f;
+    if (mem::rawRead(&actorWidth, target.address() + off::player::AabbWidth,
+                     sizeof(actorWidth)) &&
+        std::isfinite(actorWidth) && actorWidth >= 0.1f && actorWidth <= 2.5f)
+        width = actorWidth;
+    const float radius = width * 1.1f;
+    const float height = target.height();
+    const double nowMs = ImGui::GetTime() * 1000.0;
+    const float bob = static_cast<float>(std::sin(nowMs / 200.0));
+    const float bandOffset = static_cast<float>(std::cos(nowMs / 200.0) * 0.5);
+    const float topY = feet.y + height * 0.5445f + bob;
+    const float bottomY = topY - bandOffset;
+
+    ImDrawList* draw = ImGui::GetForegroundDrawList();
+    Vec3 projectedTop[kSigmaRingSegments];
+    Vec3 projectedBottom[kSigmaRingSegments];
+    bool visible[kSigmaRingSegments]{};
+    for (int i = 0; i < kSigmaRingSegments; ++i)
+    {
+        const float angle = static_cast<float>(i) * (2.0f * kPi / kSigmaRingSegments);
+        const float x = feet.x + radius * std::cos(angle);
+        const float z = feet.z + radius * std::sin(angle);
+        Vec3 top{x, topY, z};
+        Vec3 bottom{x, bottomY, z};
+        visible[i] = worldToScreen(top, camera.pos, camera.yaw, camera.pitch,
+                                   fov, screenW, screenH, projectedTop[i]) &&
+                     worldToScreen(bottom, camera.pos, camera.yaw, camera.pitch,
+                                   fov, screenW, screenH, projectedBottom[i]);
+    }
+
+    for (int i = 0; i < kSigmaRingSegments; ++i)
+    {
+        const int next = (i + 1) % kSigmaRingSegments;
+        if (!visible[i] || !visible[next])
+            continue;
+
+        const float a0 = static_cast<float>(i) * (2.0f * kPi / kSigmaRingSegments);
+        const float a1 = static_cast<float>(i + 1) * (2.0f * kPi / kSigmaRingSegments);
+        const ImVec2 ribbon[4] = {
+            ImVec2(projectedTop[i].x, projectedTop[i].y),
+            ImVec2(projectedTop[next].x, projectedTop[next].y),
+            ImVec2(projectedBottom[next].x, projectedBottom[next].y),
+            ImVec2(projectedBottom[i].x, projectedBottom[i].y),
+        };
+        const ImU32 ribbonColors[4] = {
+            sigmaRingU32(a0, nowMs, coloredSigmaRing_, 63),
+            sigmaRingU32(a1, nowMs, coloredSigmaRing_, 63),
+            sigmaRingU32(a1, nowMs, coloredSigmaRing_, 0),
+            sigmaRingU32(a0, nowMs, coloredSigmaRing_, 0),
+        };
+        writeSigmaRingQuad(draw, ribbon, ribbonColors);
+
+        draw->AddLine(ImVec2(projectedTop[i].x, projectedTop[i].y),
+                      ImVec2(projectedTop[next].x, projectedTop[next].y),
+                      sigmaRingU32(a0, nowMs, coloredSigmaRing_, 255), 0.5f);
+    }
+}
+
 void KillAura::onTick()
 {
     if (!Game::get().localFound() || menu::visible() || ImGui::GetIO().WantCaptureMouse)
     {
+        targetAddress_ = 0;
         clearTarget();
         return;
     }
@@ -241,6 +375,11 @@ void KillAura::onTick()
     }
 
     const auto now = std::chrono::steady_clock::now();
+    constexpr auto retryFloor = std::chrono::milliseconds(50);
+    if (lastAttackAttempt_.time_since_epoch().count() != 0 &&
+        now - lastAttackAttempt_ < retryFloor)
+        return;
+
     const float delayMs = randomizeAps_
         ? nextAttackDelayMs_
         : 1000.0f / clampf(cps_, 1.0f, 30.0f);
@@ -262,6 +401,7 @@ void KillAura::onTick()
         lastSwing_ = now;
     }
 
+    lastAttackAttempt_ = now;
     const bool sent = Game::get().gameMode().attack(local, target);
     if (debug_)
     {
@@ -276,6 +416,12 @@ void KillAura::onTick()
         }
     }
 
+    if (!sent)
+        return;
+
+    // The retry floor throttles failed transport attempts only; successful
+    // attacks still honor the configured APS up to the module's 30 CPS cap.
+    lastAttackAttempt_ = {};
     lastAttack_ = now;
     lastTargetAttacks_[target.address()] = now;
     if (targetMode_ == 1)
@@ -293,8 +439,10 @@ void KillAura::onTick()
 
 void KillAura::onDisable()
 {
+    targetAddress_ = 0;
     clearTarget();
     lastDimension_ = 0;
+    lastAttackAttempt_ = {};
     multiTargetCursor_ = 0;
     lastTargetAttacks_.clear();
 }
@@ -328,6 +476,8 @@ nlohmann::json KillAura::saveSettings() const
         {"swingDelaySeconds", swingDelaySeconds_},
         {"attackThroughWalls", attackThroughWalls_},
         {"autoDisableOnDimensionChange", autoDisableOnDimensionChange_},
+        {"targetRing", targetRing_},
+        {"coloredSigmaRing", coloredSigmaRing_},
         {"debug", debug_},
     };
 }
@@ -350,6 +500,8 @@ void KillAura::loadSettings(const nlohmann::json& j)
     swingDelaySeconds_ = clampf(j.value("swingDelaySeconds", swingDelaySeconds_), 0.0f, 10.0f);
     attackThroughWalls_ = j.value("attackThroughWalls", attackThroughWalls_);
     autoDisableOnDimensionChange_ = j.value("autoDisableOnDimensionChange", autoDisableOnDimensionChange_);
+    targetRing_ = j.value("targetRing", targetRing_);
+    coloredSigmaRing_ = j.value("coloredSigmaRing", coloredSigmaRing_);
     debug_ = j.value("debug", debug_);
     nextAttackDelayMs_ = 1000.0f / cps_;
 }
@@ -384,6 +536,9 @@ void KillAura::drawSettings()
             widgets::CSlider("Swing Delay Value##ka", &swingDelaySeconds_, 0.0f, 10.0f, "%.2f s");
     }
     widgets::Checkbox("Attack Through Walls##ka", &attackThroughWalls_);
+    widgets::Checkbox("Target Ring##ka", &targetRing_);
+    if (targetRing_)
+        widgets::Checkbox("Colored Sigma Ring##ka", &coloredSigmaRing_);
     widgets::Checkbox("Auto Disable on Dimension Change##ka", &autoDisableOnDimensionChange_);
     widgets::Checkbox("Debug##ka", &debug_);
 }

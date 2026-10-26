@@ -62,8 +62,7 @@ bool placeActorAt(uintptr_t actor, const Vec3& where, Vec3* realOut = nullptr,
     // Anti recycling: si la memoria del actor fue liberada y reutilizada
     // por otro objeto, su vtable ya no es la de un player remoto.
     uintptr_t vt = mem::read<uintptr_t>(actor);
-    if (vt != mem::resolve(vt::RemotePlayer) &&
-        vt != mem::resolve(vt::RemotePlayerAlt))
+    if (vt != mem::resolve(vt::RemotePlayer))
         return false;
 
     Vec3 net{};
