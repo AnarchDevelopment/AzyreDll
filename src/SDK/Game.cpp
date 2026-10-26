@@ -71,8 +71,8 @@ namespace {
 struct ScanPacket
 {
     uintptr_t local = 0;
+    uintptr_t client = 0;
     std::vector<uintptr_t> remotes;
-    std::vector<uintptr_t> remotesAlt;
     // Instancias de GameMode halladas por vtable (scanner).
     uintptr_t gmSurvival = 0;
     uintptr_t gmCreative = 0;
@@ -103,7 +103,6 @@ ScanPacket runScanJob(bool localOnly)
     // antes de que scanMulti los use (std::bad_function_call -> crash).
     mem::ValidateFn validateLocal = actorValidator(vt::LocalPlayer, false);
     mem::ValidateFn validateRemote = actorValidator(vt::RemotePlayer, true);
-    mem::ValidateFn validateRemoteAlt = actorValidator(vt::RemotePlayerAlt, true);
     // Instancias de GameMode: la cadena level->SNH+0x20 resuelve otra cosa
     // en servidores (gm=...valid=0 en el [SC]); el GameMode REAL es el que
     // apunta a una de estas vtables (tecnica de searchGM.py). Validacion
@@ -111,14 +110,29 @@ ScanPacket runScanJob(bool localOnly)
     mem::ValidateFn validateGm = [](uintptr_t p) {
         return p && mem::isReadable(p, 0x100) != 0;
     };
+    mem::ValidateFn validateClient = [](uintptr_t p) {
+        if (!p || (p & 0xF) != 0 || !mem::isReadable(p, 0x158) ||
+            mem::read<uintptr_t>(p) != mem::resolve(vt::MinecraftClient))
+            return false;
+
+        uintptr_t begin = 0;
+        uintptr_t end = 0;
+        if (!mem::rawRead(&begin, p + 0x148, sizeof(begin)) ||
+            !mem::rawRead(&end, p + 0x150, sizeof(end)))
+            return false;
+        return begin == end || (begin && end > begin && end - begin <= 0x1000 &&
+                                ((end - begin) & 0x0F) == 0);
+    };
 
     std::vector<mem::VtableQuery> queries;
     if (localOnly)
     {
         // Busqueda rapida: solo el LocalPlayer (maxCount 1 + early-exit del
-        // scanner al encontrarlo).
+        // scanner al encontrarlo) y MinecraftClient, que tambien existe en
+        // start_screen aunque todavía no haya un LocalPlayer.
         queries = {
             {vt::LocalPlayer, &validateLocal, 1},
+            {vt::MinecraftClient, &validateClient, 1},
         };
     }
     else
@@ -126,7 +140,7 @@ ScanPacket runScanJob(bool localOnly)
         queries = {
             {vt::LocalPlayer, &validateLocal, 1},
             {vt::RemotePlayer, &validateRemote, 64},
-            {vt::RemotePlayerAlt, &validateRemoteAlt, 64},
+            {vt::MinecraftClient, &validateClient, 1},
             {vt::SurvivalMode, &validateGm, 1},
             {vt::CreativeMode, &validateGm, 1},
             {vt::GameMode, &validateGm, 1},
@@ -138,11 +152,16 @@ ScanPacket runScanJob(bool localOnly)
 
     if (!out.empty() && !out[0].empty())
         packet.local = out[0][0];
-    if (out.size() > 2)
+    if (localOnly)
     {
-        packet.remotes = std::move(out[1]);
-        packet.remotesAlt = std::move(out[2]);
+        if (out.size() > 1 && !out[1].empty())
+            packet.client = out[1][0];
+        return packet;
     }
+    if (out.size() > 1)
+        packet.remotes = std::move(out[1]);
+    if (out.size() > 2 && !out[2].empty())
+        packet.client = out[2][0];
     if (out.size() > 3)
     {
         if (!out[3].empty())
@@ -334,6 +353,17 @@ void Game::update()
                     scanOnLocalFound = true;
             }
 
+            // MinecraftClient exists on the title screen, before a LocalPlayer
+            // can be captured. Keep it from the scanner so UI modules can read
+            // the active-screen stack outside a world session.
+            if (packet.client && mem::isReadable(packet.client, 0x158) &&
+                mem::read<uintptr_t>(packet.client) == mem::resolve(vt::MinecraftClient))
+            {
+                if (client_ != packet.client)
+                    MC_LOG("[Game] MinecraftClient captured: 0x%p", (void*)packet.client);
+                client_ = packet.client;
+            }
+
             remotesRaw_.clear();
             auto addUnique = [this](uintptr_t p) {
                 if (!p || p == local_)
@@ -346,8 +376,6 @@ void Game::update()
                 remotesRaw_.emplace_back(p);
             };
             for (uintptr_t p : packet.remotes)
-                addUnique(p);
-            for (uintptr_t p : packet.remotesAlt)
                 addUnique(p);
 
             // GameMode del scanner (fallback cuando la cadena no valida —

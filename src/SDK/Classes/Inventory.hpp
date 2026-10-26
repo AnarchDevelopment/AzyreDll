@@ -65,6 +65,20 @@ public:
         return itemAt(realSlot);
     }
 
+    int hotbarRealSlot(int hotbarSlot) const
+    {
+        if (hotbarSlot < 0 || hotbarSlot > 8)
+            return -1;
+        uintptr_t mapBegin = mem::read<uintptr_t>(addr + off::inv::HotbarMapBegin);
+        uintptr_t mapEnd = mem::read<uintptr_t>(addr + off::inv::HotbarMapEnd);
+        if (!mapBegin || !mapEnd || mapEnd <= mapBegin)
+            return -1;
+        uintptr_t entry = mapBegin + (uintptr_t)hotbarSlot * sizeof(int);
+        if (entry + sizeof(int) > mapEnd)
+            return hotbarSlot;
+        return mem::read<int>(entry);
+    }
+
 private:
     uintptr_t addr = 0;
 };

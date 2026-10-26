@@ -9,8 +9,12 @@ namespace mc::vt {
 
 constexpr uintptr_t LocalPlayer = 0xE63B88;
 constexpr uintptr_t RemotePlayer = 0xE645A0;
+// Secondary VRegionListener subobject at RemotePlayer + 0xFD8; not an Actor.
 constexpr uintptr_t RemotePlayerAlt = 0xE64588;
 constexpr uintptr_t ServerPlayer = 0xE6CDA8;
+// Skin descriptor types observed in the player-renderer path.
+constexpr uintptr_t ClientSkinInfoData = 0xE63A90;
+constexpr uintptr_t ServerSkinInfoData = 0xE87AC0;
 
 constexpr uintptr_t MinecraftClient = 0xE44B28; /* Like ClientInstance */
 constexpr uintptr_t MoveInputHandler = 0xE618E8;
@@ -165,6 +169,8 @@ namespace GameMode
     // slot 11 sub_140511700, slot 15 sub_1405118A0. El caller de los
     // ctores de UseItemPacket (0x5100F0/0x510270) ES el orquestador.
     constexpr int UseItemOn = 12;
+    // sub_140511700: native GameMode::useItem(Player*, ItemStack const&).
+    constexpr int UseItem = 11;
     // Confirmado por REA en GameMode/CreativeMode/SurvivalMode: slot 14
     // despacha sub_1405103D0(this, Player*, Actor*), la entrada de ataque.
     constexpr int Attack = 14;

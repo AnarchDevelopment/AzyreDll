@@ -6,6 +6,7 @@
 #include "SDK/VTables.hpp"
 
 #include <cmath>
+#include <array>
 #include <excpt.h>
 #include <string>
 
@@ -24,7 +25,6 @@ public:
         uintptr_t v = mem::read<uintptr_t>(addr);
         if (v != mem::resolve(vt::LocalPlayer) &&
             v != mem::resolve(vt::RemotePlayer) &&
-            v != mem::resolve(vt::RemotePlayerAlt) &&
             v != mem::resolve(vt::ServerPlayer))
             return false;
         float x = mem::read<float>(addr + off::player::PosX);
@@ -186,10 +186,78 @@ public:
 
     int health() const
     {
-        int hp = 0;
-        if (mem::rawRead(&hp, addr + off::player::Health, sizeof(hp)))
-            return hp;
-        return 0;
+        const float hp = currentHealth();
+        return std::isfinite(hp) && hp >= 0.0f
+            ? static_cast<int>(std::lround(hp))
+            : 0;
+    }
+
+    float maxHealth() const
+    {
+        // Actor + 0x220 is not max health. The native hurt path copies the
+        // current health attribute into that cache, so using it as the HUD
+        // denominator makes the bar stay full as health drops.
+        return valid() ? 20.0f : 0.0f;
+    }
+
+    float cachedHealth() const
+    {
+        if (!addr || !mem::isReadable(addr + off::player::Health, sizeof(int)))
+            return -1.0f;
+        int value = 0;
+        if (!mem::rawRead(&value, addr + off::player::Health, sizeof(value)) ||
+            value < 0 || value > 40)
+            return -1.0f;
+        return static_cast<float>(value);
+    }
+
+    float currentHealth() const
+    {
+        return cachedHealth();
+    }
+
+    bool skinRgba(std::array<uint8_t, off::skin::PixelBytes>& pixels) const
+    {
+        if (!valid())
+            return false;
+
+        uintptr_t skinInfo = 0;
+        uintptr_t skinVtable = 0;
+        if (!mem::rawRead(&skinInfo, addr + off::player::SkinInfo, sizeof(skinInfo)) ||
+            !skinInfo ||
+            !mem::rawRead(&skinVtable, skinInfo, sizeof(skinVtable)))
+            return false;
+
+        uintptr_t pixelsBegin = 0;
+        uintptr_t pixelsEnd = 0;
+        if (skinVtable == mem::resolve(vt::ServerSkinInfoData))
+        {
+            if (!mem::rawRead(&pixelsBegin, skinInfo + off::skin::ServerPixelsBegin,
+                              sizeof(pixelsBegin)) ||
+                !mem::rawRead(&pixelsEnd, skinInfo + off::skin::ServerPixelsEnd,
+                              sizeof(pixelsEnd)))
+                return false;
+        }
+        else if (skinVtable == mem::resolve(vt::ClientSkinInfoData))
+        {
+            uintptr_t image = 0;
+            if (!mem::rawRead(&image, skinInfo + off::skin::ClientImage, sizeof(image)) ||
+                !image ||
+                !mem::rawRead(&pixelsBegin, image + off::skin::ImagePixelsBegin,
+                              sizeof(pixelsBegin)) ||
+                !mem::rawRead(&pixelsEnd, image + off::skin::ImagePixelsEnd,
+                              sizeof(pixelsEnd)))
+                return false;
+        }
+        else
+            return false;
+
+        if (!pixelsBegin || pixelsEnd < pixelsBegin ||
+            pixelsEnd - pixelsBegin != pixels.size() ||
+            !mem::isReadable(pixelsBegin, pixels.size()))
+            return false;
+
+        return mem::rawRead(pixels.data(), pixelsBegin, pixels.size());
     }
 
     bool swing() const

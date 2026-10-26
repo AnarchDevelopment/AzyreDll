@@ -30,6 +30,10 @@ public:
     // Despacha el ataque por la vtable activa del modo (Survival/Creative/base).
     bool attack(const Actor& player, const Actor& target) const;
 
+    // Native GameMode::useItem (vtable slot 11): invokes the item's local use
+    // behavior and sends the matching UseItemPacket through the game's sender.
+    bool useItem(const ItemInstance& item, uintptr_t playerAddr) const;
+
     bool useItemOn(const ItemInstance& item, const BlockPos& pos, uint8_t face,
                    const Vec3& click, uintptr_t playerAddr);
     bool useItemOnVt(const ItemInstance& item, const BlockPos& pos, uint8_t face,

@@ -187,6 +187,36 @@ bool GameMode::attack(const Actor& player, const Actor& target) const
     return sentToServer;
 }
 
+bool GameMode::useItem(const ItemInstance& item, uintptr_t playerAddr) const
+{
+    if (!valid() || !playerAddr || !item.valid())
+        return false;
+
+    const uintptr_t table = mem::read<uintptr_t>(addr);
+    constexpr int slot = vt::slot::GameMode::UseItem;
+    if (!table || !mem::isReadable(table + (uintptr_t)slot * sizeof(uintptr_t),
+                                   sizeof(uintptr_t)))
+        return false;
+    const uintptr_t fn =
+        mem::read<uintptr_t>(table + (uintptr_t)slot * sizeof(uintptr_t));
+    if (!fn)
+        return false;
+
+    bool used = false;
+    __try
+    {
+        using UseItemFn = char(__fastcall*)(void*, void*, void*);
+        used = reinterpret_cast<UseItemFn>(fn)(
+                   reinterpret_cast<void*>(addr), reinterpret_cast<void*>(playerAddr),
+                   reinterpret_cast<void*>(item.address())) != 0;
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER)
+    {
+        used = false;
+    }
+    return used;
+}
+
 bool GameMode::useItemOn(const ItemInstance& item, const BlockPos& pos, uint8_t face,
                          const Vec3& click, uintptr_t /*playerAddr*/)
 {

@@ -5,6 +5,8 @@
 #include "SDK/Offsets.hpp"
 #include "SDK/VTables.hpp"
 
+#include <cstddef>
+
 
 namespace mc {
 
@@ -21,6 +23,46 @@ public:
         return mem::read<uintptr_t>(addr) == mem::resolve(vt::MinecraftClient);
     }
     uintptr_t address() const { return addr; }
+
+    // The active-screen stack is a vector of 16-byte shared_ptr entries.
+    // Return only the top object pointer; callers must not invoke an
+    // unverified virtual function on it.
+    uintptr_t activeScreen() const
+    {
+        if (!valid())
+            return 0;
+
+        uintptr_t begin = 0;
+        uintptr_t end = 0;
+        if (!mem::rawRead(&begin, addr + 0x148, sizeof(begin)) ||
+            !mem::rawRead(&end, addr + 0x150, sizeof(end)))
+            return 0;
+        if (!begin || end <= begin || end - begin < 0x10 ||
+            end - begin > 0x1000 || ((end - begin) & 0x0F) != 0 ||
+            !mem::isReadable(end - 0x10, 0x10))
+            return 0;
+
+        uintptr_t screen = 0;
+        if (!mem::rawRead(&screen, end - 0x10, sizeof(screen)) ||
+            !screen || !mem::isReadable(screen, sizeof(uintptr_t)))
+            return 0;
+        return screen;
+    }
+
+    size_t activeScreenDepth() const
+    {
+        if (!valid())
+            return 0;
+
+        uintptr_t begin = 0;
+        uintptr_t end = 0;
+        if (!mem::rawRead(&begin, addr + 0x148, sizeof(begin)) ||
+            !mem::rawRead(&end, addr + 0x150, sizeof(end)) ||
+            !begin || end < begin || end - begin > 0x1000 ||
+            ((end - begin) & 0x0F) != 0)
+            return 0;
+        return static_cast<size_t>((end - begin) / 0x10);
+    }
 
     // The active-screen stack is a std::vector<std::shared_ptr<Screen>> in
     // the Minecraft client object. sub_14004A9B0 uses +0x148 as begin and

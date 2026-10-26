@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
 namespace mc::off {
@@ -86,6 +87,8 @@ namespace player
     constexpr uintptr_t RenderRotEnd = 0x18;
     constexpr uintptr_t OnGround = 0x17D;
     constexpr uintptr_t Height = 0xD4;
+    // Integer cache copied from the generic.health AttributeInstance by the
+    // native hurt handler. This is current health, never maximum health.
     constexpr uintptr_t Health = 0x220;
     constexpr uintptr_t LevelPtr = 0x90;
     constexpr uintptr_t PosX = 0xB4;
@@ -104,6 +107,18 @@ namespace player
     constexpr uintptr_t UseItemRemainingTicks = 0x0F58;
     constexpr uintptr_t UseItemDuration = 0x0F6C;
     constexpr uintptr_t TicksUsingItem = 0x0F78;
+    // Skin descriptor consumed by the player-renderer path (sub_1402DE840).
+    constexpr uintptr_t SkinInfo = 0x0F40;
+}
+
+namespace skin
+{
+    constexpr uintptr_t ServerPixelsBegin = 0x78;
+    constexpr uintptr_t ServerPixelsEnd = 0x80;
+    constexpr uintptr_t ClientImage = 0x78;
+    constexpr uintptr_t ImagePixelsBegin = 0x40;
+    constexpr uintptr_t ImagePixelsEnd = 0x48;
+    constexpr size_t PixelBytes = 64u * 64u * 4u;
 }
 
 namespace inv
@@ -123,6 +138,9 @@ namespace item
     constexpr uintptr_t ItemPtr = 0x10;
     constexpr uintptr_t Count = 0x18;
     constexpr uintptr_t Metadata = 0x20;
+    // Item::mLegacyId. The ItemStack network serializer sub_1403960E0 reads
+    // a signed short from Item* + 0x36 before serializing its numeric ID.
+    constexpr uintptr_t LegacyId = 0x36;
     constexpr int MagicValue = 0x10040;
 }
 
@@ -310,6 +328,9 @@ namespace fn
     constexpr uintptr_t InputWrapper1 = 0x5111F0;
     constexpr uintptr_t InputWrapper2 = 0x511270;
     constexpr uintptr_t ItemInstanceUpdate = 0x55D960;
+    // ItemStack copy constructor used by LocalPlayer's native
+    // MobEquipmentPacket synchronization path.
+    constexpr uintptr_t ItemStackCopy = 0x55D350;
 
     constexpr uintptr_t BlockSourceGetBlock = 0x5E73F0;
     constexpr uintptr_t BlockSourceMayPlace = 0x5E8120;
@@ -342,6 +363,8 @@ namespace fn
     constexpr uintptr_t ItemInHandRender = 0x2FB690;
     constexpr uintptr_t ItemInHandDraw = 0x2FA2F0;
     constexpr uintptr_t ItemInHandDrawReturn = 0x2FC0B8;
+    constexpr uintptr_t ItemInHandSwingTransform = 0x2FC5A0;
+    constexpr uintptr_t ItemInHandSwingTransformReturn = 0x2FB955;
 
     // Matriz stack/render helpers confirmados con REA en este build.
     constexpr uintptr_t RenderMatrixStackPush = 0x793F40;
