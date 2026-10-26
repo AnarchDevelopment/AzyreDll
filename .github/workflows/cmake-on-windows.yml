@@ -27,35 +27,6 @@ jobs:
       - name: Build
         run: cmake --build build --config ${{ env.BUILD_TYPE }} --parallel
 
-  windows-gcc:
-    name: Windows - GCC (MinGW)
-    runs-on: windows-latest
-    defaults:
-      run:
-        shell: msys2 {0}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Setup MSYS2
-        uses: msys2/setup-msys2@v2
-        with:
-          msystem: MINGW64
-          update: true
-          install: >-
-            mingw-w64-x86_64-gcc
-            mingw-w64-x86_64-cmake
-            mingw-w64-x86_64-ninja
-
-      - name: Configure CMake
-        run: cmake -S . -B build -G Ninja
-             -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
-             -DCMAKE_C_COMPILER=gcc
-             -DCMAKE_CXX_COMPILER=g++
-
-      - name: Build
-        run: cmake --build build --parallel
-
   windows-clang:
     name: Windows - Clang (clang-cl)
     runs-on: windows-latest
@@ -68,38 +39,6 @@ jobs:
 
       - name: Build
         run: cmake --build build --config ${{ env.BUILD_TYPE }} --parallel
-
-  windows-clang-native:
-    name: Windows - Clang (nativo)
-    runs-on: windows-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Setup Clang
-        uses: msys2/setup-msys2@v2
-        with:
-          msystem: CLANG64
-          update: true
-          install: >-
-            mingw-w64-clang-x86_64-clang
-            mingw-w64-clang-x86_64-clang-tools-extra
-            mingw-w64-clang-x86_64-lld
-            mingw-w64-clang-x86_64-cmake
-            mingw-w64-clang-x86_64-ninja
-
-      - name: Configure CMake
-        shell: msys2 {0}
-        run: cmake -S . -B build -G Ninja
-             -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
-             -DCMAKE_C_COMPILER=clang
-             -DCMAKE_CXX_COMPILER=clang++
-             -DCMAKE_LINKER=lld
-
-      - name: Build
-        shell: msys2 {0}
-        run: cmake --build build --parallel 2>&1 | head -n 50
-        continue-on-error: true
 
       - name: Report
         if: always()

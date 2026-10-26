@@ -11,6 +11,10 @@ opencode
 .freebuff
 .claude
 rea/
+gitdiff.txt
+gitstatus_stdout.txt
+make_commits.sh
+Commits.py
 
 [Bb]uild/
 gitstatus_stdout.txt
