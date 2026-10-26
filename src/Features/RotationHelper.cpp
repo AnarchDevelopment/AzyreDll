@@ -5,6 +5,7 @@
 #include "Framework/Log.hpp"
 #include "Framework/Math.hpp"
 #include "Framework/Memory.hpp"
+#include "SDK/Game.hpp"
 #include "SDK/Classes/LocalPlayer.hpp"
 #include "SDK/Offsets.hpp"
 
@@ -15,7 +16,10 @@ namespace {
 
 constexpr float kMoveThresholdSquared = 0.0025000002f;
 constexpr float kMaxBodyHeadDifference = 75.0f;
-constexpr float kRenderRotationResponse = 30.0f;
+constexpr float kRenderRotationResponse = 16.0f;
+// A slower response makes camera turns visibly ease on the local model;
+// 20/s tracked vanilla too closely to be noticeable at normal frame rates.
+constexpr float kGeneralRotationResponse = 8.0f;
 
 struct RotationState
 {
@@ -33,9 +37,21 @@ struct RotationState
     int priority = 0;
     bool hasPosition = false;
     bool active = false;
+    bool releasing = false;
 };
 
 RotationState g_state;
+
+struct GeneralRotationState
+{
+    uintptr_t actor = 0;
+    float displayedBodyYaw = 0.0f;
+    float displayedHeadYaw = 0.0f;
+    double lastUpdateMs = 0.0;
+    bool active = false;
+};
+
+GeneralRotationState g_generalState;
 using PlayerRendererModelSetupFn = __int64(__fastcall*)(
     void*, void*, void*, void*, void*, void*, float);
 void* g_playerRendererModelSetupOriginal = nullptr;
@@ -56,10 +72,15 @@ uintptr_t fieldAddress(uintptr_t actor, int index)
 
 float approachAngle(float current, float target, float dt)
 {
-    // Use a frame-rate independent response and the shortest angular path.
-    // The response is slightly faster than Solstice's 20 Hz lerp to reduce
-    // visible lag while retaining its per-frame smoothing behavior.
+    // Use a frame-rate independent damped response and the shortest angular
+    // path. A 16/s response gives the model time to ease in and out cleanly.
     const float alpha = 1.0f - std::exp(-kRenderRotationResponse * dt);
+    return wrapDegrees(current + wrapDegrees(target - current) * alpha);
+}
+
+float approachAngle(float current, float target, float dt, float response)
+{
+    const float alpha = 1.0f - std::exp(-response * dt);
     return wrapDegrees(current + wrapDegrees(target - current) * alpha);
 }
 
@@ -119,6 +140,45 @@ __int64 __fastcall playerRendererModelSetupDetour(
         return 0;
 
     const uintptr_t actorAddress = reinterpret_cast<uintptr_t>(actor);
+    const bool moduleOverride = g_state.active &&
+        actorAddress == g_state.actor;
+
+    // General camera-turn smoothing is applied only while the local player's
+    // model is being built. Actor values are restored immediately afterwards,
+    // so gameplay, camera input, packets and remote actors keep native values.
+    if (!moduleOverride && actor && g_generalState.active &&
+        actorAddress == g_generalState.actor &&
+        mem::isReadable(actorAddress + off::player::BodyYawField,
+            sizeof(float) * 4))
+    {
+        float actorAngles[4]{};
+        if (readRotation(actorAddress, actorAngles))
+        {
+            const float renderAngles[4] = {
+                g_generalState.displayedBodyYaw,
+                g_generalState.displayedBodyYaw,
+                g_generalState.displayedHeadYaw,
+                g_generalState.displayedHeadYaw,
+            };
+            if (mem::rawWrite(actorAddress + off::player::BodyYawField,
+                    renderAngles, sizeof(renderAngles)))
+            {
+                __int64 result = 0;
+                __try
+                {
+                    result = original(renderer, arg1, arg2, actor, arg4, arg5,
+                        partialTick);
+                }
+                __finally
+                {
+                    mem::rawWrite(actorAddress + off::player::BodyYawField,
+                        actorAngles, sizeof(actorAngles));
+                }
+                return result;
+            }
+        }
+    }
+
     float actorAngles[4]{};
     float actorPitch = 0.0f;
     float actorRenderPitch = 0.0f;
@@ -225,6 +285,17 @@ void clearState()
     g_state = {};
 }
 
+void beginRelease()
+{
+    if (!g_state.active)
+        return;
+
+    // Keep the render substitution alive while it eases back to the actor's
+    // live angles. Packet rotation ownership is released immediately.
+    g_state.releasing = true;
+    g_state.priority = 0;
+}
+
 } // namespace
 
 bool requestClientRotation(const LocalPlayer& player, float yaw, float pitch,
@@ -235,7 +306,7 @@ bool requestClientRotation(const LocalPlayer& player, float yaw, float pitch,
         return false;
 
     const uintptr_t actor = player.address();
-    if (g_state.active && priority < g_state.priority)
+    if (g_state.active && !g_state.releasing && priority < g_state.priority)
         return false;
     if (g_state.active && g_state.actor != actor)
         clearState();
@@ -264,6 +335,9 @@ bool requestClientRotation(const LocalPlayer& player, float yaw, float pitch,
     }
     else
     {
+        // A new owner takes over from the currently displayed orientation,
+        // including while the previous owner is easing out.
+        g_state.releasing = false;
         g_state.priority = priority;
         g_state.targetYaw = wrapDegrees(yaw);
         g_state.targetPitch = clampf(pitch, -90.0f, 90.0f);
@@ -274,7 +348,7 @@ bool requestClientRotation(const LocalPlayer& player, float yaw, float pitch,
 
 void tickClientRotation(const LocalPlayer& player)
 {
-    if (!g_state.active || !player.valid() || !player.isLocal() ||
+    if (!g_state.active || g_state.releasing || !player.valid() || !player.isLocal() ||
         player.address() != g_state.actor)
         return;
 
@@ -287,6 +361,46 @@ void tickClientRotation(const LocalPlayer& player)
 
 void updateClientRotation()
 {
+    installPlayerRendererModelSetupHook();
+
+    // Keep the camera-driven local model smooth even when no module requests a
+    // silent rotation. The target values come from the game's native actor
+    // fields; only the render-scoped copy is eased toward them.
+    const LocalPlayer local = Game::get().localPlayer();
+    float nativeAngles[4]{};
+    if (local.valid() && local.isLocal() && readRotation(local.address(), nativeAngles))
+    {
+        const double now = smooth::detail::nowMs();
+        if (!g_generalState.active || g_generalState.actor != local.address())
+        {
+            g_generalState.actor = local.address();
+            g_generalState.displayedBodyYaw = nativeAngles[0];
+            g_generalState.displayedHeadYaw = nativeAngles[2];
+            g_generalState.lastUpdateMs = now;
+            g_generalState.active = true;
+        }
+        else
+        {
+            double dtMs = now - g_generalState.lastUpdateMs;
+            if (dtMs < 0.0)
+                dtMs = 0.0;
+            if (dtMs > 100.0)
+                dtMs = 100.0;
+            const float dt = static_cast<float>(dtMs / 1000.0);
+            g_generalState.displayedBodyYaw = approachAngle(
+                g_generalState.displayedBodyYaw, nativeAngles[0], dt,
+                kGeneralRotationResponse);
+            g_generalState.displayedHeadYaw = approachAngle(
+                g_generalState.displayedHeadYaw, nativeAngles[2], dt,
+                kGeneralRotationResponse);
+            g_generalState.lastUpdateMs = now;
+        }
+    }
+    else
+    {
+        g_generalState = {};
+    }
+
     if (!g_state.active)
         return;
 
@@ -297,8 +411,8 @@ void updateClientRotation()
         return;
     }
 
-    installPlayerRendererModelSetupHook();
-    tickClientRotation(player);
+    if (!g_state.releasing)
+        tickClientRotation(player);
 
     const double now = smooth::detail::nowMs();
     double dtMs = now - g_state.lastUpdateMs;
@@ -308,22 +422,47 @@ void updateClientRotation()
         dtMs = 100.0;
 
     const float dt = static_cast<float>(dtMs / 1000.0);
+    float targetBodyYaw = g_state.bodyYaw;
+    float targetHeadYawY = wrapDegrees(g_state.targetYaw - g_state.displayedBodyYaw);
+    float targetPitch = g_state.targetPitch;
+
+    if (g_state.releasing)
+    {
+        float nativeAngles[4]{};
+        float nativePitch = 0.0f;
+        if (!readRotation(g_state.actor, nativeAngles) ||
+            !mem::rawRead(&nativePitch, g_state.actor + off::player::Pitch,
+                sizeof(nativePitch)) || !std::isfinite(nativePitch))
+        {
+            clearState();
+            return;
+        }
+        targetBodyYaw = nativeAngles[0];
+        targetHeadYawY = wrapDegrees(nativeAngles[2] - nativeAngles[0]);
+        targetPitch = clampf(nativePitch, -90.0f, 90.0f);
+    }
+
     g_state.displayedBodyYaw = approachAngle(g_state.displayedBodyYaw,
-        g_state.bodyYaw, dt);
-    const float targetHeadYawY =
-        wrapDegrees(g_state.targetYaw - g_state.displayedBodyYaw);
+        targetBodyYaw, dt);
+    if (!g_state.releasing)
+        targetHeadYawY = wrapDegrees(g_state.targetYaw - g_state.displayedBodyYaw);
     g_state.displayedHeadYawY = approachAngle(g_state.displayedHeadYawY,
         targetHeadYawY, dt);
     const float pitchAlpha = 1.0f - std::exp(-kRenderRotationResponse * dt);
-    g_state.displayedHeadPitch +=
-        (g_state.targetPitch - g_state.displayedHeadPitch) * pitchAlpha;
+    g_state.displayedHeadPitch += (targetPitch - g_state.displayedHeadPitch) * pitchAlpha;
     g_state.displayedHeadPitch = clampf(g_state.displayedHeadPitch, -90.0f, 90.0f);
     g_state.lastUpdateMs = now;
+
+    if (g_state.releasing &&
+        std::fabs(wrapDegrees(targetBodyYaw - g_state.displayedBodyYaw)) < 0.35f &&
+        std::fabs(wrapDegrees(targetHeadYawY - g_state.displayedHeadYawY)) < 0.35f &&
+        std::fabs(targetPitch - g_state.displayedHeadPitch) < 0.35f)
+        clearState();
 }
 
 bool outgoingHeadYaw(float& yaw)
 {
-    if (!g_state.active)
+    if (!g_state.active || g_state.releasing)
         return false;
 
     LocalPlayer player(g_state.actor);
@@ -336,13 +475,13 @@ bool outgoingHeadYaw(float& yaw)
 
 void clearClientRotation()
 {
-    clearState();
+    beginRelease();
 }
 
 void clearClientRotation(int priority)
 {
-    if (g_state.active && g_state.priority == priority)
-        clearState();
+    if (g_state.active && !g_state.releasing && g_state.priority == priority)
+        beginRelease();
 }
 
 } // namespace mc::rotation_helper
