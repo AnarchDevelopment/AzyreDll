@@ -344,9 +344,9 @@ Press **INSERT** to toggle the menu. Configuration is saved on close and when mo
 | **Module system** | ✅ Live | 49 modules across Combat / Movement / Visuals / Misc / Interface |
 | **Cross-toolchain CI** | ✅ Live | MSVC, Clang-CL, and MinGW GCC validated on every push |
 | **Effect sprites** | ✅ Live | Lazy-loaded potion-effect icon atlas (`src/Render/EffectSprites.*`) |
-| **World chunks** | 🔧 In progress | ECS-backed chunk tracking (`src/Features/WorldChunks.hpp`) |
-| **D2D rendering** | 🔧 In progress | Direct2D backend under `src/Render/D2D/` |
-| **Resource sprites** | 🔧 In progress | Sprite atlas system under `src/Render/ResourceSprites.*` |
+| **World chunks** | ✅ Live | ECS-backed chunk tracking (`src/Features/WorldChunks.hpp`) |
+| **D2D rendering** | ✅ Live | Direct2D backend under `src/Render/D2D/` |
+| **Resource sprites** | ✅ Live | Sprite atlas system under `src/Render/ResourceSprites.*` |
 
 See the [issue tracker](https://github.com/AnarchDevelopment/AzyreDll/issues) for the full backlog and roadmap.
 
