@@ -44,6 +44,11 @@ public:
 
     virtual bool holdToActivate() const { return false; }
 
+    // true mientras el modulo esta capturando el teclado para escribir texto.
+    // El manager lo consulta para no disparar keybinds (menu incluido) sin
+    // conocer ningun modulo concreto.
+    virtual bool capturesText() const { return false; }
+
     bool enabled() const { return enabled_; }
     const std::string& name() const { return name_; }
     const std::string& description() const { return description_; }

@@ -12,6 +12,7 @@
 #include "Framework/Math.hpp"
 
 #include <imgui.h>
+#include <cstdint>
 #include <string>
 
 namespace mc::ecs {
@@ -24,6 +25,15 @@ struct Transform
     float height = 1.8f;
     bool onGround = false;
     Vec3 velocity;
+};
+
+// Native identity observed by Game and the player render hook. An Actor can
+// be freed and its address reused, so the runtime id participates in identity.
+struct ActorIdentity
+{
+    uintptr_t address = 0;
+    uint64_t runtimeId = 0;
+    uintptr_t vtable = 0;
 };
 
 struct PlayerName

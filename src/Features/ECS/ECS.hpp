@@ -15,7 +15,7 @@
 #include "Events.hpp"
 
 #include "Features/Friends.hpp"
-#include "SDK/Game.hpp"
+#include "SDK/Core/Game.hpp"
 
 #include <entt/entt.hpp>
 
@@ -344,19 +344,59 @@ private:
         return e;
     }
 
+    entt::entity getOrCreateActor(const Actor& actor)
+    {
+        const uintptr_t addr = actor.address();
+        const uint64_t runtimeId = actor.runtimeId();
+        auto it = addrToEntity_.find(addr);
+        if (it != addrToEntity_.end() && registry.valid(it->second))
+        {
+            const auto* identity = registry.try_get<ActorIdentity>(it->second);
+            if (identity &&
+                ((identity->runtimeId && runtimeId &&
+                  identity->runtimeId != runtimeId) ||
+                 (identity->vtable && identity->vtable != actor.vtable())))
+            {
+                const entt::entity old = it->second;
+                if (old == local_)
+                    local_ = entt::null;
+                registry.destroy(old);
+                addrToEntity_.erase(it);
+            }
+            else
+            {
+                registry.emplace_or_replace<ActorIdentity>(it->second,
+                    ActorIdentity{addr, runtimeId, actor.vtable()});
+                return it->second;
+            }
+        }
+
+        const entt::entity e = getOrCreate(addr);
+        registry.emplace_or_replace<ActorIdentity>(e,
+            ActorIdentity{addr, runtimeId, actor.vtable()});
+        return e;
+    }
+
     void syncLocal(LocalPlayer& local)
     {
         uintptr_t addr = local.address();
+        const entt::entity actorEntity = getOrCreateActor(local);
 
-        if (local_ == entt::null || !registry.valid(local_))
+        if (local_ == entt::null || !registry.valid(local_) ||
+            local_ != actorEntity)
         {
             // LocalPlayer encontrado por primera vez (o tras perderlo)
-            local_ = getOrCreate(addr);
+            if (registry.valid(local_))
+            {
+                registry.remove<IsLocal>(local_);
+                dispatcher.enqueue<LocalPlayerLost>();
+            }
+            local_ = actorEntity;
             registry.emplace_or_replace<IsLocal>(local_);
-            registry.emplace<PlayerName>(local_, PlayerName{local.name()});
-            registry.emplace<Health>(local_, Health{local.health()});
-            registry.emplace<Transform>(local_);
-            registry.emplace<ScreenPos>(local_);
+            registry.emplace_or_replace<PlayerName>(local_, PlayerName{local.name()});
+            registry.emplace_or_replace<Health>(local_, Health{local.health()});
+            (void)registry.get_or_emplace<Transform>(local_);
+            (void)registry.get_or_emplace<ScreenPos>(local_);
             registry.emplace_or_replace<IsHurt>(local_, IsHurt{0});
             dispatcher.enqueue<LocalPlayerFound>(local_);
         }
@@ -407,7 +447,7 @@ private:
 
         bool isFriend = friends::isFriend(actor.name());
 
-        auto e = getOrCreate(addr);
+        auto e = getOrCreateActor(actor);
 
         // Components base
         auto& t = registry.get_or_emplace<Transform>(e);
@@ -466,7 +506,14 @@ private:
         {
             if (!registry.valid(e))
                 continue;
-            if (!mem::isReadable(addr, 8))
+            const auto* identity = registry.try_get<ActorIdentity>(e);
+            const Actor native(addr);
+            const uint64_t runtimeId = native.runtimeId();
+            const uintptr_t vtable = native.vtable();
+            if (!native.valid() ||
+                (identity && identity->vtable && vtable != identity->vtable) ||
+                (identity && identity->runtimeId && runtimeId &&
+                 runtimeId != identity->runtimeId))
             {
                 dead.push_back(e);
             }

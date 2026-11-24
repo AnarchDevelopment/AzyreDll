@@ -56,6 +56,10 @@ public:
     std::vector<Module*> byCategory(Category cat);
     Module* find(const std::string& name);
 
+    // true si algun modulo habilitado esta capturando el teclado para escribir
+    // texto (chat propio). Se consulta sin conocer el modulo concreto.
+    bool anyTextCapture() const;
+
     // Mueve el modulo a un "graveyard" (queda vivo hasta el sweep de onTick):
     // permite remover durante el dispatch de comandos sin invalidar
     // iteradores. El modulo no vuelve a aparecer en la GUI ni en busquedas.

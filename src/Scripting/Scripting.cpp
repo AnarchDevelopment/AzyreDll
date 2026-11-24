@@ -6,10 +6,10 @@
 #include "GUI/Widgets.hpp"
 #include "Input/KeyNames.hpp"
 #include "Modules/ModuleManager.hpp"
-#include "SDK/Camera.hpp"
-#include "SDK/ChatHook.hpp"
-#include "SDK/Classes/MoveInputHandler.hpp"
-#include "SDK/Game.hpp"
+#include "SDK/Client/Camera.hpp"
+#include "SDK/UI/Hooks/ChatHook.hpp"
+#include "SDK/Client/MoveInputHandler.hpp"
+#include "SDK/Core/Game.hpp"
 
 #include "Luau/Compiler.h"
 #include "lua.h"
@@ -341,12 +341,10 @@ static int l_game_worldToScreen(lua_State* L)
         return 1;
     }
     CameraView cam = getCameraView(p, g.client());
-    float fov = readGameFov();
-    ImVec2 disp = ImGui::GetIO().DisplaySize;
     Vec3 proj;
     Vec3 w = {(float)lua_tonumber(L, 1), (float)lua_tonumber(L, 2),
               (float)lua_tonumber(L, 3)};
-    if (!worldToScreen(w, cam.pos, cam.yaw, cam.pitch, fov, disp.x, disp.y, proj))
+    if (!cam.project(w, proj))
     {
         lua_pushnil(L);
         return 1;

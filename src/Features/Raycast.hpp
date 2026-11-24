@@ -9,9 +9,9 @@
 // raycast simplemente no encuentra nada (degradacion segura).
 // ============================================================================
 
-#include "Features/WorldChunks.hpp"
+#include "SDK/World/LevelChunkCache.hpp"
 #include "Framework/Math.hpp"
-#include "SDK/Classes/BlockSource.hpp"
+#include "SDK/World/BlockSource/BlockSource.hpp"
 
 #include <cmath>
 #include <limits>

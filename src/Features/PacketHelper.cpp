@@ -1,9 +1,11 @@
 #include "Features/PacketHelper.hpp"
 
+#include "SDK/Network/Packets/Packets.hpp"
+
 #include "Framework/Memory.hpp"
-#include "SDK/ChatHook.hpp"
-#include "SDK/Offsets.hpp"
-#include "SDK/VTables.hpp"
+#include "SDK/UI/Hooks/ChatHook.hpp"
+#include "SDK/Engine/Memory/Offsets.hpp"
+#include "SDK/Engine/VTable/VTables.hpp"
 
 #include <mutex>
 
@@ -24,7 +26,7 @@ std::atomic<float> g_sentZ{0.0f};
 // sin shared_ptrs ni ownership, el dump lo confirmo). La vtable copiada
 // apunta a las funciones del juego: al reenviar, el Write serializa
 // normal.
-constexpr size_t kPacketBytes = 0x60; // datos hasta +0x34 con margen
+constexpr size_t kPacketBytes = packets::MovePlayerPacket::CopySize;
 
 std::mutex g_mu;
 std::vector<std::vector<unsigned char>> g_buffer;
@@ -42,14 +44,14 @@ bool onOutgoingPacket(uintptr_t p)
         return false;
 
     bool isMovePacket =
-        mem::read<uintptr_t>(p) == mem::resolve(vt::MovePlayerPacket);
+        mem::read<uintptr_t>(p) == mem::resolve(packets::MovePlayerPacket::VTableRva);
     if (!isMovePacket)
         return false;
 
     // Posicion del paquete (+0x18 x, +0x1C y, +0x20 z del dump).
-    float x = mem::read<float>(p + off::movePlayerPacket::X);
-    float y = mem::read<float>(p + off::movePlayerPacket::Y);
-    float z = mem::read<float>(p + off::movePlayerPacket::Z);
+    float x = mem::read<float>(p + packets::MovePlayerPacket::XOffset);
+    float y = mem::read<float>(p + packets::MovePlayerPacket::YOffset);
+    float z = mem::read<float>(p + packets::MovePlayerPacket::ZOffset);
 
     if (!g_active.load(std::memory_order_acquire))
     {

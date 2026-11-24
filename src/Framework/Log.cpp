@@ -2,6 +2,7 @@
 
 #include <windows.h>
 #include <psapi.h>
+#include <cwchar>
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
@@ -180,30 +181,47 @@ static LONG WINAPI unhandledLogger(EXCEPTION_POINTERS* ep)
 // en RaiseException y el sistema los captura como control flow. Son ruido
 // benigno de primera chance: un crash REAL de esos sigue llegando al
 // unhandled filter (segunda chance), que no esta sujeto a este filtro.
+// Nombre del modulo que contiene la direccion ("" si no se puede resolver).
+static void moduleNameOf(void* address, wchar_t* out, size_t cap)
+{
+    if (!out || cap == 0)
+        return;
+    out[0] = 0;
+    if (!address)
+        return;
+
+    MEMORY_BASIC_INFORMATION mbi{};
+    if (!VirtualQuery(address, &mbi, sizeof(mbi)))
+        return;
+    HMODULE mod = reinterpret_cast<HMODULE>(mbi.AllocationBase);
+    if (!mod)
+        return;
+
+    wchar_t path[MAX_PATH]{};
+    if (!GetModuleFileNameW(mod, path, MAX_PATH))
+        return;
+    const wchar_t* slash = wcsrchr(path, L'\\');
+    wcsncpy_s(out, cap, slash ? slash + 1 : path, _TRUNCATE);
+}
+
 static bool isRpcNoise(DWORD code, void* address)
 {
-    static uintptr_t s_rpcBase = [] {
-        HMODULE m = GetModuleHandleW(L"RPCRT4.dll");
-        return m ? (uintptr_t)m : 0;
-    }();
-    static uintptr_t s_rpcEnd = [] {
-        HMODULE m = GetModuleHandleW(L"RPCRT4.dll");
-        if (!m)
-            return (uintptr_t)0;
-        MODULEINFO mi{};
-        GetModuleInformation(GetCurrentProcess(), m, &mi, sizeof(mi));
-        return (uintptr_t)m + mi.SizeOfImage;
-    }();
+    // Codigos de estado Win32 (0 < code < 0x10000000). Los NTSTATUS/AV reales
+    // (0xC000xxxx) y el C++ EH (0xE06D7363) NUNCA caen aqui.
+    if (code == 0 || code >= 0x10000000)
+        return false;
 
-    if (!s_rpcBase || !address)
-        return false;
-    uintptr_t a = (uintptr_t)address;
-    if (a < s_rpcBase || a >= s_rpcEnd)
-        return false;
-    // Codigos de estado Win32 (0 < code < 0x100000): el dialecto de
-    // RaiseException de RPCRT4. Los NTSTATUS/AV reales (0xC000xxxx) se
-    // dejan pasar.
-    return code > 0 && code < 0x10000000;
+    // El sitio del raise identifica al emisor: RPCRT4/combase re-lanzan en el
+    // hilo de callback los estados que cruzan un apartamento WinRT, y el raise
+    // acaba materializado en KERNELBASE!RaiseException o ntdll!RtlRaiseException
+    // (no en RPCRT4, que es lo que asumia el filtro anterior: por eso el log
+    // mostraba AVs fantasma de Windows.Networking.Connectivity que el proceso
+    // sobrevivia).
+    wchar_t mod[64]{};
+    moduleNameOf(address, mod, 64);
+    return wcscmp(mod, L"RPCRT4.dll") == 0 || wcscmp(mod, L"combase.dll") == 0 ||
+           wcscmp(mod, L"KERNELBASE.dll") == 0 || wcscmp(mod, L"ntdll.dll") == 0 ||
+           wcsncmp(mod, L"Windows.Networking", 18) == 0;
 }
 
 // Vectored handler: corre ANTES que cualquier otro handler. Filtra las

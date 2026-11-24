@@ -4,28 +4,32 @@
 #include <string>
 
 // ============================================================================
-// Envio de chat al servidor.
+// Envio de chat al servidor — ruta NATIVA del build (REA, 0.15.10.0).
 //
-// No hay ctor conocido de TextPacket en este build: la via segura es CLONAR
-// un TextPacket real saliente (capturado en el hook de sendToServer con sus
-// strings reales: xuid, platform id, etc.), reescribir SOLO el Message y
-// reenviarlo por chathook::sendRawPacket con los handles capturados.
-//
-// sendToServer NO destruye el paquete (lo confirma el Blink, que reenvia
-// copias planas): nuestros clones se libera NOSOTROS tras el envio.
+// Se arma el TextPacket de chat a mano (vtable 0xE4BDC0, +0x08=2, +0x0C=1,
+// +0x10=1 tipo chat, source en +0x18, mensaje en +0x38) y se envia por la misma
+// cadena que usa sub_1400DE4A0 (el metodo de envio del ChatScreen):
+// client+0xE8 -> connector+0x98 -> PacketSender vslot 2.
+// Si esa cadena no expone un PacketSender valido (sesiones remotas), el paquete
+// sale por sendToServer: es la via que el chat nativo termina usando.
+// No hace falta ninguna "plantilla" capturada.
 // ============================================================================
 
 namespace mc::chatsend {
 
-// Llamado por ChatHook en cada TextPacket saliente: captura/refresca la
-// plantilla (solo type=1 chat, sin comandos ni mensajes vacios).
+// Llamado por ChatHook en cada TextPacket saliente: refresca el source name
+// autoritativo (el que el propio juego pone al chat).
 void onOutgoingTextPacket(uintptr_t packet);
 
-// Envia un mensaje de chat al servidor. false si no hay plantilla aun
-// (el jugador debe escribir un chat normal una vez en la partida) o si
-// el envio fallo.
+// Envia un mensaje de chat al servidor. false si no hay cliente o el envio
+// fue rechazado por ambas rutas.
 bool send(const std::string& text);
 
+// Sends a slash-prefixed server command through the build's normal chat
+// TextPacket path. Commands are kept verbatim by the Spammer (no obfuscation).
+bool sendCommand(const std::string& command);
+
+// Compatibilidad: ya no hay plantilla; true cuando hay cliente al que enviar.
 bool haveTemplate();
 
 // Obfuscacion antispam (misma señal para hash/dedup del server):

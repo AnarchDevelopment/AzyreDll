@@ -5,9 +5,9 @@
 #include "Framework/Log.hpp"
 #include "Framework/Math.hpp"
 #include "Framework/Memory.hpp"
-#include "SDK/Game.hpp"
-#include "SDK/Classes/LocalPlayer.hpp"
-#include "SDK/Offsets.hpp"
+#include "SDK/Core/Game.hpp"
+#include "SDK/Entity/LocalPlayer.hpp"
+#include "SDK/Engine/Memory/Offsets.hpp"
 
 #include <cmath>
 
@@ -46,7 +46,8 @@ struct GeneralRotationState
 {
     uintptr_t actor = 0;
     float displayedBodyYaw = 0.0f;
-    float displayedHeadYaw = 0.0f;
+    float displayedHeadYawY = 0.0f;
+    float displayedHeadPitch = 0.0f;
     double lastUpdateMs = 0.0;
     bool active = false;
 };
@@ -140,6 +141,7 @@ __int64 __fastcall playerRendererModelSetupDetour(
         return 0;
 
     const uintptr_t actorAddress = reinterpret_cast<uintptr_t>(actor);
+    Game::get().observeRenderedPlayer(actorAddress);
     const bool moduleOverride = g_state.active &&
         actorAddress == g_state.actor;
 
@@ -149,32 +151,64 @@ __int64 __fastcall playerRendererModelSetupDetour(
     if (!moduleOverride && actor && g_generalState.active &&
         actorAddress == g_generalState.actor &&
         mem::isReadable(actorAddress + off::player::BodyYawField,
-            sizeof(float) * 4))
+            sizeof(float) * 4) &&
+        mem::isReadable(actorAddress + off::player::Pitch, sizeof(float)) &&
+        mem::isReadable(actorAddress + off::player::RenderPitch, sizeof(float)))
     {
         float actorAngles[4]{};
-        if (readRotation(actorAddress, actorAngles))
+        float actorPitch = 0.0f;
+        float actorRenderPitch = 0.0f;
+        if (readRotation(actorAddress, actorAngles) &&
+            mem::rawRead(&actorPitch, actorAddress + off::player::Pitch,
+                sizeof(actorPitch)) &&
+            mem::rawRead(&actorRenderPitch,
+                actorAddress + off::player::RenderPitch,
+                sizeof(actorRenderPitch)) &&
+            std::isfinite(actorPitch) && std::isfinite(actorRenderPitch) &&
+            std::isfinite(g_generalState.displayedHeadPitch))
         {
             const float renderAngles[4] = {
                 g_generalState.displayedBodyYaw,
                 g_generalState.displayedBodyYaw,
-                g_generalState.displayedHeadYaw,
-                g_generalState.displayedHeadYaw,
+                wrapDegrees(g_generalState.displayedBodyYaw +
+                    g_generalState.displayedHeadYawY),
+                wrapDegrees(g_generalState.displayedBodyYaw +
+                    g_generalState.displayedHeadYawY),
             };
             if (mem::rawWrite(actorAddress + off::player::BodyYawField,
                     renderAngles, sizeof(renderAngles)))
             {
-                __int64 result = 0;
-                __try
+                const float renderPitch = g_generalState.displayedHeadPitch;
+                if (mem::rawWrite(actorAddress + off::player::Pitch,
+                        &renderPitch, sizeof(renderPitch)))
                 {
-                    result = original(renderer, arg1, arg2, actor, arg4, arg5,
-                        partialTick);
+                    if (mem::rawWrite(actorAddress + off::player::RenderPitch,
+                            &renderPitch, sizeof(renderPitch)))
+                    {
+                        __int64 result = 0;
+                        __try
+                        {
+                            result = original(renderer, arg1, arg2, actor, arg4,
+                                arg5, partialTick);
+                        }
+                        __finally
+                        {
+                            mem::rawWrite(actorAddress + off::player::RenderPitch,
+                                &actorRenderPitch, sizeof(actorRenderPitch));
+                            mem::rawWrite(actorAddress + off::player::Pitch,
+                                &actorPitch, sizeof(actorPitch));
+                            mem::rawWrite(actorAddress + off::player::BodyYawField,
+                                actorAngles, sizeof(actorAngles));
+                        }
+                        return result;
+                    }
+
+                    mem::rawWrite(actorAddress + off::player::Pitch,
+                        &actorPitch, sizeof(actorPitch));
                 }
-                __finally
-                {
-                    mem::rawWrite(actorAddress + off::player::BodyYawField,
-                        actorAngles, sizeof(actorAngles));
-                }
-                return result;
+
+                mem::rawWrite(actorAddress + off::player::BodyYawField,
+                    actorAngles, sizeof(actorAngles));
             }
         }
     }
@@ -368,14 +402,20 @@ void updateClientRotation()
     // fields; only the render-scoped copy is eased toward them.
     const LocalPlayer local = Game::get().localPlayer();
     float nativeAngles[4]{};
-    if (local.valid() && local.isLocal() && readRotation(local.address(), nativeAngles))
+    float nativePitch = 0.0f;
+    if (local.valid() && local.isLocal() &&
+        readRotation(local.address(), nativeAngles) &&
+        mem::rawRead(&nativePitch, local.address() + off::player::Pitch,
+            sizeof(nativePitch)) && std::isfinite(nativePitch))
     {
         const double now = smooth::detail::nowMs();
         if (!g_generalState.active || g_generalState.actor != local.address())
         {
             g_generalState.actor = local.address();
             g_generalState.displayedBodyYaw = nativeAngles[0];
-            g_generalState.displayedHeadYaw = nativeAngles[2];
+            g_generalState.displayedHeadYawY =
+                wrapDegrees(nativeAngles[2] - nativeAngles[0]);
+            g_generalState.displayedHeadPitch = clampf(nativePitch, -90.0f, 90.0f);
             g_generalState.lastUpdateMs = now;
             g_generalState.active = true;
         }
@@ -390,9 +430,16 @@ void updateClientRotation()
             g_generalState.displayedBodyYaw = approachAngle(
                 g_generalState.displayedBodyYaw, nativeAngles[0], dt,
                 kGeneralRotationResponse);
-            g_generalState.displayedHeadYaw = approachAngle(
-                g_generalState.displayedHeadYaw, nativeAngles[2], dt,
+            const float targetHeadYawY =
+                wrapDegrees(nativeAngles[2] - nativeAngles[0]);
+            g_generalState.displayedHeadYawY = approachAngle(
+                g_generalState.displayedHeadYawY, targetHeadYawY, dt,
                 kGeneralRotationResponse);
+            const float targetPitch = clampf(nativePitch, -90.0f, 90.0f);
+            const float pitchAlpha = 1.0f -
+                std::exp(-kGeneralRotationResponse * dt);
+            g_generalState.displayedHeadPitch +=
+                (targetPitch - g_generalState.displayedHeadPitch) * pitchAlpha;
             g_generalState.lastUpdateMs = now;
         }
     }

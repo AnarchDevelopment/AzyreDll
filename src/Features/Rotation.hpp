@@ -28,7 +28,28 @@ inline std::atomic<float> g_yaw{0.0f};
 inline std::atomic<float> g_headYawOffset{0.0f};
 inline std::atomic<ULONGLONG> g_expiry{0};
 inline std::atomic<int> g_priority{0};
+// Monotonico: cada paquete saliente que recibio la rotacion de la request
+// vigente. El server valida la mirada contra el ultimo MovePlayerPacket
+// RECIBIDO, no contra la request local, asi que un modulo que manda un
+// paquete dependiente de la mirada (InteractPacket de ataque) puede esperar
+// a este contador en vez de asumir que ya salio.
+inline std::atomic<uint64_t> g_appliedPackets{0};
 } // namespace detail
+
+// Marca que un paquete saliente ya lleva la rotacion aplicada. Lo llama el
+// hook de sendToServer (ChatHook::applyRotation).
+inline void markApplied()
+{
+    detail::g_appliedPackets.fetch_add(1, std::memory_order_relaxed);
+}
+
+// Numero de paquetes enviados con rotacion aplicada desde el inicio. Sirve
+// como base: se guarda el valor al pedir la rotacion y se compare contra el
+// actual para saber si el server ya la vio.
+inline uint64_t appliedCount()
+{
+    return detail::g_appliedPackets.load(std::memory_order_acquire);
+}
 
 // Pedir la rotacion activa. priority mayor = gana sobre requests activas
 // de menor prioridad (Combat > Movement > Visuals, por ejemplo).

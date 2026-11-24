@@ -1,4 +1,5 @@
 #include "Features/Smoothing.hpp"
+#include "SDK/Entity/ActorOffsets.hpp"
 
 #include "Framework/Log.hpp"
 #include "Framework/Memory.hpp"
@@ -139,7 +140,7 @@ Vec3 renderPos(uintptr_t actor, const Vec3& raw)
         if (actor == s_traceActor && s_traceLines < 250)
         {
             Vec3 tp{};
-            mem::rawRead(&tp, actor + 0x0C, sizeof(tp));
+            mem::rawRead(&tp, actor + off::player::PosTrueX, sizeof(tp));
             MC_LOG("[REMPos] raw=(%.3f,%.3f,%.3f) true=(%.3f,%.3f,%.3f) "
                    "out=(%.3f,%.3f,%.3f) iv=%.0f",
                    raw.x, raw.y, raw.z, tp.x, tp.y, tp.z,

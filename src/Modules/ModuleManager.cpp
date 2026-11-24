@@ -3,7 +3,8 @@
 #include "Commands/CommandManager.hpp"
 #include "Config/Config.hpp"
 #include "Framework/Log.hpp"
-#include "SDK/Game.hpp"
+#include "Input/WheelHook.hpp"
+#include "SDK/Core/Game.hpp"
 
 #include <imgui.h>
 #include <windows.h>
@@ -270,6 +271,16 @@ Module* ModuleManager::find(const std::string& name)
     return nullptr;
 }
 
+bool ModuleManager::anyTextCapture() const
+{
+    for (const auto& m : modules_)
+    {
+        if (m->enabled() && m->capturesText())
+            return true;
+    }
+    return false;
+}
+
 void ModuleManager::setBinding(Module* m)
 {
     binding_ = m;
@@ -295,7 +306,9 @@ void ModuleManager::handleKeybinds()
     // Vanilla chat is outside ImGui, so WantTextInput is not sufficient. The
     // client screen stack is checked without virtual dispatch; while the
     // ChatScreen vtable is on top, keybinds must not toggle or capture keys.
-    if (Game::get().client().chatOpen())
+    // A client module capturing text (Custom Chat) reports through
+    // Module::capturesText, so no keybind fires while typing.
+    if (Game::get().client().chatOpen() || anyTextCapture())
     {
         if (binding_)
         {
