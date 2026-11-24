@@ -26,27 +26,3 @@ jobs:
 
       - name: Build
         run: cmake --build build --config ${{ env.BUILD_TYPE }} --parallel
-
-  windows-clang:
-    name: Windows - Clang (clang-cl)
-    runs-on: windows-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Configure CMake (ClangCL toolset)
-        run: cmake -B build -G "Visual Studio 18 2026" -A x64 -T ClangCL
-
-      - name: Build
-        run: cmake --build build --config ${{ env.BUILD_TYPE }} --parallel
-
-      - name: Report
-        if: always()
-        shell: msys2 {0}
-        run: |
-          if [ -f build/AzyreSDK.dll ]; then
-            echo "Native clang: build OK"
-          else
-            echo "Native clang: build failed"
-            echo "Advisory only; MSVC remains the canonical build."
-          fi

@@ -73,7 +73,7 @@ A fully-featured module library, modern blur rendering, and an embeddable Lua in
 | **DirectX** | 11 | Rendering API used for the overlay and effects |
 | **CMake** | 3.25+ | Build system and dependency management |
 | **Windows** | 10 / 11 (x64) | Target platform |
-| **Toolchains** | MSVC, Clang-CL, MinGW-w64 | Supported C++ compilers (see [Building](#building)) |
+| **Toolchain** | MSVC (Visual Studio 2026) | Supported and CI-validated compiler (see [Building](#building)) |
 
 ---
 
@@ -106,7 +106,17 @@ src/
 ├── Modules/         Feature modules (Combat / Movement / Visuals / Misc / Interface)
 ├── Networking/      IRC bridge and Spotify service
 ├── Render/          DX11 Present hook, BlurHelper, EffectSprites, ResourceSprites, D2D backend
-├── SDK/             Game SDK: offsets, vtables, classes, code patches, effects hook
+├── SDK/             Game SDK, grouped by engine subsystem
+│   ├── Client/      Client, camera view, and move input
+│   ├── Core/        Game facade and runtime discovery
+│   ├── Entity/      Actor and LocalPlayer
+│   ├── World/       Level, blocks, and block sources
+│   ├── Gameplay/    GameMode and effects
+│   ├── Inventory/   Inventory and item instances
+│   ├── Network/     Packet definitions and packet classes
+│   ├── UI/          Chat and chat hooks
+│   ├── Engine/      Memory patches, offsets, and vtables
+│   └── SDK.hpp      Umbrella include for broad integration points
 └── Scripting/       Luau runtime and native bindings
 ```
 
@@ -118,7 +128,7 @@ src/
 |-----------|-------------------|
 | **Separation of concerns** | Game internals live in `SDK/` and `Features/`; feature logic lives in `Modules/`. Modules never read raw offsets directly — they go through the ECS. |
 | **Fail-safe isolation** | Module lifecycle hooks are guarded. A faulty module is disabled rather than crashing the process. |
-| **Compiler portability** | MSVC-specific SEH is remapped transparently via `Framework/Compat.hpp`. All three supported toolchains must compile cleanly. |
+| **Compiler support** | MSVC x64 is the supported and CI-validated toolchain. |
 | **Dependency hygiene** | All third-party libraries are fetched through CMake `FetchContent` — no manual setup, no vendored binaries. |
 | **Runtime configurability** | Modules, keybinds, presets, and HUD layouts are JSON-driven and reloaded on the fly. |
 
@@ -152,9 +162,12 @@ Each module lives in its own folder, implements a shared `Module` interface, and
 | **InventoryWalk** | Allows movement while an inventory is open |
 | **LongJump** | Extends horizontal jump distance |
 | **NoFall** | Prevents fall damage |
+| **NoJumpDelay** | Removes the tick delay between consecutive jumps |
 | **NoSlow** | Removes slowdown from items and effects |
+| **Parkour** | Automatically jumps when reaching the edge of a block |
 | **Scaffold** | Automatically places blocks under your feet while walking (Stairs / Full / Down / Bottomless) |
 | **Speed** | Movement speed boosts (Friction / Legit modes) |
+| **Step** | Automatically steps up 1-2 block walls without jumping |
 
 ### Visuals
 
@@ -199,8 +212,8 @@ Each module lives in its own folder, implements a shared `Module` interface, and
 | Module | Description |
 |--------|-------------|
 | **Interface** | Appearance settings (style, theme, accent, font, rounding) |
-| **sAzyre** | Classic Azyre menu style |
-| **sSolstice** | Modern Solstice menu style |
+| **Custom Chat** | Rise-style chat overlay with formatted messages; keyboard capture leaves native mouse and wheel input alone |
+| **Interface styles** | Azyre, Rise, Glass, and Packet 3.1 |
 
 ---
 
@@ -252,7 +265,7 @@ Exposed namespaces include `game`, `modules`, `ui`, `input`, `friends`, `chat`, 
 
 ## Quick Start
 
-To get Azyre Client up and running, ensure you have the prerequisites (Windows 10/11 x64, CMake 3.25+, and a supported C++ toolchain — MSVC, Clang‑CL, or MinGW‑w64). Then follow the [Building](#building) guide for detailed step‑by‑step instructions.
+To get Azyre Client up and running, ensure you have Windows 10/11 x64, CMake 3.25+, and Visual Studio 2026 with the MSVC x64 toolchain. Then follow the [Building](#building) guide.
 
 ---
 
@@ -263,53 +276,22 @@ To get Azyre Client up and running, ensure you have the prerequisites (Windows 1
 - **Windows 10 or 11** (x64)
 - **CMake 3.25 or newer**
 - **Windows SDK** (with C++/WinRT headers)
-- An x64 C++ toolchain — one of:
-  - **Visual Studio 2022/2026** with the *Desktop development with C++* workload (MSVC)
-  - **LLVM/Clang** (`clang-cl` toolset)
-  - **MinGW-w64** (GCC, e.g. via MSYS2)
+- **Visual Studio 2026** with the *Desktop development with C++* workload and MSVC x64
 
 All third-party dependencies are downloaded automatically during the CMake configure step.
 
-### Additional notes
+Configure and build the Release x64 DLL:
 
-#### Supported toolchains
-
-The build is compiler-aware. The primary and fully-featured target is **MSVC**; the workflow also validates **Clang-CL** and **MinGW-w64 (GCC)** on every push.
-
-| Toolchain | Configure command |
-|-----------|-------------------|
-| **MSVC** | `cmake -B build -G "Visual Studio 18 2026" -A x64` |
-| **Clang-CL** | `cmake -B build -G "Visual Studio 18 2026" -A x64 -T ClangCL` |
-| **MinGW GCC** | `cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++` |
-
-```bash
-# Clang-CL
-cmake -B build -G "Visual Studio 18 2026" -A x64 -T ClangCL
+```powershell
+cmake -B build -G "Visual Studio 18 2026" -A x64
 cmake --build build --config Release --parallel
-
-# MinGW GCC (Ninja, single-config)
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release ^
-      -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++
-cmake --build build --parallel
 ```
 
-#### Compiler-specific behavior
-
-- **MSVC / Clang-CL** compile with `/utf-8`, `/W3` and, on `cl.exe` only, `/MP`. Clang-CL is detected and does **not** receive `/MP` (which it rejects).
-- **GCC / Clang (native)** use `-Wall -Wextra` and link with `-static -static-libgcc` so the produced DLL has no dynamic `libgcc`/`libstdc++`/`winpthreads` dependencies.
-- **SEH portability:** MSVC-specific `__try`/`__except` guards are transparently remapped for non-MSVC compilers through `src/Framework/Compat.hpp` (included force-wide via `-include`). On MinGW, `__try` is a native keyword mapped to `try`, so `__except` becomes `catch (...)`.
-- **WinRT is MSVC-only:** the C++/WinRT input and window-title integrations are compiled only under `_MSC_VER`. Non-MSVC builds use Win32 COM initialization and polling input; they are intended as **compile/CI validation**, not as injectable production builds.
-- **D3DCompiler:** on MinGW the compiler import library is resolved from the Windows SDK (`d3dcompiler.lib` in `um/x64`), since MinGW ships no `d3dcompiler_47.a`.
-
-#### CI
-
-Continuous integration runs on every push and pull request to `main` via [`.github/workflows/cmake-on-windows.yml`](.github/workflows/cmake-on-windows.yml), building all three toolchains (MSVC, Clang-CL, MinGW GCC) on `windows-latest`.
-
-#### Notes
+### Notes
 
 - The Windows SDK's C++/WinRT include directory is auto-detected (Windows Kits path or registry); a warning is emitted if it cannot be found.
 - Release is the recommended configuration. `Debug` is supported but produces substantially larger binaries.
-- If the SDK is installed in a non-standard location, pass it via `-DCMAKE_PREFIX_PATH` or the appropriate `CMAKE_*_COMPILER`/include variables.
+- The Windows workflow runs the same MSVC x64 Release build on pushes and pull requests to `main`.
 
 ---
 
@@ -328,7 +310,7 @@ Runtime state is stored as JSON in the client's base directory:
 └── azyre_sdk.log        # Diagnostic log
 ```
 
-> **Note:** The client resolves `LocalState` via WinRT at boot. If WinRT is unavailable (non-MSVC builds), it falls back to the `RoamingState` path.
+> **Note:** The client resolves `LocalState` via WinRT at boot and falls back to `RoamingState` if WinRT is unavailable.
 
 Press **INSERT** to toggle the menu. Configuration is saved on close and when modules change.
 
@@ -341,10 +323,10 @@ Press **INSERT** to toggle the menu. Configuration is saved on close and when mo
 | **Luau scripting** | ✅ Live | Native game API, settings schema, `.script reload` |
 | **IRC bridge** | ✅ Live | In-game chat bridge with Spotify service |
 | **DX11 overlay** | ✅ Live | Acrylic/glass blur pipeline via BlurHelper |
-| **Module system** | ✅ Live | 49 modules across Combat / Movement / Visuals / Misc / Interface |
-| **Cross-toolchain CI** | ✅ Live | MSVC, Clang-CL, and MinGW GCC validated on every push |
+| **Module system** | ✅ Live | Modules across Combat / Movement / Visuals / Misc / Interface |
+| **MSVC x64 CI** | ✅ Live | Visual Studio 2026 Release build on every push and pull request |
 | **Effect sprites** | ✅ Live | Lazy-loaded potion-effect icon atlas (`src/Render/EffectSprites.*`) |
-| **World chunks** | ✅ Live | ECS-backed chunk tracking (`src/Features/WorldChunks.hpp`) |
+| **World chunks** | ✅ Live | Chunk access through the SDK (`src/SDK/World/LevelChunkCache.hpp`) |
 | **D2D rendering** | ✅ Live | Direct2D backend under `src/Render/D2D/` |
 | **Resource sprites** | ✅ Live | Sprite atlas system under `src/Render/ResourceSprites.*` |
 
