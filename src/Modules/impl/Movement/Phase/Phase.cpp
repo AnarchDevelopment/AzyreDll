@@ -4,10 +4,10 @@
 #include "Framework/Math.hpp"
 #include "Framework/Memory.hpp"
 #include "GUI/Menu.hpp"
-#include "SDK/ChatHook.hpp"
-#include "SDK/Classes/BlockSource.hpp"
-#include "SDK/Classes/LocalPlayer.hpp"
-#include "SDK/Game.hpp"
+#include "SDK/UI/Hooks/ChatHook.hpp"
+#include "SDK/World/BlockSource/BlockSource.hpp"
+#include "SDK/Entity/LocalPlayer.hpp"
+#include "SDK/Core/Game.hpp"
 
 #include <windows.h>
 #include <imgui.h>

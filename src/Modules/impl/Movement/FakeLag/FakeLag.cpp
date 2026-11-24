@@ -2,8 +2,8 @@
 #include "GUI/Widgets.hpp"
 
 #include "GUI/Menu.hpp"
-#include "SDK/ChatHook.hpp"
-#include "SDK/Game.hpp"
+#include "SDK/UI/Hooks/ChatHook.hpp"
+#include "SDK/Core/Game.hpp"
 
 #include <imgui.h>
 #include <windows.h>

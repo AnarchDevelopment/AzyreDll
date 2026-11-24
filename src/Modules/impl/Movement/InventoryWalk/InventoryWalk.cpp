@@ -3,8 +3,8 @@
 
 #include "Framework/Math.hpp"
 #include "GUI/Menu.hpp"
-#include "SDK/Game.hpp"
-#include "SDK/Offsets.hpp"
+#include "SDK/Core/Game.hpp"
+#include "SDK/Engine/Memory/Offsets.hpp"
 
 #include <imgui.h>
 #include <windows.h>

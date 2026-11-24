@@ -1,18 +1,19 @@
-﻿#include "Scaffold.hpp"
+#include "Scaffold.hpp"
 
 #include "Features/Rotation.hpp"
 #include "Features/RotationHelper.hpp"
-#include "Features/WorldChunks.hpp"
+#include "SDK/World/LevelChunkCache.hpp"
 #include "Framework/Math.hpp"
 #include "Framework/Memory.hpp"
 #include "Framework/Log.hpp"
 #include "GUI/Widgets.hpp"
-#include "SDK/ChatHook.hpp"
-#include "SDK/Classes/GameMode.hpp"
-#include "SDK/Classes/Inventory.hpp"
-#include "SDK/Classes/ItemInstance.hpp"
-#include "SDK/Classes/LocalPlayer.hpp"
-#include "SDK/Game.hpp"
+#include "SDK/Gameplay/GameMode.hpp"
+#include "SDK/Inventory/Inventory.hpp"
+#include "SDK/Inventory/ItemInstance/ItemInstance.hpp"
+#include "SDK/Entity/LocalPlayer.hpp"
+#include "SDK/Network/Packets/MobEquipmentPacket.hpp"
+#include "SDK/Core/Game.hpp"
+#include "SDK/UI/Hooks/ChatHook.hpp"
 
 #include <windows.h>
 #include <imgui.h>
@@ -20,6 +21,7 @@
 #include <algorithm>
 #include <cmath>
 #include <climits>
+#include <exception>
 #include <vector>
 
 namespace mc {
@@ -31,6 +33,24 @@ bool keyDown(int vk)
     return (GetAsyncKeyState(vk) & 0x8000) != 0;
 }
 
+bool hasReadableItem(const ItemInstance& stack)
+{
+    if (!stack.valid())
+        return false;
+    const uintptr_t item = stack.item();
+    return item > 0x10000 && item != UINTPTR_MAX &&
+           mem::isReadable(item, sizeof(uintptr_t));
+}
+
+int safeStackCount(const ItemInstance& stack)
+{
+    // The count field at +0x18 is not fully verified for every stack variant
+    // in this build. Reject impossible values instead of letting them dominate
+    // slot selection or appear as an enormous HUD total.
+    const int count = stack.count();
+    return count >= 1 && count <= 64 ? count : 1;
+}
+
 float axisOf(int negVk, int posVk)
 {
     float v = 0.0f;
@@ -39,6 +59,27 @@ float axisOf(int negVk, int posVk)
     if (keyDown(negVk))
         v -= 1.0f;
     return v;
+}
+
+// Solstice aplica el offset de las teclas al yaw al calcular Extend. Esto
+// hace que el objetivo avance en la direccion de movimiento al strafear o
+// retroceder, sin cambiar la celda base (extend == 0).
+float movementKeyYawOffset()
+{
+    const bool w = keyDown('W');
+    const bool a = keyDown('A');
+    const bool s = keyDown('S');
+    const bool d = keyDown('D');
+
+    if (w && a) return -45.0f;
+    if (w && d) return 45.0f;
+    if (s && a) return -135.0f;
+    if (s && d) return 135.0f;
+    if (w) return 0.0f;
+    if (a) return -90.0f;
+    if (s) return -180.0f;
+    if (d) return 90.0f;
+    return 0.0f;
 }
 
 // [SCDBG]: razon exacta de cada abort (1 log/seg max).
@@ -63,7 +104,10 @@ bool isPlaceableCell(const BlockSource& bs, int x, int y, int z)
     if (y < -64 || y > 400)
         return false;
     int id = bs.getBlockId(x, y, z);
-    return id <= 0 || id == 8 || id == 10;
+    // -1 means the block lookup is unknown (for example, an unloaded server
+    // chunk), not air. Treating it as air made Scaffold send a placement the
+    // server could not accept once it reached an edge or chunk boundary.
+    return id == 0 || (id >= 8 && id <= 11);
 }
 
 // Bloque que sirve de SOPORTE (solido, ni agua ni lava).
@@ -72,7 +116,7 @@ bool isSupport(const BlockSource& bs, int x, int y, int z)
     if (y < -64 || y > 400)
         return false;
     int id = bs.getBlockId(x, y, z);
-    return id > 0 && id != 8 && id != 10;
+    return id > 0 && !(id >= 8 && id <= 11);
 }
 
 // Puerto de BlockUtils::getBlockPlaceFace (Solstice): la cara del vecino
@@ -149,7 +193,7 @@ bool getClosestPlacePos(const BlockSource& bs, int cx, int cy,
 // bloques en la direccion de VISTA del player (yaw + 90 -> cos/sin).
 void getRotBasedPos(const LocalPlayer& lp, float extend, float yPos, int& ox, int& oy, int& oz)
 {
-    float yaw = deg2rad(lp.yaw() + 90.0f);
+    float yaw = deg2rad(lp.yaw() + movementKeyYawOffset() + 90.0f);
     Vec3 p = lp.posExact();
     ox = (int)std::floor(p.x + std::cos(yaw) * extend);
     oy = (int)std::floor(yPos);
@@ -206,6 +250,25 @@ void clipLocalPlayerUp(const LocalPlayer& lp, float dy)
 
 } // namespace
 
+// Keep transient access violations local to Scaffold. The global module
+// guard disables a module after an uncaught SEH exception; this boundary lets
+// the next game tick reconcile its slot state and retry instead.
+bool sehScaffoldTick(Scaffold* scaffold)
+{
+    if (!scaffold)
+        return false;
+    __try
+    {
+        scaffold->onTickImpl();
+        return true;
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER)
+    {
+        scaffold->recoverAfterTickFault(GetExceptionCode());
+        return false;
+    }
+}
+
 Scaffold::Scaffold()
     : Module("Scaffold", "Automatically places blocks beneath you while moving",
              Category::Movement, 0)
@@ -217,12 +280,22 @@ void Scaffold::onEnable()
 {
     rotation_helper::clearClientRotation(rot::PrioMovement);
     rot::clear(rot::PrioMovement);
-    lastSwapMs_ = 0;
     mStartY_ = 0.0f;
     mIsTowering_ = false;
     mLastSlot_ = -1;
+    mLastInventorySlot_ = -1;
+    mServerSlot_ = -1;
+    forcedBlockSlot_ = -1;
+    failStreak_ = 0;
     lastRewindMs_ = 0;
     lastStrafe_ = 1;
+    slotRecoveryPending_ = false;
+    recoveryActorSlot_ = -1;
+    recoveryInventorySlot_ = -1;
+    recoveryServerSlot_ = -1;
+    lastRecoveryAttemptMs_ = 0;
+    lastExceptionLogMs_ = 0;
+    nextRetryMs_ = 0;
 
     Game& game = Game::get();
     if (game.localFound())
@@ -234,6 +307,10 @@ void Scaffold::onEnable()
             // pies) y recordar el slot para restaurarlo al desactivar.
             mStartY_ = lp.posExact().y - 2.62f;
             mLastSlot_ = lp.hotbarSlot();
+            Inventory inventory = lp.inventory();
+            if (inventory.valid())
+                mLastInventorySlot_ = inventory.selectedSlot();
+            mServerSlot_ = mLastSlot_;
         }
     }
 }
@@ -248,8 +325,16 @@ void Scaffold::onDisable()
         LocalPlayer lp = game.localPlayer();
         if (lp.valid())
         {
+            Inventory inventory = lp.inventory();
+            if (slotRecoveryPending_)
+                (void)recoverSlots(lp);
             if (mLastSlot_ >= 0 && mLastSlot_ <= 8 && mLastSlot_ != lp.hotbarSlot())
                 lp.setHotbarSlot(mLastSlot_);
+            if (inventory.valid() && mLastInventorySlot_ >= 0 &&
+                mLastInventorySlot_ <= 8 && inventory.selectedSlot() != mLastInventorySlot_)
+                inventory.setSelectedSlot(mLastInventorySlot_);
+            if (mServerSlot_ >= 0 && mLastSlot_ >= 0 && mServerSlot_ != mLastSlot_)
+                (void)packets::sendMobEquipment(lp, mLastSlot_);
             if (mIsTowering_)
             {
                 mIsTowering_ = false;
@@ -259,11 +344,82 @@ void Scaffold::onDisable()
     }
 }
 
+void Scaffold::beginSlotRecovery(int actorSlot, int inventorySlot, int serverSlot)
+{
+    recoveryActorSlot_ = actorSlot;
+    recoveryInventorySlot_ = inventorySlot;
+    recoveryServerSlot_ = serverSlot >= 0 && serverSlot <= 8 ? serverSlot : actorSlot;
+    slotRecoveryPending_ = true;
+}
+
+void Scaffold::finishSlotRecovery()
+{
+    slotRecoveryPending_ = false;
+    recoveryActorSlot_ = -1;
+    recoveryInventorySlot_ = -1;
+    recoveryServerSlot_ = -1;
+}
+
+bool Scaffold::recoverSlots(const LocalPlayer& player)
+{
+    if (!slotRecoveryPending_ || !player.valid())
+        return !slotRecoveryPending_;
+
+    Inventory inventory = player.inventory();
+    if (recoveryActorSlot_ >= 0 && recoveryActorSlot_ <= 8 &&
+        player.hotbarSlot() != recoveryActorSlot_)
+        const_cast<LocalPlayer&>(player).setHotbarSlot(recoveryActorSlot_);
+    if (inventory.valid() && recoveryInventorySlot_ >= 0 && recoveryInventorySlot_ <= 8 &&
+        inventory.selectedSlot() != recoveryInventorySlot_)
+        inventory.setSelectedSlot(recoveryInventorySlot_);
+
+    const unsigned long long now = GetTickCount64();
+    if (now - lastRecoveryAttemptMs_ < 100ull)
+        return false;
+    lastRecoveryAttemptMs_ = now;
+
+    const int serverSlot = recoveryServerSlot_;
+    if (serverSlot >= 0 && serverSlot <= 8)
+    {
+        if (!packets::sendMobEquipment(player, serverSlot))
+        {
+            mServerSlot_ = -1; // unknown; force a fresh sync before placement
+            return false;
+        }
+        mServerSlot_ = serverSlot;
+    }
+    finishSlotRecovery();
+    MC_LOG("[Scaffold] recovered hotbar state after a placement fault");
+    return true;
+}
+
+void Scaffold::recoverAfterTickFault(unsigned long code)
+{
+    const unsigned long long now = GetTickCount64();
+    nextRetryMs_ = now + 250ull;
+    if (now - lastExceptionLogMs_ >= 1000ull)
+    {
+        lastExceptionLogMs_ = now;
+        MC_LOG_ERROR("[Scaffold] caught exception 0x%08lX; keeping module enabled and retrying",
+                     code);
+    }
+    failStreak_ = 0;
+    forcedBlockSlot_ = -1;
+    mIsTowering_ = false;
+    rot::clear(rot::PrioMovement);
+    rotation_helper::clearClientRotation(rot::PrioMovement);
+    // A fault may have interrupted the temporary Switch/Silent slot swap.
+    // Keep its recovery record for the next safe tick.
+}
+
 // Puerto de Scaffold::tickPlace (Solstice).
 bool Scaffold::tickPlace(const LocalPlayer& lp,
                          const BlockSource& bs)
 {
     LocalPlayer& mlp = const_cast<LocalPlayer&>(lp);
+    GameMode activeMode = Game::get().gameMode();
+    const bool survivalMode = activeMode.isSurvival();
+
     Vec3 vel = mlp.velocity();
     Vec3 exact = mlp.posExact();
 
@@ -315,92 +471,84 @@ bool Scaffold::tickPlace(const LocalPlayer& lp,
         setVelocityY(lp, -5.0f);
     }
 
-    // --- Item: slot activo si tiene algo colocable; sino swap al mejor.
-    // Patron del Python v6 (probado): el gate fuerte es el Item* no-null
-    // — el ORQUESTADOR del juego valida el item de verdad. El
-    // isBlockItem por vtable es PREFERENCIA: cuando al menos un slot la
-    // pasa, se usan solo esos; cuando NINGUN la pasa (lista de vtables
-    // incompleta — blockItems=0 con slots llenos), fallback a cualquier
-    // slot con Item* y el orquestador decide.
+    // Select a block stack independently from the currently visible hand.
+    // Verified block items take priority; retain the non-null Item* fallback
+    // for block classes missing from this build's vtable list.
+    Inventory inv = mlp.inventory();
     ItemInstance heldNow = mlp.heldItem();
-    bool heldOk = heldNow.valid() && heldNow.item() != 0;
-    if (!heldOk)
+    const int currentSlot = mlp.hotbarSlot();
+    int blockSlot = -1;
+    int bestBlockCount = 0;
+    int fallbackSlot = -1;
+    int fallbackCount = 0;
+    if (inv.valid())
     {
-        Inventory inv = mlp.inventory();
-        int best = -1;
-        int bestCount = 0;
-        int withItem = 0, blockItems = 0, withItemPtr = 0;
-        uintptr_t firstItemVt = 0;
         for (int slot = 0; slot <= 8; ++slot)
         {
             uintptr_t addr = inv.hotbarItem(slot);
             if (!addr)
                 continue;
-            ++withItem;
-            ItemInstance it(addr);
-            if (!it.valid() || it.item() == 0)
+            ItemInstance item(addr);
+            if (!hasReadableItem(item))
                 continue;
-            ++withItemPtr;
-            if (firstItemVt == 0)
-                firstItemVt = it.itemVtable();
-            if (!it.isBlockItem())
-                continue;
-            ++blockItems;
-            // Block items verificados SIEMPRE ganan (prioridad maxima).
-            int c = (it.count() > 0 ? it.count() : 1) + 1000000;
-            if (best == -1 || c > bestCount)
+            const int count = safeStackCount(item);
+            if (fallbackSlot < 0 || count > fallbackCount)
             {
-                best = slot;
-                bestCount = c;
+                fallbackSlot = slot;
+                fallbackCount = count;
             }
-        }
-        if (best < 0 && withItemPtr > 0)
-        {
-            // Fallback v6: ningun block item verificado pero hay items —
-            // elegir el de mayor count aparente; el orquestador decidira
-            // si es colocable (el failStreak rota si falla).
-            scDbg("0 block items en %d slots con item "
-                  "(vt=0x%llX RVA 0x%llX) — fallback v6 activo",
-                  withItem, (unsigned long long)firstItemVt,
-                  (unsigned long long)(firstItemVt - mem::base()));
-            for (int slot = 0; slot <= 8; ++slot)
+            if (item.isBlockItem())
             {
-                uintptr_t addr = inv.hotbarItem(slot);
-                if (!addr)
-                    continue;
-                ItemInstance it(addr);
-                if (!it.valid() || it.item() == 0)
-                    continue;
-                int c = it.count() > 0 ? it.count() : 1;
-                if (best == -1 || c > bestCount)
+                const int score = count + 1000000;
+                if (blockSlot < 0 || score > bestBlockCount)
                 {
-                    best = slot;
-                    bestCount = c;
+                    blockSlot = slot;
+                    bestBlockCount = score;
                 }
             }
         }
-        if (best < 0)
-        {
-            scDbg("sin items: slotsConItem=%d conItemPtr=%d "
-                  "held(addr=0x%llX valid=%d)",
-                  withItem, withItemPtr,
-                  (unsigned long long)heldNow.address(),
-                  heldNow.valid() ? 1 : 0);
-            return false;
-        }
-        unsigned long long now = GetTickCount64();
-        if (now - lastSwapMs_ < (unsigned long long)switchDelayMs_)
-            return false;
-        // El slot que lee el orquestador para el flag del paquete es
-        // supplies+0xB0 (inv SelectedSlot) â€” escribir ambos.
-        inv.setSelectedSlot(best);
-        mlp.setHotbarSlot(best);
-        lastSwapMs_ = now;
-        scDbg("swap de slot -> %d", best);
-        return false; // el proximo tick coloca ya con el slot cambiado
+    }
+    if (blockSlot < 0)
+        blockSlot = fallbackSlot;
+    if (forcedBlockSlot_ >= 0 && forcedBlockSlot_ <= 8 && inv.hotbarItem(forcedBlockSlot_))
+        blockSlot = forcedBlockSlot_;
+    if (blockSlot < 0)
+    {
+        scDbg("no block stack in hotbar (held=0x%llX valid=%d)",
+              (unsigned long long)heldNow.address(), heldNow.valid() ? 1 : 0);
+        return false;
     }
 
-    ItemInstance held = mlp.heldItem();
+    const int currentInventorySlot = inv.valid() ? inv.selectedSlot() : -1;
+    if (placeMode_ == kPick &&
+        blockSlot != currentInventorySlot)
+    {
+        // Pick is the real client-side slot selection. The native UseItem
+        // packet carries this slot, so do not make placement depend on the
+        // optional MobEquipment spoof packet (which can fail to resolve a
+        // PacketSender in multiplayer sessions).
+        mlp.setHotbarSlot(blockSlot);
+        if (inv.valid())
+            inv.setSelectedSlot(blockSlot);
+        mServerSlot_ = blockSlot;
+        scDbg("Pick selected slot %d (actor=%d inv=%d)",
+              blockSlot, mlp.hotbarSlot(), inv.valid() ? inv.selectedSlot() : -1);
+    }
+
+    if (placeMode_ == kPick && currentSlot != blockSlot)
+        mlp.setHotbarSlot(blockSlot);
+
+    ItemInstance held(inv.hotbarItem(blockSlot));
+    if (!hasReadableItem(held))
+        return false;
+
+    // Silent updates server equipment while preserving the local hand.
+    if (placeMode_ == kSilent && mServerSlot_ != blockSlot)
+    {
+        if (!packets::sendMobEquipment(mlp, blockSlot))
+            return false;
+        mServerSlot_ = blockSlot;
+    }
 
     // --- getPlacePos(0): celda base segun el modo ---
     int bx, by, bz;
@@ -430,9 +578,12 @@ bool Scaffold::tickPlace(const LocalPlayer& lp,
         // el place falle/reintente. Usa el yaw "Reverse" (direccion de
         // movimiento + 180) y pitch casi vertical. 400ms: se renueva cada
         // tick mientras vuelas y no queda pegada mucho despues de aterrizar.
-        const float clientYaw = reverseYaw(mlp, axisOf('S', 'W'), strafe);
-        rotation_helper::requestClientRotation(mlp, clientYaw, 89.9f, rot::PrioMovement);
-        rot::request(89.9f, clientYaw, 400, rot::PrioMovement);
+        if (rotateMode_ != 5)
+        {
+            const float clientYaw = reverseYaw(mlp, axisOf('S', 'W'), strafe);
+            rotation_helper::requestClientRotation(mlp, clientYaw, 89.9f, rot::PrioMovement);
+            rot::request(89.9f, clientYaw, 400, rot::PrioMovement);
+        }
     }
     else if (mode_ == kRewind)
     {
@@ -457,35 +608,58 @@ bool Scaffold::tickPlace(const LocalPlayer& lp,
     if (!mlp.onGround() && vel.y < -0.5f && !mIsTowering_)
         by = (int)std::floor(exact.y) - 2;
 
-    if (getBlockPlaceFace(bs, bx, by, bz) == -1)
+    // Match Solstice's getPlacePos flow: resolve a missing support around the
+    // base first, then apply Extend only when that resolved target is already
+    // occupied. Searching forward before resolving the base made Extend jump
+    // past valid base placements and could select unsupported cells.
+    const int desiredX = bx;
+    const int desiredY = by;
+    const int desiredZ = bz;
+    bool targetResolved = getBlockPlaceFace(bs, bx, by, bz) >= 0;
+
+    if (!targetResolved)
     {
         int rx, ry, rz;
-        if (!getClosestPlacePos(bs, bx, by, bz, (int)range_, rx, ry, rz))
+        if (getClosestPlacePos(bs, desiredX, desiredY, desiredZ,
+                               static_cast<int>(range_), rx, ry, rz))
         {
-            scDbg("sin celda colocable cerca de (%d,%d,%d) rango=%d",
-                  bx, by, bz, (int)range_);
-            return false;
+            bx = rx;
+            by = ry;
+            bz = rz;
+            targetResolved = true;
         }
-        bx = rx;
-        by = ry;
-        bz = rz;
     }
 
-    // --- Extend loop (Solstice): si la base no es aire, avanzar. ---
-    if (!isPlaceableCell(bs, bx, by, bz) && !mIsTowering_)
+    if (targetResolved && !isPlaceableCell(bs, bx, by, bz) &&
+        maxExtend >= 1.0f && !mIsTowering_)
     {
-        for (float e = 1.0f; e <= maxExtend; e += 1.0f)
+        const int maxSteps = std::clamp(static_cast<int>(std::floor(maxExtend)), 0, 10);
+        for (int step = 1; step <= maxSteps; ++step)
         {
             int ex, ey, ez;
-            getRotBasedPos(mlp, e, mStartY_, ex, ey, ez);
-            if (isPlaceableCell(bs, ex, ey, ez))
-            {
-                bx = ex;
-                by = ey;
-                bz = ez;
-                break;
-            }
+            getRotBasedPos(mlp, static_cast<float>(step),
+                           static_cast<float>(desiredY), ex, ey, ez);
+            if (ex == bx && ey == by && ez == bz)
+                continue; // fractional positions can map to the same block cell
+            // Extend is directional: do not let the radial fallback pull the
+            // candidate sideways or behind the player.
+            if (!isPlaceableCell(bs, ex, ey, ez) ||
+                getBlockPlaceFace(bs, ex, ey, ez) < 0)
+                continue;
+
+            bx = ex;
+            by = ey;
+            bz = ez;
+            targetResolved = true;
+            break; // nearest valid forward cell; don't overshoot the bridge
         }
+    }
+
+    if (!targetResolved)
+    {
+        scDbg("sin celda con soporte cerca de (%d,%d,%d) rango=%d",
+              desiredX, desiredY, desiredZ, static_cast<int>(range_));
+        return false;
     }
 
     if (!isPlaceableCell(bs, bx, by, bz))
@@ -549,13 +723,106 @@ bool Scaffold::tickPlace(const LocalPlayer& lp,
         return false;
     }
 
+    // Advanced uses the exact click point on the selected support face. This
+    // request is made before the placement attempt so an airborne bridge can
+    // align its server rotation with the face being targeted, even if this
+    // tick's placement is rejected and retried on the next one.
+    if (rotateMode_ == 5)
+    {
+        const Vec3 eye = mlp.eyePos();
+        const float aimX = cx - eye.x;
+        const float aimY = cy - eye.y;
+        const float aimZ = cz - eye.z;
+        const float horizontal = std::sqrt(aimX * aimX + aimZ * aimZ);
+        float aimYaw = rad2deg(std::atan2(aimZ, aimX)) - 90.0f;
+        float aimPitch = rad2deg(-std::atan2(aimY, horizontal));
+        while (aimYaw > 180.0f)
+            aimYaw -= 360.0f;
+        while (aimYaw < -180.0f)
+            aimYaw += 360.0f;
+        rotation_helper::requestClientRotation(mlp, aimYaw, aimPitch, rot::PrioMovement);
+        rot::request(aimPitch, aimYaw, 500, rot::PrioMovement);
+    }
+
     // --- placeBlock (Solstice): el orquestador real del juego ---
     BlockPos support{sx, sy, sz};
     Vec3 clickAbs{cx, cy, cz};
-    bool ok = placeBlockFull(held, support, (uint8_t)face, clickAbs, mlp.address());
+    const int previousInventorySlot = inv.valid() ? inv.selectedSlot() : -1;
+    const int previousActorSlot = mlp.hotbarSlot();
+    const int switchReturnSlot = previousActorSlot;
+    const int restoreServerSlot = placeMode_ == kSwitch
+                                      ? switchReturnSlot
+                                      : mServerSlot_;
+    const bool temporarySlotChange = placeMode_ != kPick &&
+                                     ((previousActorSlot != blockSlot) ||
+                                      (previousInventorySlot != blockSlot) ||
+                                      (placeMode_ == kSwitch && mServerSlot_ != blockSlot));
+    if (temporarySlotChange)
+        beginSlotRecovery(previousActorSlot, previousInventorySlot, restoreServerSlot);
+
+    // Switch syncs equipment only around this placement. The server then sees
+    // the normal hand again while the client selection never changes.
+    if (placeMode_ == kSwitch && mServerSlot_ != blockSlot)
+    {
+        if (!packets::sendMobEquipment(mlp, blockSlot))
+            return false;
+        mServerSlot_ = blockSlot;
+    }
+
+    // The native routine reads both selection fields; keep them aligned with
+    // the source stack for the synchronous packet/local-use operation.
+    if (placeMode_ != kPick && previousActorSlot != blockSlot)
+        mlp.setHotbarSlot(blockSlot);
+    if (inv.valid() && previousInventorySlot != blockSlot)
+        inv.setSelectedSlot(blockSlot);
+    // Use one placement route in every game mode. The native GameMode
+    // virtual path is unreliable in multiplayer Creative as well as
+    // Survival, while the build's UseItemPacket constructor + gameplay sender
+    // is the same server-facing route used by Bedrock's interaction flow.
+    // Apply the item's local use once after sending so the client predicts the
+    // block and local placement hooks observe it without a duplicate packet.
+    const Vec3 packetPlayerPos = mlp.posExact();
+    const int packetSlot = inv.valid() ? inv.selectedSlot() : blockSlot;
+    const bool sent = sendPlacePacket(held, support, (uint8_t)face, clickAbs,
+                                      packetPlayerPos, packetSlot);
+    bool predicted = false;
+    if (sent)
+    {
+        predicted = applyLocalBlockPlacement(
+            held, mlp.address(), support, (uint8_t)face, clickAbs);
+        scDbg("%s placement sent target=(%d,%d,%d) local=%d slot=%d",
+              survivalMode ? "Survival" : "Creative",
+              bx, by, bz, predicted ? 1 : 0, packetSlot);
+    }
+    const bool ok = sent;
+    if (inv.valid() && previousInventorySlot >= 0 && previousInventorySlot <= 8 &&
+        previousInventorySlot != blockSlot)
+        inv.setSelectedSlot(previousInventorySlot);
+    if (placeMode_ != kPick && previousActorSlot >= 0 && previousActorSlot <= 8 &&
+        previousActorSlot != blockSlot)
+        mlp.setHotbarSlot(previousActorSlot);
+
+    if (placeMode_ == kSwitch && switchReturnSlot >= 0 && switchReturnSlot <= 8 &&
+        switchReturnSlot != blockSlot)
+    {
+        if (packets::sendMobEquipment(mlp, switchReturnSlot))
+            mServerSlot_ = switchReturnSlot;
+        else
+            mServerSlot_ = -1;
+    }
+    if (temporarySlotChange)
+    {
+        if (placeMode_ == kSwitch && mServerSlot_ != switchReturnSlot)
+            slotRecoveryPending_ = true;
+        else
+            finishSlotRecovery();
+    }
 
     if (!ok)
     {
+        scDbg("useItemOn rejected target=(%d,%d,%d) support=(%d,%d,%d) face=%d slot=%d inv=%d mode=%d",
+              bx, by, bz, sx, sy, sz, face, mlp.hotbarSlot(),
+              inv.valid() ? inv.selectedSlot() : -1, placeMode_);
         // El orquestador valido y rechazo (colision con tu propio
         // hitbox, cooldown, item en estado raro). Como el v6/Solstice:
         // NADA de fallback de paquete manual — mandar un place que el
@@ -565,8 +832,7 @@ bool Scaffold::tickPlace(const LocalPlayer& lp,
         // agotado.
         if (++failStreak_ >= 2)
         {
-            Inventory inv = mlp.inventory();
-            int cur = mlp.hotbarSlot();
+            int cur = blockSlot;
             int best = -1;
             int bestCount = 0;
             for (int slot = 0; slot <= 8; ++slot)
@@ -579,7 +845,7 @@ bool Scaffold::tickPlace(const LocalPlayer& lp,
                 ItemInstance it(addr);
                 if (!it.valid() || it.item() == 0)
                     continue;
-                int c = it.count() > 0 ? it.count() : 1;
+                int c = safeStackCount(it);
                 if (it.isBlockItem())
                     c += 1000000;
                 if (best == -1 || c > bestCount)
@@ -590,15 +856,18 @@ bool Scaffold::tickPlace(const LocalPlayer& lp,
             }
             if (best >= 0)
             {
-                inv.setSelectedSlot(best);
-                mlp.setHotbarSlot(best);
-                scDbg("swap forzado tras fallos -> slot %d (antes %d)", best, cur);
+                forcedBlockSlot_ = best;
+                scDbg("next block source slot %d (after failures on %d)", best, cur);
             }
             failStreak_ = 0;
         }
         return false;
     }
     failStreak_ = 0;
+    forcedBlockSlot_ = -1;
+    scDbg("useItemOn accepted target=(%d,%d,%d) support=(%d,%d,%d) face=%d slot=%d inv=%d mode=%d",
+          bx, by, bz, sx, sy, sz, face, mlp.hotbarSlot(),
+          inv.valid() ? inv.selectedSlot() : -1, placeMode_);
 
     // Actor::swing performs the local hand animation and emits the normal
     // AnimatePacket (action 1), so this checkbox covers both client and server.
@@ -607,7 +876,6 @@ bool Scaffold::tickPlace(const LocalPlayer& lp,
 
     static ULONGLONG s_lastOk = 0;
     ULONGLONG now = GetTickCount64();
-    lastPlaceMs_ = now;
     if (mode_ == kRewind)
         lastRewindMs_ = now;
 
@@ -622,11 +890,13 @@ bool Scaffold::tickPlace(const LocalPlayer& lp,
     {
         int ox = 0, oy = 0, oz = 0;
         placeFaceOffset(face, ox, oy, oz);
-        Vec3 target{
-            (float)bx + (float)ox * 0.5f,
-            (float)by + (float)oy * 0.5f,
-            (float)bz + (float)oz * 0.5f,
-        };
+        Vec3 target = rotateMode_ == 5
+                          ? clickAbs
+                          : Vec3{
+                                (float)bx + (float)ox * 0.5f,
+                                (float)by + (float)oy * 0.5f,
+                                (float)bz + (float)oz * 0.5f,
+                            };
 
         // MathUtils::getRots (Solstice) — desde la posicion de OJOS
         // del actor (getPos() en Solstice), no desde los pies: es la
@@ -664,7 +934,7 @@ bool Scaffold::tickPlace(const LocalPlayer& lp,
             return reverseYaw(mlp, axisOf('S', 'W'), strafe);
         };
 
-        if (mode_ == kTelly && tellyAir)
+        if (mode_ == kTelly && tellyAir && rotateMode_ != 5)
         {
             // Telly: Reverse anclado a la cara del bloque colocado.
             outYaw = adaptiveReverseYaw(dx, dz);
@@ -695,6 +965,10 @@ bool Scaffold::tickPlace(const LocalPlayer& lp,
                 outYaw = adaptiveReverseYaw(dx, dz);
                 outPitch = 89.9f;
                 break;
+            case 5: // Advanced: getRots exactos al punto de clic de la cara valida
+                outYaw = calcYaw;
+                outPitch = calcPitch;
+                break;
             }
         }
 
@@ -714,6 +988,32 @@ bool Scaffold::tickPlace(const LocalPlayer& lp,
 
 void Scaffold::onTick()
 {
+    runTickGuarded();
+}
+
+void Scaffold::runTickGuarded()
+{
+    if (GetTickCount64() < nextRetryMs_)
+        return;
+
+    try
+    {
+        (void)sehScaffoldTick(this);
+    }
+    catch (const std::exception& e)
+    {
+        recoverAfterTickFault(0xE06D7363u);
+        MC_LOG_ERROR("[Scaffold] C++ exception during tick: %s", e.what());
+    }
+    catch (...)
+    {
+        recoverAfterTickFault(0xE06D7363u);
+        MC_LOG_ERROR("[Scaffold] unknown C++ exception during tick");
+    }
+}
+
+void Scaffold::onTickImpl()
+{
     // La request de rotacion expira sola (rot::current chequea el
     // expiry); no hace falta limpieza manual — el Present deja de
     // escribir el actor y el paquete sale con la rotacion real.
@@ -724,6 +1024,11 @@ void Scaffold::onTick()
 
     LocalPlayer lp = game.localPlayer();
     if (!lp.valid())
+        return;
+
+    // Recover an interrupted Switch/Silent transaction before another place
+    // attempt can use a stale selected stack or server equipment slot.
+    if (slotRecoveryPending_ && !recoverSlots(lp))
         return;
 
     BlockSource bs = game.blockSource();
@@ -746,6 +1051,7 @@ nlohmann::json Scaffold::saveSettings() const
 {
     return nlohmann::json{
         {"mode", mode_},
+        {"placeMode", placeMode_},
         {"places", places_},
         {"extend", extend_},
         {"range", range_},
@@ -755,7 +1061,6 @@ nlohmann::json Scaffold::saveSettings() const
         {"towerSpeed", towerSpeed_},
         {"allowMovement", allowMovement_},
         {"swing", swing_},
-        {"switchDelayMs", switchDelayMs_},
         {"rotateMode", rotateMode_},
         {"tellyLead", tellyLead_},
         {"rewindDelayMs", rewindDelayMs_},
@@ -767,6 +1072,9 @@ void Scaffold::loadSettings(const nlohmann::json& j)
     mode_ = j.value("mode", mode_);
     if (mode_ < kNormal || mode_ > kRewind)
         mode_ = kNormal;
+    placeMode_ = j.value("placeMode", placeMode_);
+    if (placeMode_ < kPick || placeMode_ > kSilent)
+        placeMode_ = kPick;
     places_ = j.value("places", places_);
     if (places_ < 1.0f)
         places_ = 1.0f;
@@ -796,12 +1104,11 @@ void Scaffold::loadSettings(const nlohmann::json& j)
         towerSpeed_ = 20.0f;
     allowMovement_ = j.value("allowMovement", allowMovement_);
     swing_ = j.value("swing", swing_);
-    switchDelayMs_ = j.value("switchDelayMs", switchDelayMs_);
     rotateMode_ = j.value("rotateMode", rotateMode_);
     if (rotateMode_ < 0)
         rotateMode_ = 0;
-    if (rotateMode_ > 4)
-        rotateMode_ = 4;
+    if (rotateMode_ > 5)
+        rotateMode_ = 5;
 
     tellyLead_ = clampf(j.value("tellyLead", tellyLead_), 0.0f, 0.6f);
     rewindDelayMs_ = j.value("rewindDelayMs", rewindDelayMs_);
@@ -813,8 +1120,16 @@ void Scaffold::loadSettings(const nlohmann::json& j)
 
 void Scaffold::drawSettings()
 {
+    if (ImGui::Button("Trace outgoing packets (8s)##sc_pkttrace"))
+        chathook::armPacketTrace(8);
+    ImGui::TextDisabled("Use while KillAura is attacking to inspect VInteract action and target ID");
+    ImGui::Separator();
+
     const char* modes[] = {"Normal", "Telly", "RewindSide"};
     widgets::CCombo("Mode##sc", &mode_, modes, 3);
+    const char* placeModes[] = {"Pick", "Switch", "Silent"};
+    widgets::CCombo("Place mode##sc", &placeMode_, placeModes, 3);
+    ImGui::TextDisabled("Pick selects the block slot; Switch keeps your hand; Silent spoofs server equipment");
 
     if (mode_ == kTelly)
     {
@@ -845,13 +1160,13 @@ void Scaffold::drawSettings()
     widgets::CCombo("Tower mode##sc", &towerMode_, towers, 3);
     widgets::CSlider("Tower speed##sc", &towerSpeed_, 0.0f, 20.0f, "%.1f");
     widgets::Checkbox("Allow movement (tower)##sc", &allowMovement_);
-    widgets::CSlider("Switch delay (ms)##sc", &switchDelayMs_, 0, 500, "%d");
     ImGui::Separator();
-    const char* rots[] = {"None", "Normal", "Down", "Backwards", "Reverse"};
-    widgets::CCombo("Rotate mode##sc", &rotateMode_, rots, 5);
+    const char* rots[] = {"None", "Normal", "Down", "Backwards", "Reverse", "Advanced"};
+    widgets::CCombo("Rotate mode##sc", &rotateMode_, rots, 6);
     ImGui::TextDisabled("Silent rotations apply to movement packets and the local model");
     ImGui::TextDisabled("Smooth body yaw and head yaw/pitch; camera stays unchanged");
     ImGui::TextDisabled("Reverse = back to the placed face, pitch 89.9 (Telly look)");
+    ImGui::TextDisabled("Advanced aims at the exact valid block face, including mid-air");
 }
 
 MC_REGISTER_MODULE(Scaffold);

@@ -6,9 +6,9 @@
 #include "Framework/Memory.hpp"
 #include "GUI/Menu.hpp"
 #include "GUI/Theme.hpp"
-#include "SDK/Camera.hpp"
-#include "SDK/ChatHook.hpp"
-#include "SDK/Game.hpp"
+#include "SDK/Client/Camera.hpp"
+#include "SDK/UI/Hooks/ChatHook.hpp"
+#include "SDK/Core/Game.hpp"
 
 #include <imgui.h>
 #include <windows.h>
@@ -107,8 +107,7 @@ void Blink::onRender()
     bool allVisible = true;
     for (int i = 0; i < 8; ++i)
     {
-        if (!worldToScreen(corners[i], cam.pos, cam.yaw, cam.pitch,
-                           readGameFov(), sw, sh, proj[i]))
+        if (!cam.project(corners[i], proj[i]))
         {
             allVisible = false;
             break;

@@ -2,7 +2,7 @@
 
 #include "Modules/Module.hpp"
 
-#include "SDK/Classes/BlockSource.hpp"
+#include "SDK/World/BlockSource/BlockSource.hpp"
 
 namespace mc {
 
@@ -33,6 +33,13 @@ public:
         kRewind = 2,
     };
 
+    enum PlaceMode
+    {
+        kPick = 0,
+        kSwitch = 1,
+        kSilent = 2,
+    };
+
     Scaffold();
 
     void onEnable() override;
@@ -57,11 +64,20 @@ public:
     void loadSettings(const nlohmann::json& j) override;
 
 private:
+    friend bool sehScaffoldTick(Scaffold* scaffold);
+
+    void onTickImpl();
+    void runTickGuarded();
+    void recoverAfterTickFault(unsigned long code);
+    void beginSlotRecovery(int actorSlot, int inventorySlot, int serverSlot);
+    void finishSlotRecovery();
+    bool recoverSlots(const LocalPlayer& player);
     bool tickPlace(const LocalPlayer& lp, const BlockSource& bs);
 
     // Ajustes (Solstice: mPlaces/mExtend/mRange/mLockY/mAvoidUnderplace/
     // mTowerMode/mTowerSpeed/mAllowMovement)
     int mode_ = kNormal;
+    int placeMode_ = kPick;
     float places_ = 1.0f;
     float extend_ = 3.0f;
     float range_ = 5.0f;
@@ -71,8 +87,7 @@ private:
     float towerSpeed_ = 8.5f;
     bool allowMovement_ = false;
     bool swing_ = false;
-    int switchDelayMs_ = 0;
-    int rotateMode_ = 0; // 0=None, 1=Normal, 2=Down, 3=Backwards, 4=Reverse
+    int rotateMode_ = 0; // 0=None, 1=Normal, 2=Down, 3=Backwards, 4=Reverse, 5=Advanced
     float tellyLead_ = 0.25f;  // predicción XZ de aterrizaje (s)
     int rewindDelayMs_ = 80;   // cadencia de place en RewindSide
 
@@ -80,11 +95,19 @@ private:
     float mStartY_ = 0.0f;
     bool mIsTowering_ = false;
     int mLastSlot_ = -1;
-    unsigned long long lastSwapMs_ = 0;
-    unsigned long long lastPlaceMs_ = 0;
+    int mLastInventorySlot_ = -1;
+    int mServerSlot_ = -1;
+    int forcedBlockSlot_ = -1;
     int failStreak_ = 0; // places fallidos seguidos -> swap forzado
     int lastStrafe_ = 1; // +1 derecha (D), -1 izquierda (A) — RewindSide
     unsigned long long lastRewindMs_ = 0;
+    bool slotRecoveryPending_ = false;
+    int recoveryActorSlot_ = -1;
+    int recoveryInventorySlot_ = -1;
+    int recoveryServerSlot_ = -1;
+    unsigned long long lastRecoveryAttemptMs_ = 0;
+    unsigned long long lastExceptionLogMs_ = 0;
+    unsigned long long nextRetryMs_ = 0;
 };
 
 }

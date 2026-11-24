@@ -2,7 +2,7 @@
 #include "GUI/Widgets.hpp"
 
 #include "Framework/Math.hpp"
-#include "SDK/Game.hpp"
+#include "SDK/Core/Game.hpp"
 
 #include <imgui.h>
 

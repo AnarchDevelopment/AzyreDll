@@ -4,8 +4,8 @@
 #include "GUI/Widgets.hpp"
 #include "Modules/ModuleManager.hpp"
 #include "Modules/impl/Combat/KillAura/KillAura.hpp"
-#include "SDK/Camera.hpp"
-#include "SDK/Game.hpp"
+#include "SDK/Client/Camera.hpp"
+#include "SDK/Core/Game.hpp"
 
 #include <imgui.h>
 #include <windows.h>
@@ -190,8 +190,7 @@ void TargetStrafe::onRender()
         const Vec3 world{center.x + std::cos(angle) * range_, center.y,
                          center.z + std::sin(angle) * range_};
         Vec3 screen{};
-        if (!worldToScreen(world, camera.pos, camera.yaw, camera.pitch, fov,
-                           display.x, display.y, screen))
+        if (!camera.project(world, screen))
             return;
         points[static_cast<size_t>(i)] = ImVec2(screen.x, screen.y);
     }
