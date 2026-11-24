@@ -7,7 +7,9 @@
 #include <windows.h>
 #include <cstdint>
 #include <cstdio>
+#include <filesystem>
 #include <string>
+#include <vector>
 
 namespace mc {
 
@@ -18,6 +20,7 @@ public:
 
     void onEnable() override;
     void onTick() override;
+    void onFrame(float dt) override;
     void drawSettings() override;
 
     std::string suffix() const override
@@ -38,6 +41,9 @@ public:
             {"order", order_},
             {"debug", debug_},
             {"lines", lines},
+            {"noDelay", noDelay_},
+            {"useWordlist", useWordlist_},
+            {"wordlist", selectedWordlist_},
         };
     }
 
@@ -52,6 +58,9 @@ public:
         order_ = j.value("order", order_);
         if (order_ < 0 || order_ > 1) order_ = 1;
         debug_ = j.value("debug", debug_);
+        noDelay_ = j.value("noDelay", noDelay_);
+        useWordlist_ = j.value("useWordlist", useWordlist_);
+        selectedWordlist_ = j.value("wordlist", selectedWordlist_);
         if (j.contains("lines") && j["lines"].is_array())
         {
             for (int i = 0; i < kLines && i < (int)j["lines"].size(); ++i)
@@ -64,13 +73,19 @@ public:
                 std::snprintf(lines_[i], sizeof(lines_[i]), "%s", s.c_str());
             }
         }
+        refreshWordlists();
+        loadSelectedWordlist();
     }
 
 private:
     static constexpr int kLines = 8;
 
     std::string pickMessage();
+    void sendNext();
     void displayDebug(const std::string& msg);
+    bool expandPlayerPlaceholder(std::string& message);
+    void refreshWordlists();
+    bool loadSelectedWordlist();
 
     char lines_[kLines][128] = {};
     float minDelay_ = 3.0f;
@@ -78,11 +93,19 @@ private:
     int obfMode_ = 2; // 0 None, 1 Invisible, 2 Suffix, 3 Full
     int order_ = 1;   // 0 Sequential, 1 Random
     bool debug_ = false;
+    bool noDelay_ = false;
+    bool useWordlist_ = false;
+    std::string selectedWordlist_;
+    std::string loadedWordlist_;
+    std::vector<std::string> wordlistFiles_;
+    std::vector<std::string> wordlistMessages_;
 
     int seq_ = 0;
     ULONGLONG nextSendMs_ = 0;
     uint32_t rng_ = 0x51A9D0F1u;
     bool warnedNoTpl_ = false;
+    bool warnedWordlist_ = false;
+    bool warnedNoPlayer_ = false;
 };
 
 }

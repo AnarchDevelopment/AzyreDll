@@ -5,7 +5,7 @@
 #include "Framework/Sound.hpp"
 #include "GUI/Widgets.hpp"
 #include "Modules/ModuleManager.hpp"
-#include "SDK/ChatHook.hpp"
+#include "SDK/UI/Hooks/ChatHook.hpp"
 
 #include <windows.h>
 

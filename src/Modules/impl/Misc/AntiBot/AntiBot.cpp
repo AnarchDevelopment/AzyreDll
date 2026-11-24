@@ -2,7 +2,7 @@
 
 #include "Features/BotFilter.hpp"
 #include "GUI/Widgets.hpp"
-#include "SDK/Game.hpp"
+#include "SDK/Core/Game.hpp"
 
 #include <imgui.h>
 
@@ -34,6 +34,9 @@ void AntiBot::drawSettings()
         Game::get().refreshBotFilter();
 
     ImGui::TextDisabled("Applies to ESP, Tracers, NameTags, AimAssist, TargetHUD");
+    const size_t raw = Game::get().rawRemotesCount();
+    const size_t shown = Game::get().shownRemotesCount();
+    ImGui::Text("Filtered players: %zu", raw >= shown ? raw - shown : 0);
 }
 
 nlohmann::json AntiBot::saveSettings() const
@@ -48,6 +51,8 @@ void AntiBot::loadSettings(const nlohmann::json& j)
 {
     botfilter::g_filterKeywords = j.value("keywords", botfilter::g_filterKeywords);
     botfilter::g_filterInvalidNames = j.value("invalidNames", botfilter::g_filterInvalidNames);
+    if (enabled())
+        Game::get().refreshBotFilter();
 }
 
 MC_REGISTER_MODULE(AntiBot);

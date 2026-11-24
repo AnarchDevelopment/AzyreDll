@@ -2,7 +2,7 @@
 
 #include "Commands/Command.hpp"
 #include "Networking/IRC/IRC.hpp"
-#include "SDK/Game.hpp"
+#include "SDK/Core/Game.hpp"
 
 namespace mc {
 

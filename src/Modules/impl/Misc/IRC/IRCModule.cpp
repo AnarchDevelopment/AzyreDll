@@ -1,8 +1,8 @@
 #include "IRCModule.hpp"
 
 #include "Networking/IRC/IRC.hpp"
-#include "SDK/ChatHook.hpp"
-#include "SDK/Game.hpp"
+#include "SDK/UI/Hooks/ChatHook.hpp"
+#include "SDK/Core/Game.hpp"
 
 #include <windows.h>
 

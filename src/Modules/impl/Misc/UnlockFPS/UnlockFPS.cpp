@@ -2,7 +2,7 @@
 #include "GUI/Widgets.hpp"
 
 #include "Render/DX11.hpp"
-#include "SDK/ChatHook.hpp"
+#include "SDK/UI/Hooks/ChatHook.hpp"
 
 #include <cstdio>
 

@@ -9,13 +9,14 @@
 #include "impl/HelpCommand.hpp"
 #include "impl/IRCCommand.hpp"
 #include "impl/PrefixCommand.hpp"
+#include "impl/SkinCommand.hpp"
 #include "impl/ScriptCommand.hpp"
 #include "impl/ToggleCommand.hpp"
 
 #include "Config/Config.hpp"
 #include "Framework/Log.hpp"
 #include "Modules/ModuleManager.hpp"
-#include "SDK/ChatHook.hpp"
+#include "SDK/UI/Hooks/ChatHook.hpp"
 
 #include <atomic>
 #include <cctype>

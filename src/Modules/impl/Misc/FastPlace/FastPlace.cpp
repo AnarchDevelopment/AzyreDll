@@ -4,11 +4,11 @@
 #include "Framework/Math.hpp"
 #include "GUI/Menu.hpp"
 #include "GUI/Widgets.hpp"
-#include "SDK/Classes/GameMode.hpp"
-#include "SDK/Classes/ItemInstance.hpp"
-#include "SDK/Classes/LocalPlayer.hpp"
-#include "SDK/Classes/MoveInputHandler.hpp"
-#include "SDK/Game.hpp"
+#include "SDK/Gameplay/GameMode.hpp"
+#include "SDK/Inventory/ItemInstance/ItemInstance.hpp"
+#include "SDK/Entity/LocalPlayer.hpp"
+#include "SDK/Client/MoveInputHandler.hpp"
+#include "SDK/Core/Game.hpp"
 
 #include <imgui.h>
 #include <windows.h>

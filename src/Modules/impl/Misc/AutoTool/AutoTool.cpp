@@ -3,7 +3,11 @@
 
 #include "Features/Raycast.hpp"
 #include "Framework/Math.hpp"
-#include "SDK/Game.hpp"
+#include "SDK/Core/Game.hpp"
+#include "SDK/Entity/LocalPlayer.hpp"
+#include "SDK/Inventory/Inventory.hpp"
+#include "SDK/Inventory/ItemInstance/ItemInstance.hpp"
+#include "SDK/Network/Packets/MobEquipmentPacket.hpp"
 
 #include <imgui.h>
 #include <windows.h>
@@ -13,7 +17,9 @@ namespace mc {
 
 namespace {
 
-// Mapeo bloque -> herramienta requerida.
+// Mapeo bloque -> herramienta requerida. Ids legacy del build actual; los que
+// no aparecen aqui no fuerzan cambio de herramienta (mejor no tocar nada que
+// adivinar mal).
 ToolKind requiredTool(int blockId)
 {
     switch (blockId)
@@ -31,14 +37,30 @@ ToolKind requiredTool(int blockId)
     case off::blocks::EnderChest:
     case off::blocks::AncientDebris:
     case off::blocks::CopperOre:
+    case 41:  // gold block
+    case 42:  // iron block
+    case 49:  // obsidian
+    case 57:  // diamond block
+    case 87:  // netherrack
+    case 89:  // glowstone
+    case 152: // redstone block
+    case 155: // quartz block
+    case 172: // hardened clay
+    case 173: // coal block
+    case 174: // packed ice
         return ToolKind::Pickaxe;
     case off::blocks::Log:
     case off::blocks::Planks:
+    case 54: // chest
         return ToolKind::Axe;
     case off::blocks::Grass:
     case off::blocks::Dirt:
     case off::blocks::Sand:
     case off::blocks::Gravel:
+    case 60: // farmland
+    case 82: // clay
+    case 110: // mycelium
+    case 243: // podzol
         return ToolKind::Shovel;
     case off::blocks::Leaves:
         return ToolKind::Hoe;
@@ -92,6 +114,56 @@ AutoTool::AutoTool()
 void AutoTool::onEnable()
 {
     prevSlot_ = -1;
+    serverSlot_ = -1;
+}
+
+void AutoTool::onDisable()
+{
+    // Restaurar la mano original: dejar la herramienta equipada tras apagar el
+    // modulo es un cambio de inventario visible para el jugador y para el server.
+    Game& game = Game::get();
+    if (!game.localFound())
+        return;
+    LocalPlayer lp = game.localPlayer();
+    if (!lp.valid())
+        return;
+    if (switchBack_ && prevSlot_ >= 0 && prevSlot_ <= 8 && prevSlot_ != lp.hotbarSlot())
+        (void)switchTo(lp, prevSlot_);
+    prevSlot_ = -1;
+    serverSlot_ = -1;
+}
+
+bool AutoTool::switchTo(LocalPlayer& lp, int slot)
+{
+    if (slot < 0 || slot > 8)
+        return false;
+
+    lp.setHotbarSlot(slot);
+    Inventory inv = lp.inventory();
+    if (inv.valid() && inv.selectedSlot() != slot)
+        inv.setSelectedSlot(slot);
+
+    // El hand del cliente ya cambio; sin el paquete el servidor sigue viendo el
+    // slot anterior y descarta las acciones (place/break) de la herramienta.
+    if (syncServer_ && packets::sendMobEquipment(lp, slot))
+        serverSlot_ = slot;
+    else
+        serverSlot_ = -1;
+    return true;
+}
+
+int AutoTool::toolTierAt(const LocalPlayer& lp, int hotbarSlot, ToolKind& kind) const
+{
+    kind = ToolKind::None;
+    Inventory inv = lp.inventory();
+    if (!inv.valid())
+        return -1;
+    ItemInstance it(inv.hotbarItem(hotbarSlot));
+    if (!it.valid() || it.count() <= 0)
+        return -1;
+    int tier = -1;
+    toolKindFromId(it.itemId(), kind, tier);
+    return tier;
 }
 
 void AutoTool::onTick()
@@ -109,9 +181,10 @@ void AutoTool::onTick()
     {
         if (!mining)
         {
-            if (switchBack_ && prevSlot_ >= 0 && prevSlot_ <= 8)
+            if (switchBack_ && prevSlot_ >= 0 && prevSlot_ <= 8 &&
+                prevSlot_ != lp.hotbarSlot())
             {
-                lp.setHotbarSlot(prevSlot_);
+                (void)switchTo(lp, prevSlot_);
                 prevSlot_ = -1;
             }
             return;
@@ -138,12 +211,40 @@ void AutoTool::onTick()
     int want = bestToolSlot(lp, hit.blockId);
     if (want < 0 || want > 8)
         return;
-    if (lp.hotbarSlot() == want)
+
+    const int current = lp.hotbarSlot();
+    if (current == want)
+    {
+        // La mano ya quedo sincronizada por nosotros: recordar que el server la
+        // conoce para no reenviar el paquete en cada tick.
+        if (serverSlot_ < 0 && syncServer_ && current >= 0)
+            serverSlot_ = current;
         return;
+    }
+
+    // Mantener la herramienta actual si ya es del tipo correcto y no es peor
+    // que la mejor encontrada: cambiar por un tier superior apenas acelera y
+    // provoca parpadeo en el HUD.
+    if (keepCurrent_)
+    {
+        ToolKind currentKind = ToolKind::None;
+        const int currentTier = toolTierAt(lp, current, currentKind);
+        const ToolKind need = requiredTool(hit.blockId);
+        const bool usable = currentKind != ToolKind::None &&
+                            (toolMode_ == 1 || need == ToolKind::None || currentKind == need);
+        if (usable)
+        {
+            ToolKind wantKind = ToolKind::None;
+            const int wantTier = toolTierAt(lp, want, wantKind);
+            (void)wantKind;
+            if (wantTier < 0 || currentTier >= wantTier)
+                return;
+        }
+    }
 
     if (switchBack_ && prevSlot_ < 0)
-        prevSlot_ = lp.hotbarSlot();
-    lp.setHotbarSlot(want);
+        prevSlot_ = current;
+    (void)switchTo(lp, want);
 }
 
 int AutoTool::bestToolSlot(const LocalPlayer& lp, int blockId)
@@ -198,6 +299,8 @@ void AutoTool::drawSettings()
     widgets::CSlider("Reach##at", &reach_, 3.0f, 6.0f, "%.1f");
     widgets::Checkbox("Only while mining##at", &onlyMining_);
     widgets::Checkbox("Switch back afterwards##at", &switchBack_);
+    widgets::Checkbox("Keep current tool##at", &keepCurrent_);
+    widgets::Checkbox("Sync server slot##at", &syncServer_);
 }
 
 MC_REGISTER_MODULE(AutoTool);
