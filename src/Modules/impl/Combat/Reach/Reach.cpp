@@ -1,11 +1,9 @@
 #include "Reach.hpp"
+#include "Features/ReachOverride.hpp"
 #include "GUI/Widgets.hpp"
-
-#include "Framework/Memory.hpp"
-#include "SDK/Offsets.hpp"
+#include "SDK/Engine/Memory/Offsets.hpp"
 
 #include <imgui.h>
-#include <cmath>
 
 namespace mc {
 
@@ -15,37 +13,19 @@ Reach::Reach()
     markHasSettings();
 }
 
-void Reach::writeReach()
-{
-    uintptr_t addr = mem::resolve(off::misc::Reach);
-    if (mem::isReadable(addr, sizeof(float)))
-        mem::writeImage<float>(addr, reach_);
-}
-
 void Reach::onEnable()
 {
-    uintptr_t addr = mem::resolve(off::misc::Reach);
-    if (mem::isReadable(addr, sizeof(float)))
-    {
-        saved_ = mem::read<float>(addr);
-        savedValid_ = std::isfinite(saved_);
-    }
-    writeReach();
+    reach_override::update(reach_override::Owner::ReachModule, reach_);
 }
 
 void Reach::onTick()
 {
-    writeReach();
+    reach_override::update(reach_override::Owner::ReachModule, reach_);
 }
 
 void Reach::onDisable()
 {
-    if (savedValid_)
-    {
-        uintptr_t addr = mem::resolve(off::misc::Reach);
-        if (mem::isReadable(addr, sizeof(float)))
-            mem::writeImage<float>(addr, saved_);
-    }
+    reach_override::clear(reach_override::Owner::ReachModule);
 }
 
 void Reach::drawSettings()

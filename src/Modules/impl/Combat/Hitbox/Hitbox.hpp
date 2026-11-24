@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Modules/Module.hpp"
-#include "SDK/CodePatch.hpp"
+#include "SDK/Engine/Memory/CodePatch.hpp"
 
 namespace mc {
 

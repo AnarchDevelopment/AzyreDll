@@ -3,7 +3,7 @@
 
 #include "Framework/Math.hpp"
 #include "Features/Friends.hpp"
-#include "SDK/Game.hpp"
+#include "SDK/Core/Game.hpp"
 
 #include <imgui.h>
 #include <windows.h>

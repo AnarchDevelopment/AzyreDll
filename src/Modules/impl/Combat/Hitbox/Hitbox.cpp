@@ -3,7 +3,7 @@
 
 #include "Framework/Log.hpp"
 #include "Framework/Memory.hpp"
-#include "SDK/Offsets.hpp"
+#include "SDK/Engine/Memory/Offsets.hpp"
 
 #include <imgui.h>
 #include <cstring>

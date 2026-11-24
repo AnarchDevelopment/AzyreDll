@@ -1,7 +1,7 @@
 #include "Criticals.hpp"
 
 #include "GUI/Widgets.hpp"
-#include "SDK/Game.hpp"
+#include "SDK/Core/Game.hpp"
 
 #include <imgui.h>
 #include <windows.h>

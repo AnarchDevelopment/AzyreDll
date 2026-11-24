@@ -2,6 +2,7 @@
 
 #include "Features/Friends.hpp"
 #include "Features/Raycast.hpp"
+#include "Features/ReachOverride.hpp"
 #include "Features/Rotation.hpp"
 #include "Features/RotationHelper.hpp"
 #include "Framework/Log.hpp"
@@ -9,9 +10,9 @@
 #include "GUI/Menu.hpp"
 #include "GUI/Theme.hpp"
 #include "GUI/Widgets.hpp"
-#include "SDK/Camera.hpp"
-#include "SDK/Game.hpp"
-#include "SDK/Offsets.hpp"
+#include "SDK/Client/Camera.hpp"
+#include "SDK/Core/Game.hpp"
+#include "SDK/Engine/Memory/Offsets.hpp"
 #include "Features/Smoothing.hpp"
 #include "Framework/Memory.hpp"
 
@@ -32,6 +33,10 @@ constexpr float kMinDistance = 0.1f;
 constexpr float kTargetEyeHeight = 0.85f;
 constexpr unsigned kRotationLifetimeMs = 120;
 constexpr unsigned kFlickRotationLifetimeMs = 180;
+// Espera maxima a que salga un MovePlayerPacket con la rotacion nueva. Es
+// solo un limite: si el jugador esta quieto y no hay paquetes de movimiento,
+// se ataca igual para no romper el CPS configurado.
+constexpr int kRotationAckTimeoutMs = 100;
 constexpr int kSigmaRingSegments = 64;
 
 struct TargetCandidate
@@ -46,6 +51,8 @@ Vec3 targetPoint(const Actor& actor)
 {
     Vec3 point = actor.posExact();
     point.y = actor.pos().y + actor.height() * kTargetEyeHeight;
+    // Backtrack congela al TARGET escribiendo su mPosition/AABB: posExact() ya
+    // devuelve el anchor congelado, no hace falta ningun historial aqui.
     return point;
 }
 
@@ -197,6 +204,8 @@ void KillAura::clearTarget()
 {
     rot::clear(rot::PrioCombat);
     rotation_helper::clearClientRotation(rot::PrioCombat);
+    rotationTarget_ = 0;
+    rotationPending_ = false;
 }
 
 void KillAura::onEnable()
@@ -204,15 +213,22 @@ void KillAura::onEnable()
     lastDimension_ = Game::get().levelAddr();
     lastAttack_ = {};
     lastSwing_ = {};
-    lastAttackAttempt_ = {};
     multiTargetCursor_ = 0;
     lastTargetAttacks_.clear();
+    rotationTarget_ = 0;
+    rotationPending_ = false;
     nextAttackDelayMs_ = 1000.0f / clampf(cps_, 1.0f, 30.0f);
+    reach_override::update(reach_override::Owner::KillAura, range_);
 }
 
 void KillAura::onFrame(float /*dt*/)
 {
-    if (!Game::get().localFound() || menu::visible() || ImGui::GetIO().WantCaptureMouse)
+    // Solo el menu del SDK y el chat vanilla deben parar el aura. El antiguo
+    // gate de ImGui::WantCaptureMouse tambien disparaba cuando ImGui tomaba
+    // el raton para una ventana invisible y mataba el aura durante tramos
+    // enteros de pelea (los huecos sin ataques que se veian en el log).
+    if (!Game::get().localFound() || menu::visible() ||
+        Game::get().client().chatOpen())
     {
         targetAddress_ = 0;
         clearTarget();
@@ -220,6 +236,25 @@ void KillAura::onFrame(float /*dt*/)
     }
 
     LocalPlayer local = Game::get().localPlayer();
+    const float speed = horizontalSpeed(local);
+    const float requestedRange = dynamicRange_ && speed < 0.05f
+        ? dynamicRangeValue_
+        : range_;
+    reach_override::update(reach_override::Owner::KillAura, requestedRange);
+    const uintptr_t dimension = Game::get().levelAddr();
+    if (dimension && !lastDimension_)
+        lastDimension_ = dimension;
+    else if (dimension && lastDimension_ && dimension != lastDimension_)
+    {
+        lastDimension_ = dimension;
+        if (autoDisableOnDimensionChange_)
+        {
+            MC_LOG("[KillAura] disabled after dimension change");
+            setEnabled(false);
+            return;
+        }
+    }
+
     Actor target;
     float yaw = 0.0f;
     float pitch = 0.0f;
@@ -229,16 +264,110 @@ void KillAura::onFrame(float /*dt*/)
         return;
     }
 
+    const auto now = std::chrono::steady_clock::now();
+
     if (rotateMode_ == 0)
     {
+        // None disables rotation only. Target selection, CPS cadence, and
+        // packet attacks remain active just like Solstice's no-rotation mode.
         clearTarget();
-        return;
+    }
+    else
+    {
+        rotation_helper::requestClientRotation(local, yaw, pitch, rot::PrioCombat);
+        if (rotateMode_ == 1)
+            rot::request(pitch, yaw, kRotationLifetimeMs, rot::PrioCombat,
+                         headYaw_ ? 90.0f : 0.0f);
+
+        // Un objetivo nuevo deja al server mirando donde estaba el anterior.
+        // Se arma un ack: el aura espera a que salga un MovePlayerPacket con
+        // la rotacion nueva (rot::markApplied) antes de mandar el
+        // InteractPacket, que es lo que el server valida contra la mirada.
+        if (rotationTarget_ != target.address())
+        {
+            rotationTarget_ = target.address();
+            rotationAckBase_ = rot::appliedCount();
+            rotationPending_ = true;
+            rotationRequestAt_ = now;
+        }
     }
 
-    rotation_helper::requestClientRotation(local, yaw, pitch, rot::PrioCombat);
-    if (rotateMode_ == 1)
-        rot::request(pitch, yaw, kRotationLifetimeMs, rot::PrioCombat,
+    const float delayMs = randomizeAps_
+        ? nextAttackDelayMs_
+        : 1000.0f / clampf(cps_, 1.0f, 30.0f);
+    if (lastAttack_.time_since_epoch().count() != 0 &&
+        now - lastAttack_ < std::chrono::duration<float, std::milli>(delayMs))
+        return;
+
+    // Flick rotates the next outgoing movement packet only when an attack is
+    // ready; Normal keeps refreshing the silent rotation while a target exists.
+    if (rotateMode_ == 2)
+        rot::request(pitch, yaw, kFlickRotationLifetimeMs, rot::PrioCombat,
                      headYaw_ ? 90.0f : 0.0f);
+
+    if (rotationPending_)
+    {
+        if (rot::appliedCount() > rotationAckBase_)
+        {
+            rotationPending_ = false;
+        }
+        else if (now - rotationRequestAt_ <
+                 std::chrono::milliseconds(kRotationAckTimeoutMs))
+        {
+            // El server aun no vio la mirada nueva: se retiene el ataque.
+            return;
+        }
+        else
+        {
+            // Plazo cumplido sin paquete de movimiento (quieto o stream
+            // cerrado): se ataca igual.
+            rotationPending_ = false;
+            if (debug_)
+                MC_LOG("[KillAura] rotation ack timeout, attacking anyway");
+        }
+    }
+
+    if (swing_ &&
+        (!swingDelay_ || lastSwing_.time_since_epoch().count() == 0 ||
+         now - lastSwing_ >= std::chrono::duration<float>(swingDelaySeconds_)))
+    {
+        (void)local.swing();
+        lastSwing_ = now;
+    }
+
+    const bool sent = Game::get().gameMode().attack(local, target);
+    // One schedule controls both successful and failed sends. There is no
+    // hidden retry floor: the configured APS is the attempt cadence.
+    lastAttack_ = now;
+    if (debug_)
+    {
+        static auto lastLog = std::chrono::steady_clock::time_point{};
+        if (lastLog.time_since_epoch().count() == 0 ||
+            now - lastLog >= std::chrono::seconds(1))
+        {
+            MC_LOG("[KillAura] target=%s distance=%.2f packet-call=%s aps=%.1f",
+                   target.name().c_str(), distance3D(local.eyePos(), targetPoint(target)),
+                   sent ? "ok" : "failed",
+                   randomizeAps_ ? 1000.0f / std::max(nextAttackDelayMs_, 1.0f) : cps_);
+            lastLog = now;
+        }
+    }
+
+    if (sent)
+    {
+        lastTargetAttacks_[target.address()] = now;
+        if (targetMode_ == 1)
+            ++multiTargetCursor_;
+    }
+
+    if (randomizeAps_)
+    {
+        static thread_local std::mt19937 rng{std::random_device{}()};
+        std::uniform_real_distribution<float> apsDistribution(
+            clampf(apsMin_, 1.0f, 30.0f), clampf(apsMax_, 1.0f, 30.0f));
+        const float aps = apsDistribution(rng);
+        nextAttackDelayMs_ = 1000.0f / clampf(aps, 1.0f, 30.0f);
+    }
 }
 
 void KillAura::onRender()
@@ -293,10 +422,8 @@ void KillAura::onRender()
         const float z = feet.z + radius * std::sin(angle);
         Vec3 top{x, topY, z};
         Vec3 bottom{x, bottomY, z};
-        visible[i] = worldToScreen(top, camera.pos, camera.yaw, camera.pitch,
-                                   fov, screenW, screenH, projectedTop[i]) &&
-                     worldToScreen(bottom, camera.pos, camera.yaw, camera.pitch,
-                                   fov, screenW, screenH, projectedBottom[i]);
+        visible[i] = camera.project(top, projectedTop[i]) &&
+                     camera.project(bottom, projectedBottom[i]);
     }
 
     for (int i = 0; i < kSigmaRingSegments; ++i)
@@ -327,124 +454,14 @@ void KillAura::onRender()
     }
 }
 
-void KillAura::onTick()
-{
-    if (!Game::get().localFound() || menu::visible() || ImGui::GetIO().WantCaptureMouse)
-    {
-        targetAddress_ = 0;
-        clearTarget();
-        return;
-    }
-
-    const uintptr_t dimension = Game::get().levelAddr();
-    if (dimension && !lastDimension_)
-        lastDimension_ = dimension;
-    else if (dimension && lastDimension_ && dimension != lastDimension_)
-    {
-        lastDimension_ = dimension;
-        if (autoDisableOnDimensionChange_)
-        {
-            MC_LOG("[KillAura] disabled after dimension change");
-            setEnabled(false);
-            return;
-        }
-    }
-
-    LocalPlayer local = Game::get().localPlayer();
-    Actor target;
-    float yaw = 0.0f;
-    float pitch = 0.0f;
-    if (!selectTarget(local, target, yaw, pitch))
-    {
-        clearTarget();
-        return;
-    }
-
-    // Refresh rotations here too in case this module ticks before its first
-    // frame callback after enable.
-    if (rotateMode_ == 0)
-    {
-        clearTarget();
-    }
-    else
-    {
-        rotation_helper::requestClientRotation(local, yaw, pitch, rot::PrioCombat);
-        if (rotateMode_ == 1)
-            rot::request(pitch, yaw, kRotationLifetimeMs, rot::PrioCombat,
-                         headYaw_ ? 90.0f : 0.0f);
-    }
-
-    const auto now = std::chrono::steady_clock::now();
-    constexpr auto retryFloor = std::chrono::milliseconds(50);
-    if (lastAttackAttempt_.time_since_epoch().count() != 0 &&
-        now - lastAttackAttempt_ < retryFloor)
-        return;
-
-    const float delayMs = randomizeAps_
-        ? nextAttackDelayMs_
-        : 1000.0f / clampf(cps_, 1.0f, 30.0f);
-    const auto delay = std::chrono::duration<float, std::milli>(delayMs);
-    if (lastAttack_.time_since_epoch().count() != 0 && now - lastAttack_ < delay)
-        return;
-
-    // Flick rotates the next outgoing movement packet only when an attack is
-    // ready; Normal keeps refreshing the silent rotation while a target exists.
-    if (rotateMode_ == 2)
-        rot::request(pitch, yaw, kFlickRotationLifetimeMs, rot::PrioCombat,
-                     headYaw_ ? 90.0f : 0.0f);
-
-    if (swing_ &&
-        (!swingDelay_ || lastSwing_.time_since_epoch().count() == 0 ||
-         now - lastSwing_ >= std::chrono::duration<float>(swingDelaySeconds_)))
-    {
-        (void)local.swing();
-        lastSwing_ = now;
-    }
-
-    lastAttackAttempt_ = now;
-    const bool sent = Game::get().gameMode().attack(local, target);
-    if (debug_)
-    {
-        static auto lastLog = std::chrono::steady_clock::time_point{};
-        if (lastLog.time_since_epoch().count() == 0 ||
-            now - lastLog >= std::chrono::seconds(1))
-        {
-            MC_LOG("[KillAura] target=%s distance=%.2f packet-call=%s",
-                   target.name().c_str(), distance3D(local.eyePos(), targetPoint(target)),
-                   sent ? "ok" : "failed");
-            lastLog = now;
-        }
-    }
-
-    if (!sent)
-        return;
-
-    // The retry floor throttles failed transport attempts only; successful
-    // attacks still honor the configured APS up to the module's 30 CPS cap.
-    lastAttackAttempt_ = {};
-    lastAttack_ = now;
-    lastTargetAttacks_[target.address()] = now;
-    if (targetMode_ == 1)
-        ++multiTargetCursor_;
-
-    if (randomizeAps_)
-    {
-        static thread_local std::mt19937 rng{std::random_device{}()};
-        std::uniform_real_distribution<float> apsDistribution(
-            clampf(apsMin_, 1.0f, 30.0f), clampf(apsMax_, 1.0f, 30.0f));
-        const float aps = apsDistribution(rng);
-        nextAttackDelayMs_ = 1000.0f / clampf(aps, 1.0f, 30.0f);
-    }
-}
-
 void KillAura::onDisable()
 {
     targetAddress_ = 0;
     clearTarget();
     lastDimension_ = 0;
-    lastAttackAttempt_ = {};
     multiTargetCursor_ = 0;
     lastTargetAttacks_.clear();
+    reach_override::clear(reach_override::Owner::KillAura);
 }
 
 std::string KillAura::suffix() const

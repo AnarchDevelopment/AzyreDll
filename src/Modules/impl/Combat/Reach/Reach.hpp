@@ -34,11 +34,7 @@ public:
     }
 
 private:
-    void writeReach();
-
     float reach_ = 6.0f;
-    float saved_ = 0.0f;
-    bool savedValid_ = false;
 };
 
 }

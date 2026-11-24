@@ -16,7 +16,6 @@ public:
     KillAura();
 
     void onEnable() override;
-    void onTick() override;
     void onFrame(float dt) override;
     void onRender() override;
     void onDisable() override;
@@ -55,8 +54,15 @@ private:
     uint64_t multiTargetCursor_ = 0;
     uintptr_t targetAddress_ = 0;
     uintptr_t lastDimension_ = 0;
+    // Ack de la rotacion silenciosa: el server valida la mirada contra el
+    // ultimo MovePlayerPacket recibido, asi que al cambiar de objetivo el
+    // aura espera a que salga uno con la rotacion nueva antes de mandar el
+    // InteractPacket. rotationAckBase_ es rot::appliedCount() al armarlo.
+    uintptr_t rotationTarget_ = 0;
+    uint64_t rotationAckBase_ = 0;
+    bool rotationPending_ = false;
+    std::chrono::steady_clock::time_point rotationRequestAt_{};
     std::chrono::steady_clock::time_point lastSwing_{};
-    std::chrono::steady_clock::time_point lastAttackAttempt_{};
     std::unordered_map<uintptr_t, std::chrono::steady_clock::time_point>
         lastTargetAttacks_;
     std::chrono::steady_clock::time_point lastAttack_{};

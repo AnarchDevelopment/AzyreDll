@@ -1,10 +1,12 @@
 #include "Velocity.hpp"
+#include "SDK/Network/Packets/Packets.hpp"
+
 #include "GUI/Widgets.hpp"
 
 #include "Framework/Hook.hpp"
 #include "Framework/Log.hpp"
 #include "Framework/Memory.hpp"
-#include "SDK/VTables.hpp"
+#include "SDK/Network/Packets/SetEntityMotionPacket.hpp"
 
 #include <imgui.h>
 #include <MinHook.h>
@@ -62,14 +64,14 @@ bool __fastcall hkHandle(void* self, void* a2, void* a3, void* a4,
     {
         uintptr_t pkt = reinterpret_cast<uintptr_t>(self);
         uintptr_t pktVt = mem::read<uintptr_t>(pkt);
-        if (pktVt == mem::resolve(vt::SetEntityMotionPacket))
+        if (pktVt == mem::resolve(packets::SetEntityMotionPacket::VTableRva))
         {
             int entityId = 0;
             float vx = 0.0f, vy = 0.0f, vz = 0.0f;
-            if (mem::rawRead(&entityId, pkt + 0x08, sizeof(entityId)) &&
-                mem::rawRead(&vx, pkt + 0x18, sizeof(vx)) &&
-                mem::rawRead(&vy, pkt + 0x1C, sizeof(vy)) &&
-                mem::rawRead(&vz, pkt + 0x20, sizeof(vz)))
+            if (mem::rawRead(&entityId, pkt + packets::SetEntityMotionPacket::EntityIdOffset, sizeof(entityId)) &&
+                mem::rawRead(&vx, pkt + packets::SetEntityMotionPacket::VelocityXOffset, sizeof(vx)) &&
+                mem::rawRead(&vy, pkt + packets::SetEntityMotionPacket::VelocityYOffset, sizeof(vy)) &&
+                mem::rawRead(&vz, pkt + packets::SetEntityMotionPacket::VelocityZOffset, sizeof(vz)))
             {
                 if (!g_detected.load(std::memory_order_relaxed))
                 {
@@ -94,9 +96,9 @@ bool __fastcall hkHandle(void* self, void* a2, void* a3, void* a4,
                         float nvy = vy * vMul;
                         float nvz = vz * hMul;
 
-                        mem::write<float>(pkt + 0x18, nvx);
-                        mem::write<float>(pkt + 0x1C, nvy);
-                        mem::write<float>(pkt + 0x20, nvz);
+                        mem::write<float>(pkt + packets::SetEntityMotionPacket::VelocityXOffset, nvx);
+                        mem::write<float>(pkt + packets::SetEntityMotionPacket::VelocityYOffset, nvy);
+                        mem::write<float>(pkt + packets::SetEntityMotionPacket::VelocityZOffset, nvz);
 
                         g_modified++;
                         g_lastVx = nvx;
@@ -130,8 +132,8 @@ bool installHook()
     if (!hook::initialize())
         return false;
 
-    void* target = hook::vtableFunc(vt::SetEntityMotionPacket,
-                                    vt::slot::SetEntityMotionPacket::Handle);
+    void* target = hook::vtableFunc(packets::SetEntityMotionPacket::VTableRva,
+                                    packets::SetEntityMotionPacket::HandleSlot);
     if (!target)
     {
         MC_LOG_ERROR("[Velocity] handle slot4 not readable");
