@@ -3,7 +3,8 @@
 #include "Framework/Log.hpp"
 #include "GUI/Menu.hpp"
 #include "Input/WheelHook.hpp"
-#include "SDK/Game.hpp"
+#include "SDK/Core/Game.hpp"
+#include "SDK/UI/Hooks/KeyGateHook.hpp"
 
 #ifdef _MSC_VER
 #include <winrt/Windows.Foundation.h>
@@ -27,13 +28,76 @@ namespace mc::input {
 static CoreWindow g_coreWindow = nullptr;
 #endif
 static std::atomic<bool> g_ready{false};
+// El cliente esta en primer plano (evento Activated de CoreWindow). Es la unica
+// senal de foco fiable en UWP: GetForegroundWindow puede devolver el HWND del
+// host y WindowFromPoint deja de resolver cuando no hay mundo cargado.
+static std::atomic<bool> g_windowActive{true};
+// Ultima posicion del cursor resuelta DENTRO de la ventana del juego. Se usa
+// como fallback cuando WindowFromPoint no resuelve (menu principal, pantallas
+// nativas): sin posicion no hay ventana hovered y el scroll se pierde.
+static ImVec2 g_lastValidMouse(-FLT_MAX, -FLT_MAX);
+// Escala cliente -> DisplaySize del ultimo calculo de posicion. Los deltas del
+// raw input llegan en pixeles del cliente y hay que llevarlos a la escala de la UI.
+static float g_uiScaleX = 1.0f;
+static float g_uiScaleY = 1.0f;
+// Cursor VIRTUAL de la UI. Con el puntero del CoreWindow oculto (gameplay)
+// Windows congela GetCursorPos: el juego mueve la camara con los deltas del raw
+// y la posicion absoluta deja de cambiar. ImGui necesita una posicion propia, asi
+// que mientras la UI captura se mueve este cursor con esos mismos deltas. Si el
+// puntero real SI se mueve (menu principal, pantallas nativas) se re-ancla a el.
+static ImVec2 g_virtualCursor(-FLT_MAX, -FLT_MAX);
+static bool g_virtualActive = false;
+static POINT g_prevPhys{0, 0};
+// HWND real del CoreWindow del juego, resuelto por clase + PID. En UWP
+// WindowFromPoint puede devolver el HWND del host (ApplicationFrameHost) o
+// nada, y entonces el cursor deja de resolver fuera de mundo (menu principal,
+// pantallas nativas) y con el se pierde el scroll. Con este HWND la posicion se
+// resuelve SIEMPRE que el cursor este dentro de la ventana del cliente.
+static HWND g_gameWindow = nullptr;
+
+static HWND ResolveGameWindow()
+{
+    if (g_gameWindow && IsWindow(g_gameWindow))
+        return g_gameWindow;
+
+    g_gameWindow = nullptr;
+    const DWORD pid = GetCurrentProcessId();
+
+    HWND hwnd = nullptr;
+    while ((hwnd = FindWindowExW(nullptr, hwnd, L"Windows.UI.Core.CoreWindow", nullptr)) != nullptr)
+    {
+        DWORD wpid = 0;
+        GetWindowThreadProcessId(hwnd, &wpid);
+        if (wpid == pid)
+        {
+            g_gameWindow = hwnd;
+            return g_gameWindow;
+        }
+    }
+
+    HWND fg = GetForegroundWindow();
+    if (fg)
+    {
+        DWORD wpid = 0;
+        GetWindowThreadProcessId(fg, &wpid);
+        if (wpid == pid)
+            g_gameWindow = fg;
+    }
+    return g_gameWindow;
+}
 #ifdef _MSC_VER
 static std::atomic<int> g_keyEvents{0};
 static std::atomic<int> g_pointerEvents{0};
 static std::atomic<int> g_wheelEvents{0};
 static std::atomic<int> g_charEvents{0};
 #endif
-static bool g_cursorForcedVisible = false;
+// Cursor del JUEGO. En gameplay el cliente oculta su puntero y el mouse mueve
+// la camara; en las pantallas nativas (inventario, pausa, chat) muestra el
+// suyo. Nuestra UI NUNCA escribe PointerCursor: en su lugar dibuja el cursor
+// software de ImGui cuando el real esta oculto.
+// Ultimo estado del OR de captura de UI. Vive fuera de updateFrame para que
+// refreshUiCapture() lo deje sincronizado con el flanco automatico.
+static bool lastUiOwns = false;
 
 #ifdef _MSC_VER
 struct WinRTTokens
@@ -54,58 +118,19 @@ struct WinRTTokens
 static WinRTTokens g_tokens{};
 #endif
 
-static bool IsSystemCursorShowing()
+// El juego decide cuando su puntero es visible: en gameplay lo oculta (el mouse
+// mueve la camara) y en las pantallas nativas (inventario, pausa, chat) pone un
+// Arrow en el CoreWindow. NUNCA escribimos PointerCursor: pisarlo era lo que
+// dejaba al juego sin cursor y sin scroll y lo que mostraba el puntero en
+// gameplay. Nuestra UI usa el cursor SOFTWARE de ImGui solo cuando el real esta
+// oculto; si el juego ya muestra el suyo, se reutiliza ese y no se dibuja nada.
+static bool RealCursorVisible()
 {
     CURSORINFO ci{};
     ci.cbSize = sizeof(ci);
-    if (GetCursorInfo(&ci))
-        return (ci.flags & CURSOR_SHOWING) != 0;
-    return false;
-}
-
-static void ApplyCursorForMenu(bool menuOpen)
-{
-#ifdef _MSC_VER
-    try
-    {
-        CoreWindow win = g_coreWindow;
-        if (!win)
-            win = CoreWindow::GetForCurrentThread();
-        if (!win)
-        {
-            g_cursorForcedVisible = false;
-            return;
-        }
-
-        if (menuOpen)
-        {
-            bool inWorld = !IsSystemCursorShowing();
-            if (inWorld)
-            {
-                CoreCursor arrowCursor{CoreCursorType::Arrow, 0};
-                win.PointerCursor(arrowCursor);
-                g_cursorForcedVisible = true;
-                MC_LOG("[WinRT] Menu open in world: system cursor shown");
-            }
-        }
-        else if (g_cursorForcedVisible)
-        {
-            if (mc::Game::get().localFound())
-            {
-                win.PointerCursor(nullptr);
-                MC_LOG("[WinRT] Menu closed: system cursor hidden");
-            }
-            g_cursorForcedVisible = false;
-        }
-    }
-    catch (...)
-    {
-        g_cursorForcedVisible = false;
-    }
-#else
-    (void)menuOpen;
-    g_cursorForcedVisible = false;
-#endif
+    if (!GetCursorInfo(&ci))
+        return false;
+    return (ci.flags & CURSOR_SHOWING) != 0;
 }
 
 static ImGuiKey MapVkToImGuiKey(int vk)
@@ -305,20 +330,6 @@ void shutdown()
     {
     }
 
-    if (g_cursorForcedVisible)
-    {
-        try
-        {
-            CoreWindow win = g_coreWindow;
-            if (win)
-                win.PointerCursor(nullptr);
-        }
-        catch (...)
-        {
-        }
-        g_cursorForcedVisible = false;
-    }
-
     g_coreWindow = nullptr;
 #endif
 }
@@ -380,6 +391,9 @@ void init()
 
         g_tokens.activated = g_coreWindow.Activated([&](CoreWindow const&, WindowActivatedEventArgs const& args)
                                                      {
+                                                         const bool active =
+                                                             args.WindowActivationState() != CoreWindowActivationState::Deactivated;
+                                                         g_windowActive = active;
                                                          MC_LOG("[WinRT] WindowActivated: %s",
                                                                 args.WindowActivationState() != CoreWindowActivationState::Deactivated ? "Active" : "Inactive");
                                                      });
@@ -412,8 +426,40 @@ void init()
 #endif
 }
 
+// El puntero del sistema queda CONGELADO donde el CoreWindow lo oculto (el
+// juego lo esconde en gameplay y Windows deja de rastrear GetCursorPos). Al
+// abrir una pantalla nativa el juego vuelve a pedir su cursor, pero Windows lo
+// revive en esa posicion vieja: si quedo fuera del area cliente el cursor no
+// aparece dentro del juego y la rueda tampoco le llega. Recentrarlo una sola
+// vez en el flanco oculto->visible lo devuelve al cliente.
+static void resyncGamePointer()
+{
+    HWND game = ResolveGameWindow();
+    if (!game || !IsWindowVisible(game))
+        return;
+
+    RECT rc{};
+    if (!GetClientRect(game, &rc) || rc.right <= 0 || rc.bottom <= 0)
+        return;
+
+    POINT cur{};
+    if (GetCursorPos(&cur))
+    {
+        POINT local = cur;
+        ScreenToClient(game, &local);
+        if (PtInRect(&rc, local))
+            return; // ya esta dentro del cliente: no tocar nada
+    }
+
+    POINT center{(rc.right - rc.left) / 2, (rc.bottom - rc.top) / 2};
+    ClientToScreen(game, &center);
+    if (SetCursorPos(center.x, center.y))
+        MC_LOG("[Input] puntero del juego recentrado en (%ld,%ld)", center.x, center.y);
+}
+
 void updateFrame()
-{    ImGuiIO& io = ImGui::GetIO();
+{
+    ImGuiIO& io = ImGui::GetIO();
 
     // Suscripcion del wheel via WinRT, despachada al UI thread con el
     // Dispatcher (el patron de window::setTitle). Desde este hilo de render
@@ -466,12 +512,80 @@ void updateFrame()
     }
 #endif
 
-    static bool lastMenuVisible = false;
-    bool menuOpenNow = mc::menu::visible();
-    if (menuOpenNow != lastMenuVisible)
+    bool uiOwns = mc::menu::uiOwnsInput();
+    // Puntero del propio juego (gameplay = oculto, pantallas nativas = visible).
+    const bool realVisible = RealCursorVisible();
+    static bool lastRealVisible = false;
+    if (realVisible != lastRealVisible)
     {
-        ApplyCursorForMenu(menuOpenNow);
-        lastMenuVisible = menuOpenNow;
+        lastRealVisible = realVisible;
+        MC_LOG("[Input] juego cursor visible=%d", realVisible ? 1 : 0);
+        // El juego acaba de mostrar su cursor (pantalla nativa). Si el puntero
+        // del sistema quedo fuera del cliente, se recentra una vez.
+        if (realVisible && !uiOwns)
+            resyncGamePointer();
+    }
+
+    // Diagnostico del input del CLIENTE: el estado del CoreWindow decide si el
+    // juego puede mostrar cursor y recibir la rueda. Un renglon por segundo.
+    {
+        static ULONGLONG lastDiagMs = 0;
+        const ULONGLONG nowDiag = GetTickCount64();
+        if (nowDiag - lastDiagMs >= 1000ull)
+        {
+            lastDiagMs = nowDiag;
+            int inEnabled = -1;
+            int ptrCursor = -1;
+#ifdef _MSC_VER
+            try
+            {
+                if (g_coreWindow)
+                {
+                    inEnabled = g_coreWindow.IsInputEnabled() ? 1 : 0;
+                    ptrCursor = g_coreWindow.PointerCursor() ? 1 : 0;
+                }
+            }
+            catch (...)
+            {
+            }
+#endif
+            HWND game = ResolveGameWindow();
+            HWND fg = GetForegroundWindow();
+            MC_LOG("[InDiag] en=%d ptr=%d fg=%d win=%d real=%d uiOwns=%d mouse=(%.0f,%.0f) evP=%llu evW=%llu evK=%llu",
+                   inEnabled, ptrCursor, (game && fg == game) ? 1 : 0, game ? 1 : 0,
+                   realVisible ? 1 : 0, uiOwns ? 1 : 0, io.MousePos.x, io.MousePos.y,
+                   (unsigned long long)g_pointerEvents.load(),
+                   (unsigned long long)g_wheelEvents.load(),
+                   (unsigned long long)g_keyEvents.load());
+
+            // Auto-reparacion: si nadie de nuestro lado captura y el CoreWindow
+            // quedo con el input deshabilitado (modo UI roto), el juego se
+            // queda sin mouse, sin cursor y sin rueda. Se reactiva.
+#ifdef _MSC_VER
+            if (!uiOwns && inEnabled == 0)
+            {
+                try
+                {
+                    g_coreWindow.IsInputEnabled(true);
+                    MC_LOG("[Input] CoreWindow input re-enabled");
+                }
+                catch (...)
+                {
+                }
+            }
+#endif
+        }
+    }
+    if (uiOwns != lastUiOwns)
+    {
+        lastUiOwns = uiOwns;
+        // Telemetria del dueno de la captura: con uiOwns=1 el raw input del
+        // juego queda neutralizado y la UI recibe sus propios eventos. Si esto
+        // aparece en 1 sin ninguna UI abierta, hay una captura huerfana.
+        // real = puntero del juego visible en ese momento.
+        MC_LOG("[Input] uiOwns=%d real=%d (menu=%d hud=%d panel=%d)", uiOwns ? 1 : 0,
+               realVisible ? 1 : 0, mc::menu::visible() ? 1 : 0,
+               mc::menu::hudEditing() ? 1 : 0, mc::menu::uiCapture() ? 1 : 0);
     }
 
     POINT p{};
@@ -496,15 +610,92 @@ void updateFrame()
                     float sy = io.DisplaySize.y / (float)rc.bottom;
                     p.x = (LONG)(p.x * sx);
                     p.y = (LONG)(p.y * sy);
+                    g_uiScaleX = sx;
+                    g_uiScaleY = sy;
                 }
                 posValid = true;
             }
         }
     }
-    if (posValid)
-        io.MousePos = ImVec2((float)p.x, (float)p.y);
+    // Segunda pasada: si WindowFromPoint no resolvio al proceso se prueba con el
+    // HWND del propio CoreWindow. Fuera de mundo el host de UWP responde por el
+    // cursor y sin esto no hay hover ni scroll aunque el cliente este en foco.
+    if (!posValid)
+    {
+        HWND game = ResolveGameWindow();
+        if (game && IsWindowVisible(game))
+        {
+            POINT cp{};
+            if (GetCursorPos(&cp) && ScreenToClient(game, &cp))
+            {
+                RECT rc{};
+                if (GetClientRect(game, &rc) && rc.right > 0 && rc.bottom > 0 &&
+                    cp.x >= 0 && cp.y >= 0 && cp.x < rc.right && cp.y < rc.bottom)
+                {
+                    float sx = io.DisplaySize.x > 0.0f ? io.DisplaySize.x / (float)rc.right : 1.0f;
+                    float sy = io.DisplaySize.y > 0.0f ? io.DisplaySize.y / (float)rc.bottom : 1.0f;
+                    p.x = (LONG)(cp.x * sx);
+                    p.y = (LONG)(cp.y * sy);
+                    g_uiScaleX = sx;
+                    g_uiScaleY = sy;
+                    posValid = true;
+                }
+            }
+        }
+    }
+
+    // Deltas del mouse de ESTE frame: la unica posicion fiable cuando el puntero
+    // del CoreWindow esta oculto (GetCursorPos congelada).
+    int mdx = 0, mdy = 0;
+    wheel::consumeMouseDelta(mdx, mdy);
+
+    if (uiOwns)
+    {
+        const bool realMoved = posValid && (p.x != g_prevPhys.x || p.y != g_prevPhys.y);
+        if (!g_virtualActive || realMoved)
+        {
+            // Ancla: posicion real si resolvio; si no, la ultima buena; si no,
+            // el centro de la pantalla (el panel siempre aparece con puntero).
+            if (posValid)
+                g_virtualCursor = ImVec2((float)p.x, (float)p.y);
+            else if (g_lastValidMouse.x > -FLT_MAX)
+                g_virtualCursor = g_lastValidMouse;
+            else
+                g_virtualCursor = ImVec2(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f);
+            g_virtualActive = true;
+            mdx = 0;
+            mdy = 0;
+        }
+        g_virtualCursor.x += (float)mdx * g_uiScaleX;
+        g_virtualCursor.y += (float)mdy * g_uiScaleY;
+        const float maxX = io.DisplaySize.x > 1.0f ? io.DisplaySize.x - 1.0f : 0.0f;
+        const float maxY = io.DisplaySize.y > 1.0f ? io.DisplaySize.y - 1.0f : 0.0f;
+        g_virtualCursor.x = g_virtualCursor.x < 0.0f ? 0.0f : (g_virtualCursor.x > maxX ? maxX : g_virtualCursor.x);
+        g_virtualCursor.y = g_virtualCursor.y < 0.0f ? 0.0f : (g_virtualCursor.y > maxY ? maxY : g_virtualCursor.y);
+        io.MousePos = g_virtualCursor;
+    }
     else
-        io.MousePos = ImVec2(-FLT_MAX, -FLT_MAX);
+    {
+        g_virtualActive = false;
+        if (posValid)
+            io.MousePos = ImVec2((float)p.x, (float)p.y);
+        else if (g_windowActive.load() && g_lastValidMouse.x > -FLT_MAX)
+        {
+            // Fuera de mundo (menu principal, pantallas del juego) WindowFromPoint
+            // no resuelve al proceso: sin posicion valida ImGui no tiene ventana
+            // hovered y la rueda se pierde. Se conserva la ultima posicion buena
+            // mientras el cliente siga en primer plano.
+            io.MousePos = g_lastValidMouse;
+        }
+        else
+            io.MousePos = ImVec2(-FLT_MAX, -FLT_MAX);
+    }
+
+    if (posValid)
+    {
+        g_lastValidMouse = ImVec2((float)p.x, (float)p.y);
+        g_prevPhys = p;
+    }
 
     io.MouseDown[0] = (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
     io.MouseDown[1] = (GetAsyncKeyState(VK_RBUTTON) & 0x8000) != 0;
@@ -517,25 +708,30 @@ void updateFrame()
     // Hay que inyectar via AddMouseWheelEvent o el scroll de todas las
     // ventanas queda muerto.
     //
-    // Gate posValid: solo entregamos a ImGui el wheel ocurrido con el
-    // cursor sobre la ventana del juego. Un scroll hecho sobre la consola
-    // de debug (u otra app) llegaba aqui con MousePos invalida y ensuciaba
-    // el estado de eventos — hasta que el wheel "dejaba de funcionar".
+    // Gate del wheel: se entrega si el cursor esta sobre la ventana del juego o
+    // si el cliente esta en primer plano (aunque la posicion no haya resuelto).
+    // Antes solo valia posValid, asi que la rueda moria en el menu principal y
+    // en las pantallas del juego. Fuera de mundo basta el foco: si no hay
+    // ventana hovered ImGui descarta el evento por si solo, y si la hay (menu
+    // del cliente) el scroll funciona igual que dentro del mundo.
+    const bool wheelTarget = posValid || g_windowActive.load();
     float wheelDelta = wheel::consume();
     if (wheelDelta != 0.0f)
     {
         // [WheelDBG][Input]: estado del routing en el momento del evento.
-        // posValid=0 con eventos vivos = el cursor no esta sobre la
-        // ventana del juego (consola/alt-tab/WindowFromPoint raro).
+        // posValid=0 con focus=1 = cursor no resuelto pero cliente en primer
+        // plano (menu principal / pantalla del juego) o cursor fuera de la
+        // ventana: el evento se entrega igual y el hover decide.
         static ULONGLONG lastInDbg = 0;
         ULONGLONG nowInDbg = GetTickCount64();
         if (nowInDbg - lastInDbg > 400ull)
         {
             lastInDbg = nowInDbg;
-            MC_LOG("[WheelDBG][Input] consume=%.2f posValid=%d mouse=(%.0f,%.0f)",
-                   wheelDelta, posValid ? 1 : 0, io.MousePos.x, io.MousePos.y);
+            MC_LOG("[WheelDBG][Input] consume=%.2f posValid=%d focus=%d mouse=(%.0f,%.0f)",
+                   wheelDelta, posValid ? 1 : 0, g_windowActive.load() ? 1 : 0,
+                   io.MousePos.x, io.MousePos.y);
         }
-        if (posValid)
+        if (wheelTarget)
         {
             io.AddMouseWheelEvent(0.0f, wheelDelta);
             // Diagnostico del pipeline (ver tambien [WheelDBG] tras NewFrame).
@@ -549,7 +745,21 @@ void updateFrame()
         }
     }
 
-    io.MouseDrawCursor = menuOpenNow && !IsSystemCursorShowing();
+    // En UWP GetCursorInfo puede quedarse en CURSOR_SHOWING=0 incluso cuando
+    // el juego ha habilitado su CoreCursor para inventario/pausa. Detectamos
+    // ese estado por PointerCursor, sin escribir la propiedad, y dibujamos el
+    // cursor software cuando Windows no presenta uno real.
+    bool corePointerAvailable = false;
+#ifdef _MSC_VER
+    try
+    {
+        corePointerAvailable = g_coreWindow && (g_coreWindow.PointerCursor() ? true : false);
+    }
+    catch (...)
+    {
+    }
+#endif
+    io.MouseDrawCursor = !realVisible && (uiOwns || corePointerAvailable);
 
     io.KeyCtrl = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
     io.KeyShift = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
@@ -557,7 +767,8 @@ void updateFrame()
     io.KeySuper = (GetAsyncKeyState(VK_LWIN) & 0x8000) != 0 || (GetAsyncKeyState(VK_RWIN) & 0x8000) != 0;
 
     static bool keyWasDown[256] = {};
-    const bool wantChars = menuOpenNow || io.WantTextInput;
+    const bool wantChars = uiOwns || io.WantTextInput ||
+                           keygate::shouldCaptureKeyboard();
     BYTE keyboardState[256];
     bool ksBuilt = false;
     HKL layout = nullptr;
@@ -607,6 +818,17 @@ void updateFrame()
             }
         }
     }
+}
+
+void refreshUiCapture()
+{
+    const bool owns = mc::menu::uiOwnsInput();
+    lastUiOwns = owns;
+}
+
+bool windowActive()
+{
+    return g_windowActive.load(std::memory_order_relaxed);
 }
 
 }

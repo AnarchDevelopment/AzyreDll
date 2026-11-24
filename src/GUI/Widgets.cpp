@@ -12,6 +12,7 @@
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 #include <map>
 
@@ -103,7 +104,38 @@ void AcrylicPanel(ImDrawList* d, const ImVec2& min, const ImVec2& max,
     if (alpha <= 0.01f)
         return;
 
-    SoftShadow(d, min, max, rounding, shadowStrength * alpha, shadowSpread);
+    const bool riseMode = gui::blurMode() == 2;
+    if (!riseMode)
+        SoftShadow(d, min, max, rounding, shadowStrength * alpha, shadowSpread);
+
+    if (riseMode)
+    {
+        const float opacity = gui::riseBlurOpacity();
+        const bool haveBlur = blur::ready() && blur::srv() && sw > 0.0f && sh > 0.0f;
+        if (haveBlur)
+        {
+            ImVec2 uv0(min.x / sw, min.y / sh);
+            ImVec2 uv1(max.x / sw, max.y / sh);
+            d->AddImageRounded(ImTextureRef((void*)blur::srv()), min, max, uv0, uv1,
+                               IM_COL32(255, 255, 255, (int)(255.0f * alpha)), rounding);
+        }
+        else
+        {
+            d->AddRectFilled(min, max, IM_COL32(12, 15, 24, (int)(235.0f * alpha)), rounding);
+        }
+        const int scrimAlpha = (int)((130.0f - 92.0f * opacity) * alpha);
+        d->AddRectFilled(min, max, IM_COL32(8, 11, 22, scrimAlpha), rounding);
+        for (int layer = 3; layer >= 1; --layer)
+        {
+            const float pad = layer * 2.0f;
+            const int glowAlpha = (int)((18.0f / layer) * alpha);
+            d->AddRect(ImVec2(min.x - pad, min.y - pad), ImVec2(max.x + pad, max.y + pad),
+                       IM_COL32(210, 220, 255, glowAlpha), rounding + pad, 0, 1.5f);
+        }
+        if (drawBorder)
+            d->AddRect(min, max, IM_COL32(220, 226, 255, (int)(48.0f * alpha)), rounding, 0, 1.0f);
+        return;
+    }
 
     // Modo Solstice: blur con Direct2D (callback en el draw list).
 #ifdef _MSC_VER
@@ -380,6 +412,109 @@ bool CCombo(const char* label, int* current_item, const char* const items[], int
 
 // ============================ CSlider (WinUI) ============================
 
+static bool SliderPacket(const char* label, float* value, float vMin, float vMax,
+                         const char* format, bool isInt)
+{
+    ImGuiWindow* window = ImGui::GetCurrentWindow();
+    if (window->SkipItems)
+        return false;
+
+    ImGuiContext& g = *GImGui;
+    const ImGuiID id = window->GetID(label);
+    const float width = ImGui::CalcItemWidth();
+    const float height = 34.0f;
+    const ImVec2 pos = window->DC.CursorPos;
+    const ImRect bb(pos, ImVec2(pos.x + width, pos.y + height));
+    ImGui::ItemSize(bb, 0.0f);
+    if (!ImGui::ItemAdd(bb, id))
+        return false;
+
+    bool hovered = false;
+    bool held = false;
+    ImGui::ButtonBehavior(bb, id, &hovered, &held);
+    const float trackMin = bb.Min.x + 4.0f;
+    const float trackMax = bb.Max.x - 4.0f;
+    const float cy = bb.Min.y + 27.0f;
+    const float range = vMax - vMin;
+    bool changed = false;
+    if (held && range > 0.0f)
+    {
+        float t = (g.IO.MousePos.x - trackMin) / (trackMax - trackMin);
+        t = ImClamp(t, 0.0f, 1.0f);
+        float next = vMin + t * range;
+        if (isInt)
+            next = ImTrunc(next + 0.5f);
+        if (next != *value)
+        {
+            *value = next;
+            changed = true;
+        }
+    }
+
+    char valueText[48];
+    if (isInt) std::snprintf(valueText, sizeof(valueText), format, (int)*value);
+    else       std::snprintf(valueText, sizeof(valueText), format, *value);
+    const char* visibleLabelEnd = labelEnd(label);
+    if (visibleLabelEnd > label)
+        window->DrawList->AddText(ImVec2(bb.Min.x + 1.0f, bb.Min.y + 1.0f),
+                                  ImGui::GetColorU32(ImGuiCol_Text), label, visibleLabelEnd);
+    const ImVec2 valueSize = ImGui::CalcTextSize(valueText);
+    window->DrawList->AddText(ImVec2(bb.Max.x - valueSize.x - 1.0f, bb.Min.y + 1.0f),
+                              ImGui::GetColorU32(ImGuiCol_TextDisabled), valueText);
+
+    float t = range > 0.0f ? (*value - vMin) / range : 0.0f;
+    t = ImClamp(t, 0.0f, 1.0f);
+    const float thumbX = trackMin + t * (trackMax - trackMin);
+    window->DrawList->AddRectFilled(ImVec2(trackMin, cy - 1.7f),
+                                    ImVec2(trackMax, cy + 1.7f),
+                                    IM_COL32(255, 255, 255, 48), 2.0f);
+    window->DrawList->AddRectFilled(ImVec2(trackMin, cy - 1.7f),
+                                    ImVec2(thumbX, cy + 1.7f), accentU32(0.95f), 2.0f);
+    window->DrawList->AddCircleFilled(ImVec2(thumbX, cy), 4.2f,
+                                      IM_COL32(240, 242, 245, 255), 16);
+    return changed;
+}
+
+static bool TogglePacket(const char* label, bool* value)
+{
+    ImGuiWindow* window = ImGui::GetCurrentWindow();
+    if (window->SkipItems)
+        return false;
+
+    const ImGuiID id = window->GetID(label);
+    const float width = ImGui::GetContentRegionAvail().x;
+    const float height = 22.0f;
+    const ImVec2 pos = window->DC.CursorPos;
+    const ImRect bb(pos, ImVec2(pos.x + width, pos.y + height));
+    ImGui::ItemSize(bb, 0.0f);
+    if (!ImGui::ItemAdd(bb, id))
+        return false;
+
+    bool hovered = false;
+    bool held = false;
+    const bool pressed = ImGui::ButtonBehavior(bb, id, &hovered, &held);
+    if (pressed)
+        *value = !*value;
+
+    const char* end = labelEnd(label);
+    if (end > label)
+        window->DrawList->AddText(ImVec2(bb.Min.x + 1.0f,
+            bb.Min.y + (height - ImGui::GetTextLineHeight()) * 0.5f),
+            ImGui::GetColorU32(ImGuiCol_Text), label, end);
+
+    const float trackW = 27.0f;
+    const float trackH = 14.0f;
+    const ImVec2 trackMin(bb.Max.x - trackW - 1.0f,
+                          bb.Min.y + (height - trackH) * 0.5f);
+    const ImVec2 trackMax(trackMin.x + trackW, trackMin.y + trackH);
+    const ImU32 trackColor = *value ? accentU32(0.94f) : IM_COL32(87, 89, 93, 235);
+    window->DrawList->AddRectFilled(trackMin, trackMax, trackColor, trackH * 0.5f);
+    const float knobX = *value ? trackMax.x - 7.0f : trackMin.x + 7.0f;
+    window->DrawList->AddCircleFilled(ImVec2(knobX, (trackMin.y + trackMax.y) * 0.5f),
+                                      5.0f, IM_COL32(245, 246, 248, 255), 16);
+    return pressed;
+}
+
 static bool SliderWinUI(const char* label, float* v, float v_min, float v_max,
                         const char* format, bool is_int)
 {
@@ -586,6 +721,8 @@ bool Checkbox(const char* label, bool* v)
         return sw::Toggle(label, v);
     if (gui::style() == 2)
         return rw::Toggle(label, v);
+    if (gui::style() == 4)
+        return TogglePacket(label, v);
     return ImGui::Checkbox(label, v);
 }
 
@@ -622,6 +759,8 @@ bool CSlider(const char* label, float* v, float v_min, float v_max, const char* 
         return sw::Slider(label, v, v_min, v_max, format);
     if (gui::style() == 2)
         return rw::Slider(label, v, v_min, v_max, format);
+    if (gui::style() == 4)
+        return SliderPacket(label, v, v_min, v_max, format, false);
     return SliderWinUI(label, v, v_min, v_max, format, false);
 }
 
@@ -631,6 +770,14 @@ bool CSlider(const char* label, int* v, int v_min, int v_max, const char* format
         return sw::SliderInt(label, v, v_min, v_max, format);
     if (gui::style() == 2)
         return rw::SliderInt(label, v, v_min, v_max, format);
+    if (gui::style() == 4)
+    {
+        float fv = (float)*v;
+        if (!SliderPacket(label, &fv, (float)v_min, (float)v_max, format, true))
+            return false;
+        *v = (int)(fv >= 0.0f ? fv + 0.5f : fv - 0.5f);
+        return true;
+    }
     float fv = (float)*v;
     if (!SliderWinUI(label, &fv, (float)v_min, (float)v_max, format, true))
         return false;

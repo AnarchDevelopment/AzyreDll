@@ -59,6 +59,10 @@ void addAcrylicRect(float x1, float y1, float x2, float y2, float radius, float 
 // true si se registraron paneles acrilicos este frame (permite al Present
 // hook correr el pase a full rate en vez del throttle de ~30Hz).
 bool hasAcrylic();
+// Requests a fresh blur pass on every Present for widgets that sample the
+// backdrop directly (without registering a backbuffer acrylic composite).
+void requestFullRate();
+bool fullRateRequested();
 
 // Modo Solstice: desactiva el composite Glass nativo del menu (lo hace D2D).
 void setMenuGlass(bool on);

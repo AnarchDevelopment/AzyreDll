@@ -15,6 +15,9 @@ void motionBlur(ID3D11ShaderResourceView* cur, ID3D11ShaderResourceView* prev,
 void gauss(ID3D11ShaderResourceView* src, ID3D11RenderTargetView* dst,
            UINT w, UINT h, float dirX, float dirY);
 
+void riseGauss(ID3D11ShaderResourceView* src, ID3D11RenderTargetView* dst,
+               UINT w, UINT h, float dirX, float dirY, float radius, float compression);
+
 // Composite Mica (puerto del legacy): pinta la escena blureada OPACA sobre el
 // target con desaturacion + tint + gradiente + grain. w/h = tamaño del TARGET.
 void composite(ID3D11ShaderResourceView* src, ID3D11RenderTargetView* dst,

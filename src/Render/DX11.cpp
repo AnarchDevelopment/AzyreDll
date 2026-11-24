@@ -15,7 +15,7 @@
 #include "Render/EffectSprites.hpp"
 #include "Render/ResourceSprites.hpp"
 #include "Render/D2D/D2D.hpp"
-#include "SDK/Game.hpp"
+#include "SDK/Core/Game.hpp"
 #include "resource.h"
 
 #include <windows.h>
@@ -60,6 +60,7 @@ static ImFont* sehLoadFont(ImFontAtlas* fonts, void* data, int size, float px)
 
 static ImFont* g_hudFont = nullptr;
 static ImFont* g_gameFont = nullptr;
+static ImFont* g_gameFontBold = nullptr;
 static ImFont* g_riseFont = nullptr;
 
 ImFont* hudFont()
@@ -71,6 +72,11 @@ ImFont* hudFont()
 ImFont* gameFont()
 {
     return g_gameFont;
+}
+
+ImFont* gameFontBold()
+{
+    return g_gameFontBold;
 }
 
 // Product Sans regular — la usa el estilo Rise (como Rise real).
@@ -132,6 +138,8 @@ static void LoadAllFonts(ImFontAtlas* fonts)
         {
             if (fe.id == IDR_MOJANGLES)
                 g_gameFont = loaded;
+            else if (fe.id == IDR_MOJANGLES_BOLD)
+                g_gameFontBold = loaded;
             MC_LOG("[Font] %s: OK (%lu bytes)", fe.name, fsize);
         }
         else
@@ -311,6 +319,11 @@ static void renderQuadToCurrentRT(ID3D11ShaderResourceView* srv, UINT w, UINT h)
 // el foco en otra ventana (alt-tab) el cursor tambien es visible pero no
 // hay pantalla del juego — no hay que congelar nada.
 //
+// Cualquier panel propio que capture input (menu INSERT, editor de HUD,
+// chat custom) cuenta como UI nuestra: el overlay DEBE seguir presentandose
+// o el panel queda invisible mientras el juego esta sordo a mouse y rueda.
+// uiCapture() es justo eso: panel propio abierto sin menu visible.
+//
 // Solo aplica DENTRO de un mundo (localFound): en el menu principal del
 // juego la captura completa del backbuffer es la via probada (los logs
 // "Clone capture ok" nacen ahi) y es la unica fuente de blur para los
@@ -319,7 +332,7 @@ static bool gameScreenOpen()
 {
     if (!Game::get().localFound())
         return false; // menus del juego sin mundo: pipeline completo
-    if (mc::menu::visible() || mc::menu::hudEditing())
+    if (mc::menu::visible() || mc::menu::hudEditing() || mc::menu::uiCapture())
         return false;
     if (g_Hwnd && GetForegroundWindow() != g_Hwnd)
         return false;
@@ -506,7 +519,8 @@ static void presentBody(IDXGISwapChain* pSwapChain)
                 // MotionBlur graba a full rate: los ghosts deben ser frames
                 // consecutivos o el trail queda entrecortado.
                 if (mc::menu::visible() || fadeActive || mc::blur::motionBlurEnabled() ||
-                    mc::blur::hasAcrylic() || nowMs - lastPassMs >= 33ull)
+                    mc::blur::hasAcrylic() || mc::blur::fullRateRequested() ||
+                    nowMs - lastPassMs >= 33ull)
                 {
                     mc::blur::runPass(g_originalRenderTargetView, !gameScreen);
                     lastPassMs = nowMs;

@@ -11,9 +11,10 @@
 #include "Render/DX11.hpp"
 #include "Input/MouseHook.hpp"
 #include "Scripting/Scripting.hpp"
-#include "SDK/ChatHook.hpp"
-#include "SDK/Effects.hpp"
-#include "SDK/Game.hpp"
+#include "SDK/UI/Hooks/ChatHook.hpp"
+#include "SDK/Gameplay/Effects.hpp"
+#include "SDK/Core/Game.hpp"
+#include "Modules/impl/Interface/Interface.hpp"
 
 #ifdef _MSC_VER
 #include <winrt/Windows.Foundation.h>
@@ -56,16 +57,17 @@ static DWORD WINAPI Bootstrap(LPVOID)
     mc::scripts::loadAll();
     MC_LOG("[BOOT] 7: config load...");
     mc::config::loadAll();
-    MC_LOG("[BOOT] 7b: spotify callback server (localhost:8888)...");
-    mc::spotify::startServer();
     MC_LOG("[BOOT] 8: window title...");
-    mc::window::setTitle("Azyre | 1.1.0");
+    mc::window::setTitle("Azyre | 1.1.1");
     MC_LOG("[BOOT] 9: dx11 install...");
 
     if (mc::dx11::install())
     {
         MC_LOG("[BOOT] 10: game scanner...");
         mc::Game::get().install();
+        MC_LOG("[BOOT] 10a: hotbar easing hook...");
+        if (!mc::gui::installSlotEasingHook())
+            MC_LOG_ERROR("[Interface] failed to install Slot Easing hook");
         MC_LOG("[BOOT] 11: chat hook...");
         mc::chathook::install();
         MC_LOG("[BOOT] 12: effects hook...");
@@ -109,6 +111,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID)
         mc::mousehook::uninstall();
         mc::chathook::uninstall();
         mc::effects::uninstall();
+        mc::gui::uninstallSlotEasingHook();
         mc::ModuleManager::get().shutdownAll();
         mc::spotify::shutdown();
         mc::Game::get().uninstall();

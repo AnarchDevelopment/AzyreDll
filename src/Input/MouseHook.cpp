@@ -5,7 +5,7 @@
 #include "Framework/Memory.hpp"
 #include "GUI/Menu.hpp"
 #include "Input/WheelHook.hpp"
-#include "SDK/Offsets.hpp"
+#include "SDK/Engine/Memory/FunctionRvas.hpp"
 
 namespace mc::mousehook {
 
@@ -39,11 +39,8 @@ void __fastcall hkFeed(void* self, char action, int data, short x, short y,
     {
     }
 
-    // Con el menu abierto no reenviamos el wheel al juego: scrollear la GUI
-    // no debe mover la hotbar. Todo lo demas pasa intacto.
-    if (action == 4 && mc::menu::visible())
-        return;
-
+    // El wheel NUNCA se bloquea: scrollear la GUI tambien debe llegar al juego.
+    // El resto del feed pasa intacto.
     g_orig(self, action, data, x, y, dx, dy, force);
 }
 

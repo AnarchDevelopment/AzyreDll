@@ -11,6 +11,7 @@ ID3D11PixelShader* g_copyPS = nullptr;
 ID3D11PixelShader* g_compositePS = nullptr;
 ID3D11PixelShader* g_glassPS = nullptr;
 ID3D11PixelShader* g_motionBlurPS = nullptr;
+ID3D11PixelShader* g_riseBlurPS = nullptr;
 ID3D11BlendState* g_blurBlend = nullptr;
 ID3D11Buffer* g_blurCB = nullptr;
 ID3D11SamplerState* g_blurSampler = nullptr;
@@ -71,6 +72,46 @@ float4 PSMain(VSOut input) : SV_Target
         c += srcTex.Sample(srcSamp, input.uv - d) * kWeights[i];
     }
     return c;
+}
+)";
+
+// Rise-style separable Gaussian, evaluated at full screen resolution.
+static const char* kRiseBlurPS = R"(
+Texture2D srcTex : register(t0);
+SamplerState srcSamp : register(s0);
+cbuffer RiseBlurParams : register(b0)
+{
+    float4 TexelDir;       // (1/w, 1/h, dirX, dirY)
+    float4 RadiusCompress; // (radius, compression, 0, 0)
+}
+struct VSOut
+{
+    float4 pos : SV_Position;
+    float2 uv : TEXCOORD0;
+};
+float GaussianWeight(float x, float sigma)
+{
+    float n = x / sigma;
+    return exp(-0.5 * n * n) / (sigma * 2.5066283);
+}
+float4 PSRiseBlur(VSOut input) : SV_Target
+{
+    float radius = clamp(RadiusCompress.x, 1.0, 24.0);
+    float sigma = max(radius * 0.5, 0.5);
+    float2 stepUv = TexelDir.xy * TexelDir.zw * max(RadiusCompress.y, 0.25);
+    float centerWeight = GaussianWeight(0.0, sigma);
+    float3 color = srcTex.Sample(srcSamp, input.uv).rgb * centerWeight;
+    float weightSum = centerWeight;
+    [loop]
+    for (int i = 1; i <= (int)radius; ++i)
+    {
+        float weight = GaussianWeight((float)i, sigma);
+        float2 offset = stepUv * (float)i;
+        color += (srcTex.Sample(srcSamp, input.uv + offset).rgb +
+                  srcTex.Sample(srcSamp, input.uv - offset).rgb) * weight;
+        weightSum += weight * 2.0;
+    }
+    return float4(color / max(weightSum, 0.0001), 1.0);
 }
 )";
 
@@ -289,6 +330,7 @@ void release()
     if (g_compositePS) { g_compositePS->Release(); g_compositePS = nullptr; }
     if (g_copyPS) { g_copyPS->Release(); g_copyPS = nullptr; }
     if (g_motionBlurPS) { g_motionBlurPS->Release(); g_motionBlurPS = nullptr; }
+    if (g_riseBlurPS) { g_riseBlurPS->Release(); g_riseBlurPS = nullptr; }
     if (g_blurVS) { g_blurVS->Release(); g_blurVS = nullptr; }
     g_shadersTried = false;
     g_shadersOk = false;
@@ -348,6 +390,26 @@ bool ensure()
     if (FAILED(hr))
     {
         BD_LOG_ONCE(s_logPs, "[Backdrop] CreatePixelShader failed: 0x%08X", hr);
+        ok = false;
+    }
+    blob->Release();
+    if (!ok)
+        return false;
+
+    if (FAILED(D3DCompile(kRiseBlurPS, (SIZE_T)strlen(kRiseBlurPS), nullptr, nullptr, nullptr,
+                          "PSRiseBlur", "ps_4_0", 0, 0, &blob, &err)))
+    {
+        MC_LOG_ERROR("[Backdrop] Rise blur PS compile failed%s%s", err ? " - " : "",
+                     err ? (const char*)err->GetBufferPointer() : "");
+        if (err) err->Release();
+        if (blob) blob->Release();
+        return false;
+    }
+    hr = g_device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(),
+                                     nullptr, &g_riseBlurPS);
+    if (FAILED(hr))
+    {
+        BD_LOG_ONCE(s_logPs, "[Backdrop] CreatePixelShader (Rise blur) failed: 0x%08X", hr);
         ok = false;
     }
     blob->Release();

@@ -3,6 +3,7 @@
 #include "Framework/Hook.hpp"
 #include "Framework/Log.hpp"
 #include "GUI/Menu.hpp"
+#include "SDK/UI/Hooks/KeyGateHook.hpp"
 
 #include <MinHook.h>
 #include <atomic>
@@ -14,8 +15,16 @@ static HHOOK g_hook = nullptr;
 static HANDLE g_thread = nullptr;
 static DWORD g_threadId = 0;
 static std::atomic<int> g_units{0};
+// Movimiento relativo acumulado del mouse. Se consume una vez por frame desde la
+// UI (cursor virtual) y se descarta cuando la UI no captura.
+static std::atomic<int> g_mouseDx{0};
+static std::atomic<int> g_mouseDy{0};
 static std::atomic<int> g_lastSource{-1};
 static std::atomic<unsigned long long> g_lastSourceTime{0};
+// user32's RAWINPUT wrappers call into win32u on this thread. Only process the
+// event at the outermost layer; mutating it in the syscall hook first makes
+// the wrapper see an already-filtered event and can lose the wheel delta.
+static thread_local unsigned g_rawReadDepth = 0;
 static bool g_loggedWinrt = false;
 static bool g_loggedLL = false;
 static bool g_loggedMsg = false;
@@ -173,31 +182,55 @@ static void parseRawMouse(const rawx::RawInput* raw)
         short delta = (short)raw->data.mouse.usButtonData;
         feedWheelRaw(delta);
     }
+    // Movimiento relativo: la unica fuente de posicion fiable mientras el
+    // puntero del CoreWindow esta oculto (Windows congela GetCursorPos).
+    if (raw->data.mouse.lLastX != 0 || raw->data.mouse.lLastY != 0)
+    {
+        g_mouseDx.fetch_add(raw->data.mouse.lLastX, std::memory_order_relaxed);
+        g_mouseDy.fetch_add(raw->data.mouse.lLastY, std::memory_order_relaxed);
+    }
 }
 
-// Input gate: while the menu (or the HUD editor) is open, neutralize the
-// raw input the game is about to read so clicks/movement/keys never reach
-// the gameplay — the GUI must not attack, place or walk the player. Our
-// own ImGui polls GetAsyncKeyState, so the menu itself is unaffected. The
-// wheel accumulator is fed by parseRawMouse BEFORE this runs, so menu
-// scrolling keeps working while the game gets nothing.
+// Mouse gate for panels that explicitly own general UI input (menu/HUD editor).
+// Custom Chat does not set uiOwnsInput: its mouse buttons, relative movement
+// and wheel remain native. Keyboard capture is independent below, so typing in
+// chat cannot leak into gameplay without stopping the game's mouse path.
 static void gateRawInput(rawx::RawInput* raw)
 {
     if (!raw)
         return;
-    if (!mc::menu::visible() && !mc::menu::hudEditing())
-        return;
 
     if (raw->header.dwType == rawx::kRimTypeMouse)
     {
-        raw->data.mouse.usButtonFlags = 0;
-        raw->data.mouse.usButtonData = 0;
+        if (!mc::menu::uiOwnsInput())
+            return;
+        // La rueda se preserva: parseRawMouse ya encoló una copia para ImGui;
+        // el juego también debe recibirla para no dejar muerto el scroll.
+        const bool wheel = (raw->data.mouse.usButtonFlags & rawx::kRiMouseWheel) != 0;
+        raw->data.mouse.usButtonFlags = wheel ? rawx::kRiMouseWheel : 0;
+        if (!wheel)
+            raw->data.mouse.usButtonData = 0;
         raw->data.mouse.ulRawButtons = 0;
         raw->data.mouse.lLastX = 0;
         raw->data.mouse.lLastY = 0;
     }
     else if (raw->header.dwType == rawx::kRimTypeKeyboard)
     {
+        const bool captureKeyboard = mc::menu::uiOwnsInput() ||
+                                     mc::keygate::shouldCaptureKeyboard();
+        const bool blockChatKey = mc::keygate::shouldBlockT() &&
+            (raw->data.keyboard.VKey == 'T' || raw->data.keyboard.VKey == 't');
+        if (!captureKeyboard && !blockChatKey)
+            return;
+
+        if (!captureKeyboard && blockChatKey)
+        {
+            raw->data.keyboard.MakeCode = 0;
+            raw->data.keyboard.VKey = 0;
+            raw->data.keyboard.Message = 0;
+            return;
+        }
+
         // Inert key event: valid structure, no key. The game reads a
         // keypress with VKey 0 and ignores it.
         raw->data.keyboard.MakeCode = 0;
@@ -237,7 +270,9 @@ static void handleRawBuffer(LPVOID data, UINT size, LONG blocks)
 static UINT WINAPI hkGetRawInputData(HRAWINPUT hRawInput, UINT uiCommand, LPVOID pData,
                                      PUINT pcbSize, UINT cbSizeHeader)
 {
+    ++g_rawReadDepth;
     UINT r = oGetRawInputData(hRawInput, uiCommand, pData, pcbSize, cbSizeHeader);
+    --g_rawReadDepth;
     // r = bytes copiados: validar que el bloque completo cabe antes de leer.
     if (r != (UINT)-1 && r >= 40 && pData && uiCommand == rawx::kRidInput)
     {
@@ -249,7 +284,9 @@ static UINT WINAPI hkGetRawInputData(HRAWINPUT hRawInput, UINT uiCommand, LPVOID
 
 static UINT WINAPI hkGetRawInputBuffer(LPVOID pData, PUINT pcbSize)
 {
+    ++g_rawReadDepth;
     UINT r = oGetRawInputBuffer(pData, pcbSize);
+    --g_rawReadDepth;
     // r = numero de estructuras escritas. El walk de cada bloque queda
     // delimitado por r y validado por handleRawBuffer (dwSize sane).
     if (r != (UINT)-1 && r > 0 && r < 256 && pData && pcbSize && *pcbSize > 0)
@@ -273,7 +310,8 @@ static LONG __stdcall hkNtGetRawInputData(HRAWINPUT hRawInput, UINT uiCommand, L
                                           PUINT pcbSize, UINT cbSizeHeader)
 {
     LONG r = oNtGetRawInputData(hRawInput, uiCommand, pData, pcbSize, cbSizeHeader);
-    if (r >= (LONG)kMinRawBlockSize && pData && uiCommand == rawx::kRidInput)
+    if (g_rawReadDepth == 0 && r >= (LONG)kMinRawBlockSize && pData &&
+        uiCommand == rawx::kRidInput)
     {
         bool expected = false;
         if (g_loggedNtRaw.compare_exchange_strong(expected, true))
@@ -289,7 +327,7 @@ static LONG __stdcall hkNtGetRawInputBuffer(LPVOID pData, PUINT pcbSize, UINT cb
     LONG r = oNtGetRawInputBuffer(pData, pcbSize, cbSizeHeader);
     // r = numero de estructuras escritas (semantica GetRawInputBuffer). Solo
     // procesamos si r es plausible; el walk valida cada bloque.
-    if (r > 0 && r < kMaxRawBlocks && pData && pcbSize && *pcbSize > 0)
+    if (g_rawReadDepth == 0 && r > 0 && r < kMaxRawBlocks && pData && pcbSize && *pcbSize > 0)
     {
         bool expected = false;
         if (g_loggedNtRaw.compare_exchange_strong(expected, true))
@@ -347,6 +385,12 @@ static bool installRawInputHooks()
 void setModule(void* moduleHandle)
 {
     g_module = static_cast<HMODULE>(moduleHandle);
+}
+
+void consumeMouseDelta(int& dx, int& dy)
+{
+    dx = g_mouseDx.exchange(0, std::memory_order_relaxed);
+    dy = g_mouseDy.exchange(0, std::memory_order_relaxed);
 }
 
 float lastValue()
@@ -449,8 +493,7 @@ static LRESULT CALLBACK LLMouseProc(int nCode, WPARAM wParam, LPARAM lParam)
         if (delta != 0 && wheelOverGameWindow(info->pt))
         {
             feedWheel(delta);
-            if (mc::menu::visible())
-                return 1;
+            // La rueda nunca se bloquea: se deja pasar al juego.
         }
     }
     return CallNextHookEx(g_hook, nCode, wParam, lParam);
@@ -475,8 +518,6 @@ static BOOL WINAPI hkPeekMessageW(LPMSG lpMsg, HWND hWnd, UINT wMsgFilterMin, UI
     {
         int delta = (short)HIWORD(lpMsg->wParam);
         feedWheelMsg(delta);
-        if (mc::menu::visible())
-            lpMsg->message = WM_NULL;
     }
     return r;
 }
@@ -488,8 +529,6 @@ static BOOL WINAPI hkGetMessageW(LPMSG lpMsg, HWND hWnd, UINT wMsgFilterMin, UIN
     {
         int delta = (short)HIWORD(lpMsg->wParam);
         feedWheelMsg(delta);
-        if (mc::menu::visible())
-            lpMsg->message = WM_NULL;
     }
     return r;
 }

@@ -7,6 +7,7 @@
 #include "Framework/Math.hpp"
 #include "GUI/Theme.hpp"
 #include "GUI/Widgets.hpp"
+#include "Input/InputSystem.hpp"
 #include "Input/WheelHook.hpp"
 #include "Modules/ModuleManager.hpp"
 #include "Modules/impl/Interface/Interface.hpp"
@@ -14,11 +15,12 @@
 #include "Modules/impl/Interface/Style/sSolstice/sSolstice.hpp"
 #include "Modules/impl/Interface/Style/sRise/sRise.hpp"
 #include "Modules/impl/Interface/Style/sGlass/sGlass.hpp"
+#include "Modules/impl/Interface/Style/sPacket/sPacket.hpp"
 #include "Render/DX11.hpp"
 #include "Render/D2D/D2D.hpp"
 #include "Render/BlurHelper/BlurHelper.hpp"
 #include "Scripting/Scripting.hpp"
-#include "SDK/Game.hpp"
+#include "SDK/Core/Game.hpp"
 
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -37,6 +39,7 @@ static bool g_debugRaw = false;
 static bool g_debugBlur = false;
 static bool g_debugCompRaw = false;
 static bool g_hudEditing = false;
+static bool g_uiCapture = false;
 static int g_tab = 0;
 static float g_anim = 0.0f;
 static ImVec2 g_menuMin = ImVec2(0, 0);
@@ -67,6 +70,12 @@ void windowRect(ImVec2& outMin, ImVec2& outMax)
     outMax = g_menuMax;
 }
 
+void setWindowRect(const ImVec2& min, const ImVec2& max)
+{
+    g_menuMin = min;
+    g_menuMax = max;
+}
+
 float glassRadius()
 {
     return g_glassRounding;
@@ -79,7 +88,35 @@ bool hudEditing()
 
 void setHudEditing(bool v)
 {
+    if (g_hudEditing == v)
+        return;
     g_hudEditing = v;
+    // Mantiene sincronizado el OR de captura con el pipeline de input (flanco
+    // de uiOwns). El puntero del juego no se toca: la UI usa el cursor
+    // software de ImGui cuando el real esta oculto.
+    input::refreshUiCapture();
+}
+
+void setUiCapture(bool on)
+{
+    if (g_uiCapture == on)
+        return;
+    g_uiCapture = on;
+
+    // Sincroniza el flanco de uiOwnsInput() sin esperar al proximo updateFrame.
+    // uiOwnsInput() sigue siendo el OR de todas las fuentes, asi que si el menu
+    // esta abierto esto no le quita la captura al menu.
+    input::refreshUiCapture();
+}
+
+bool uiCapture()
+{
+    return g_uiCapture;
+}
+
+bool uiOwnsInput()
+{
+    return g_visible || g_hudEditing || g_uiCapture;
 }
 
 void handleInput()
@@ -93,6 +130,18 @@ void handleInput()
             config::saveAll();
     }
     wasDown = isDown;
+
+    // El editor de HUD captura mouse y teclado exactamente igual que el menu.
+    // Si se queda armado con el menu cerrado, uiOwnsInput() no vuelve nunca a
+    // false: el juego pierde raw input, rueda y cursor de forma permanente
+    // (sintoma: "el cursor y el scroll estan muertos en el juego"). El editor
+    // es parte del menu, asi que se cierra con el.
+    if (!g_visible && g_hudEditing)
+    {
+        g_hudEditing = false;
+        hud::Registry::get().save();
+        MC_LOG("[Menu] HUD editor closed with the menu");
+    }
 
     // Debug: F9 muestra la captura RAW fullscreen (sin blur ni scrim).
     static bool dbgWasDown = false;
@@ -234,7 +283,9 @@ static bool s_hudTabWasDown = false;
 
 static void renderHudEditor()
 {
-    if (!g_hudEditing)
+    // El editor solo vive mientras el menu esta abierto: con el menu oculto
+    // seguiria dibujando sus botones y capturando el mouse del juego.
+    if (!g_hudEditing || !g_visible)
         return;
 
     auto& reg = hud::Registry::get();
@@ -383,9 +434,9 @@ void render()
 {
     theme::apply();
 
-    // Solstice and Glass draw their own acrylic surfaces; avoid the native
-    // compositor using the classic menu's cached rectangle for those styles.
-    blur::setMenuGlass(gui::blurMode() == 0 && gui::style() != 3);
+    // Solstice and Rise draw their own backdrop surfaces; avoid a second
+    // composite (D2D or native Glass) over the same menu rectangle.
+    blur::setMenuGlass(gui::blurMode() == 0 && gui::style() != 3 && gui::style() != 4);
 
     float dt = ImGui::GetIO().DeltaTime;
     float speed = dt * 9.0f;
@@ -409,6 +460,8 @@ void render()
         gui::sRise::render(g_anim);
     else if (gui::style() == 3)
         gui::sGlass::render(g_anim);
+    else if (gui::style() == 4)
+        gui::sPacket::render(g_anim);
     else
         gui::sAzyre::render(g_anim);
 }
@@ -427,9 +480,41 @@ void drawGlassSurface(ImDrawList* d, const ImVec2& mn, const ImVec2& mx,
     if (alpha <= 0.01f || disp.x <= 0.0f || disp.y <= 0.0f)
         return;
 
-    // Elevacion: sombra suave bajo el panel (Fluent "elevated surface").
-    widgets::SoftShadow(ImGui::GetBackgroundDrawList(), mn, mx, rounding,
-                        46.0f * alpha, 26.0f);
+    // Rise usa el halo claro del selector Bloom, no la sombra/glow negro Fluent.
+    if (gui::blurMode() != 2)
+        widgets::SoftShadow(ImGui::GetBackgroundDrawList(), mn, mx, rounding,
+                            46.0f * alpha, 26.0f);
+
+    if (gui::blurMode() == 2)
+    {
+        const float opacity = gui::riseBlurOpacity();
+        const bool haveBlur = blur::ready() && blur::srv();
+        if (haveBlur)
+        {
+            ImVec2 uv0(mn.x / disp.x, mn.y / disp.y);
+            ImVec2 uv1(mx.x / disp.x, mx.y / disp.y);
+            d->AddImageRounded(ImTextureRef((void*)blur::srv()), mn, mx, uv0, uv1,
+                               IM_COL32(255, 255, 255, (int)(255.0f * alpha)), rounding);
+        }
+        else
+        {
+            d->AddRectFilled(mn, mx, IM_COL32(12, 15, 24, (int)(235.0f * alpha)), rounding);
+        }
+
+        // Mantener el blur opaco evita que se mezcle con la escena nítida que
+        // está debajo. El slider regula el tinte del panel, no el alpha del SRV.
+        const int scrimAlpha = (int)((130.0f - 92.0f * opacity) * alpha);
+        d->AddRectFilled(mn, mx, IM_COL32(8, 11, 22, scrimAlpha), rounding);
+        for (int layer = 3; layer >= 1; --layer)
+        {
+            const float pad = layer * 2.0f;
+            const int glowAlpha = (int)((18.0f / layer) * alpha);
+            d->AddRect(ImVec2(mn.x - pad, mn.y - pad), ImVec2(mx.x + pad, mx.y + pad),
+                       IM_COL32(210, 220, 255, glowAlpha), rounding + pad, 0, 1.5f);
+        }
+        d->AddRect(mn, mx, IM_COL32(220, 226, 255, (int)(48.0f * alpha)), rounding, 0, 1.0f);
+        return;
+    }
 
     // Modo Solstice: blur con Direct2D sobre el rect de la ventana.
 #ifdef _MSC_VER

@@ -45,4 +45,8 @@ ImFont* riseFont();
 // nullptr si el resource no cargo.
 ImFont* gameFont();
 
+// Mojangles Bold a 16px — estilo bold §l del chat custom.
+// nullptr si el resource no cargo.
+ImFont* gameFontBold();
+
 }

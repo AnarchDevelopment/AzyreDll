@@ -9,6 +9,7 @@
 
 #include "GUI/Menu.hpp"
 #include "Modules/ModuleManager.hpp"
+#include "Modules/impl/Interface/Interface.hpp"
 
 namespace mc::blur {
 
@@ -30,6 +31,7 @@ bool g_debugCompositeRaw = false; // F11: componer la captura RAW sin blur
 bool g_mbEnabled = false;          // MotionBlur (arst-motion-blur) activo
 float g_mbStrength = 0.75f;        // Factor de blur (0..0.99)
 bool g_menuGlass = true;          // composite Glass del menu (off en modo Solstice)
+bool g_fullRateRequested = false;
 
 // Paneles acrilicos de los widgets registrados este frame (hilo de Present,
 // mismo hilo que runPass: sin mutex). Se limpian en beginAcrylic().
@@ -146,35 +148,49 @@ void passBody(ID3D11RenderTargetView* boundRtv, bool allowWrites)
         return;
     }
 
-    // Cadena progresiva de halving: a escala 2 la interpolacion bilinear cae
-    // exactamente entre texels, produciendo un box 2x2 real por paso.
-    passes::copy(src, detail::g_btHalf.rtv, detail::g_btHalf.w, detail::g_btHalf.h);
-    passes::copy(detail::g_btHalf.srv, detail::g_btQuarter.rtv, detail::g_btQuarter.w,
-                 detail::g_btQuarter.h);
-    passes::copy(detail::g_btQuarter.srv, detail::g_btSmall.rtv, detail::g_btSmall.w,
-                 detail::g_btSmall.h);
+    const bool riseMode = mc::gui::blurMode() == 2;
+    if (riseMode && shaders::ok())
+    {
+        // Rise filtra el frame a resolución completa con radius=12 y
+        // compression=3. El kernel es separable y devuelve alpha opaco; la
+        // transparencia se aplica después al componer cada superficie.
+        const UINT dispW = (UINT)detail::g_displayW;
+        const UINT dispH = (UINT)detail::g_displayH;
+        passes::riseGauss(src, detail::g_btRiseA.rtv, dispW, dispH, 1.0f, 0.0f, 12.0f, 3.0f);
+        passes::riseGauss(detail::g_btRiseA.srv, detail::g_btRiseB.rtv,
+                          dispW, dispH, 0.0f, 1.0f, 12.0f, 3.0f);
+    }
+    else
+    {
+        // Cadena progresiva de halving: la interpolación bilinear produce
+        // un box 2x2 real por paso antes del gaussiano de bajo costo.
+        passes::copy(src, detail::g_btHalf.rtv, detail::g_btHalf.w, detail::g_btHalf.h);
+        passes::copy(detail::g_btHalf.srv, detail::g_btQuarter.rtv, detail::g_btQuarter.w,
+                     detail::g_btQuarter.h);
+        passes::copy(detail::g_btQuarter.srv, detail::g_btSmall.rtv, detail::g_btSmall.w,
+                     detail::g_btSmall.h);
 
-    // Gaussiano separable a 1/8, DOS iteraciones H/V: sigma ~19px a
-    // resolucion completa — el frost de una sola iteracion (~14px) se veia
-    // demasiado debil detras de los widgets. El resultado sigue en GaussB
-    // (lo consumen srv() y los composites).
+        if (shaders::ok())
+        {
+            passes::gauss(detail::g_btSmall.srv, detail::g_btGaussA.rtv, detail::g_btGaussA.w,
+                          detail::g_btGaussA.h, 1.0f, 0.0f);
+            passes::gauss(detail::g_btGaussA.srv, detail::g_btGaussB.rtv, detail::g_btGaussB.w,
+                          detail::g_btGaussB.h, 0.0f, 1.0f);
+            passes::gauss(detail::g_btGaussB.srv, detail::g_btGaussA.rtv, detail::g_btGaussA.w,
+                          detail::g_btGaussA.h, 1.0f, 0.0f);
+            passes::gauss(detail::g_btGaussA.srv, detail::g_btGaussB.rtv, detail::g_btGaussB.w,
+                          detail::g_btGaussB.h, 0.0f, 1.0f);
+        }
+    }
+
     if (shaders::ok())
     {
-        passes::gauss(detail::g_btSmall.srv, detail::g_btGaussA.rtv, detail::g_btGaussA.w,
-                      detail::g_btGaussA.h, 1.0f, 0.0f);
-        passes::gauss(detail::g_btGaussA.srv, detail::g_btGaussB.rtv, detail::g_btGaussB.w,
-                      detail::g_btGaussB.h, 0.0f, 1.0f);
-        passes::gauss(detail::g_btGaussB.srv, detail::g_btGaussA.rtv, detail::g_btGaussA.w,
-                      detail::g_btGaussA.h, 1.0f, 0.0f);
-        passes::gauss(detail::g_btGaussA.srv, detail::g_btGaussB.rtv, detail::g_btGaussB.w,
-                      detail::g_btGaussB.h, 0.0f, 1.0f);
-
         // Composite Mica + Glass directo al backbuffer (puerto del legacy
         // ClickGUI::mainCompositePS): la escena escarchada REEMPLAZA la
         // pantalla — sin overlays ImGui, sin blending. RTV fresco del
         // backbuffer (el del juego puede ser null en Present).
         bool compMenu = (menuAnim > 0.001f) && g_menuGlass;
-        bool compWidgets = !g_acrylic.empty();
+        bool compWidgets = !riseMode && !g_acrylic.empty();
         // Con una pantalla del juego abierta no se escribe NADA al
         // backbuffer: los composites Glass/Mica quedan suspendidos. Los
         // widgets acrilicos siguen mostrando blur en vivo porque dibujan
@@ -185,7 +201,8 @@ void passBody(ID3D11RenderTargetView* boundRtv, bool allowWrites)
             // composite de la cadena de blur.
             ID3D11ShaderResourceView* compSrc = g_debugCompositeRaw
                                                      ? capture::persistentSrv()
-                                                     : detail::g_btGaussB.srv;
+                                                     : (riseMode ? detail::g_btRiseB.srv
+                                                                 : detail::g_btGaussB.srv);
             static bool s_logComp = false;
             if (!s_logComp)
             {
@@ -346,12 +363,22 @@ bool wanted()
         return true;
 
     // NameTags (usa el blur para el fondo de los tags).
-    return modOn("NameTags");
+    return modOn("NameTags") || modOn("TargetHUD");
 }
 
 bool hasAcrylic()
 {
     return !g_acrylic.empty();
+}
+
+void requestFullRate()
+{
+    g_fullRateRequested = true;
+}
+
+bool fullRateRequested()
+{
+    return g_fullRateRequested;
 }
 
 void setMenuGlass(bool on)
@@ -368,6 +395,8 @@ void* srv()
 {
     if (!g_hasContent)
         return nullptr;
+    if (mc::gui::blurMode() == 2 && shaders::ok() && detail::g_btRiseB.srv)
+        return (void*)detail::g_btRiseB.srv;
     if (shaders::ok() && detail::g_btGaussB.srv)
         return (void*)detail::g_btGaussB.srv;
     return (void*)detail::g_btSmall.srv;
@@ -451,6 +480,7 @@ void setDebugCompositeRaw(bool on)
 void beginAcrylic()
 {
     g_acrylic.clear();
+    g_fullRateRequested = false;
 }
 
 void addAcrylicRect(float x1, float y1, float x2, float y2, float radius, float alpha)

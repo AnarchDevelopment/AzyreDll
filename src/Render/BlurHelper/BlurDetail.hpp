@@ -35,6 +35,8 @@ extern BlurTex g_btSmall;    // 1/8
 extern BlurTex g_btTiny;     // 1/16
 extern BlurTex g_btGaussA;   // ping-pong gaussiano a 1/16
 extern BlurTex g_btGaussB;   // resultado final del blur
+extern BlurTex g_btRiseA;    // pase Rise a resolución completa
+extern BlurTex g_btRiseB;    // resultado Rise a resolución completa
 extern BlurTex g_btProxy;    // render proxy full-res (experimental)
 
 // MotionBlur (lógica arst-motion-blur: acumulación full-res EMA)
@@ -49,6 +51,7 @@ extern ID3D11PixelShader* g_copyPS;
 extern ID3D11PixelShader* g_compositePS;
 extern ID3D11PixelShader* g_glassPS;
 extern ID3D11PixelShader* g_motionBlurPS;
+extern ID3D11PixelShader* g_riseBlurPS;
 extern ID3D11BlendState* g_blurBlend;
 extern ID3D11Buffer* g_blurCB;
 extern ID3D11SamplerState* g_blurSampler;

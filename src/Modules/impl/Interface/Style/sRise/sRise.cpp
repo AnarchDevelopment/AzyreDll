@@ -381,14 +381,17 @@ void render(float anim)
     if (disp.x <= 0.0f || disp.y <= 0.0f)
         return;
 
-    // Dim backdrop oscuro + blur de fondo
-    fg->AddRectFilled(ImVec2(0.0f, 0.0f), disp, IM_COL32(0, 0, 0, (int)(110.0f * fade)));
+    // Aplicar el blur como base opaca. Una mezcla parcial con el framebuffer
+    // nítido debajo produce ghosting y parece que el filtro no está blurreando.
     if (blur::wanted() && blur::ready() && blur::srv())
     {
         fg->AddImage(ImTextureRef((void*)blur::srv()), ImVec2(0.0f, 0.0f), disp,
                      ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f),
-                     IM_COL32(255, 255, 255, (int)(200.0f * fade)));
+                     IM_COL32(255, 255, 255, (int)(255.0f * fade)));
     }
+    // El scrim se pinta encima del blur para oscurecerlo sin revelar la
+    // escena original enfocada.
+    fg->AddRectFilled(ImVec2(0.0f, 0.0f), disp, IM_COL32(0, 0, 0, (int)(110.0f * fade)));
 
     // ========================================================================
     // Dimensiones del ClickGUI de Rise. Base original 416 x 338 con sidebar

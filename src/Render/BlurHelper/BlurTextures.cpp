@@ -10,6 +10,8 @@ BlurTex g_btSmall;
 BlurTex g_btTiny;
 BlurTex g_btGaussA;
 BlurTex g_btGaussB;
+BlurTex g_btRiseA;
+BlurTex g_btRiseB;
 BlurTex g_btProxy;
 BlurTex g_mbPrev;
 BlurTex g_mbSwap;
@@ -104,6 +106,8 @@ void release()
     releaseBlurTex(g_btTiny);
     releaseBlurTex(g_btGaussA);
     releaseBlurTex(g_btGaussB);
+    releaseBlurTex(g_btRiseA);
+    releaseBlurTex(g_btRiseB);
     releaseBlurTex(g_btProxy);
     releaseBlurTex(g_mbPrev);
     releaseBlurTex(g_mbSwap);
@@ -129,6 +133,8 @@ bool ensure()
         g_btSmall.tex && g_btSmall.w == wSmall && g_btSmall.h == hSmall &&
         g_btTiny.tex && g_btTiny.w == wTiny && g_btTiny.h == hTiny &&
         g_btGaussA.tex && g_btGaussB.tex &&
+        g_btRiseA.tex && g_btRiseA.w == (UINT)g_displayW && g_btRiseA.h == (UINT)g_displayH &&
+        g_btRiseB.tex && g_btRiseB.w == (UINT)g_displayW && g_btRiseB.h == (UINT)g_displayH &&
         g_btProxy.tex && g_btProxy.w == (UINT)g_displayW && g_btProxy.h == (UINT)g_displayH &&
         g_mbPrev.tex && g_mbPrev.w == (UINT)g_displayW && g_mbPrev.h == (UINT)g_displayH &&
         g_mbSwap.tex && g_mbSwap.w == (UINT)g_displayW && g_mbSwap.h == (UINT)g_displayH)
@@ -152,11 +158,14 @@ bool ensure()
     if (fmt == DXGI_FORMAT_UNKNOWN)
         fmt = DXGI_FORMAT_B8G8R8A8_UNORM;
 
-    BlurTex* targets[6] = {&g_btHalf, &g_btQuarter, &g_btSmall, &g_btTiny, &g_btGaussA, &g_btGaussB};
-    const UINT ws[6] = {wHalf, wQuarter, wSmall, wTiny, wSmall, wSmall};
-    const UINT hs[6] = {hHalf, hQuarter, hSmall, hTiny, hSmall, hSmall};
+    BlurTex* targets[8] = {&g_btHalf, &g_btQuarter, &g_btSmall, &g_btTiny,
+                           &g_btGaussA, &g_btGaussB, &g_btRiseA, &g_btRiseB};
+    const UINT ws[8] = {wHalf, wQuarter, wSmall, wTiny, wSmall, wSmall,
+                        (UINT)g_displayW, (UINT)g_displayW};
+    const UINT hs[8] = {hHalf, hQuarter, hSmall, hTiny, hSmall, hSmall,
+                        (UINT)g_displayH, (UINT)g_displayH};
 
-    for (int i = 0; i < 6; ++i)
+    for (int i = 0; i < 8; ++i)
     {
         if (!createBlurTex(ws[i], hs[i], fmt, &targets[i]->tex, &targets[i]->rtv,
                            &targets[i]->srv))

@@ -16,5 +16,9 @@ void addWinrtDirectDelta(int wheelDelta);
 void addGameDelta(int wheelDelta);
 float consume();
 float lastValue();
+// Movimiento relativo del mouse (lLastX/lLastY del RAWINPUT). Con el puntero del
+// CoreWindow oculto (gameplay) Windows CONGELA GetCursorPos: el juego mueve la
+// camara con estos deltas y la UI mueve su cursor virtual con los mismos.
+void consumeMouseDelta(int& dx, int& dy);
 
 }
