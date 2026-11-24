@@ -150,8 +150,8 @@ namespace GameMode
     constexpr int UseItemOn = 12;
     // sub_140511700: native GameMode::useItem(Player*, ItemStack const&).
     constexpr int UseItem = 11;
-    // Confirmado por REA en GameMode/CreativeMode/SurvivalMode: slot 14        
-    // despacha sub_1405103D0(this, Player*, Actor*), la entrada de ataque.     
+    // Confirmado por REA en GameMode/CreativeMode/SurvivalMode: slot 14
+    // despacha sub_1405103D0(this, Player*, Actor*), la entrada de ataque.
     constexpr int Attack = 14;
     // Cadena de rotura de bloques, confirmada por disasm REA del build actual:
     //   slot 1 = sub_140510450 startDestroyBlock(this, Player*, BlockPos*, face)

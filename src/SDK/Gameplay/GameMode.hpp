@@ -55,10 +55,10 @@ public:
     // Despacha el ataque por la vtable activa del modo (Survival/Creative/base).
     bool attack(const Actor& player, const Actor& target) const;
 
-    // Native GameMode::useItem (vtable slot 11): invokes the item's local use  
-    // behavior and sends the matching UseItemPacket through the game's sender. 
+    // Native GameMode::useItem (vtable slot 11): invokes the item's local use
+    // behavior and sends the matching UseItemPacket through the game's sender.
     bool useItem(const ItemInstance& item, uintptr_t playerAddr) const;
-    
+
     // continueDestroyBlock (vtable slot 3 = sub_140510BE0): acumula el progreso
     // de rotura del bloque en curso y aplica la rotura local + paquete cuando
     // llega a 1.0. `pos` debe ser la misma BlockPos que el GameMode tiene en
@@ -81,7 +81,7 @@ public:
     // DestroyProgress (+0x38) y NextDestroyTime (+0x58). Es lo que el click
     // real ejecuta al soltar el boton.
     bool stopDestroyBlock(uintptr_t playerAddr) const;
-    
+
     // Estado de la rotura en curso, leido sin llamar a nada del juego.
     float destroyProgress() const;
     bool destroyTarget(BlockPos& out) const;
