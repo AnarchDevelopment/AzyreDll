@@ -6,7 +6,7 @@
 #include "Features/HudRegistry.hpp"
 #include "Render/BlurHelper/BlurHelper.hpp"
 #include "Render/EffectSprites.hpp"
-#include "SDK/Effects.hpp"
+#include "SDK/Gameplay/Effects.hpp"
 
 #include <imgui.h>
 

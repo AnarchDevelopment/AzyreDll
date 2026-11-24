@@ -2,8 +2,8 @@
 
 #include "GUI/Widgets.hpp"
 #include "Modules/ModuleManager.hpp"
-#include "SDK/Camera.hpp"
-#include "SDK/Game.hpp"
+#include "SDK/Client/Camera.hpp"
+#include "SDK/Core/Game.hpp"
 
 #include <imgui.h>
 #include <windows.h>
@@ -56,12 +56,6 @@ void Waypoints::onRender()
     if (sw <= 0.0f || sh <= 0.0f)
         return;
 
-    if (!fovInited_)
-    {
-        fov_ = readGameFov();
-        fovInited_ = true;
-    }
-
     LocalPlayer lp = game.localPlayer();
     CameraView cam = getCameraView(lp, game.client());
     ImDrawList* d = ImGui::GetForegroundDrawList();
@@ -76,7 +70,7 @@ void Waypoints::onRender()
             continue;
 
         Vec3 s;
-        if (!worldToScreen(wp.pos, cam.pos, cam.yaw, cam.pitch, fov_, sw, sh, s))
+        if (!cam.project(wp.pos, s))
             continue;
 
         ImVec2 p(s.x, s.y);

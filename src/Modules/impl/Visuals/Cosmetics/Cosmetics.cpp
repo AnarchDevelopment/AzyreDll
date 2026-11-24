@@ -1,8 +1,8 @@
 #include "Cosmetics.hpp"
 #include "GUI/Widgets.hpp"
 
-#include "SDK/Camera.hpp"
-#include "SDK/Game.hpp"
+#include "SDK/Client/Camera.hpp"
+#include "SDK/Core/Game.hpp"
 #include "Features/Smoothing.hpp"
 
 #include <cmath>
@@ -47,13 +47,12 @@ ImU32 withAlpha(const ImVec4& c, float k)
     return IM_COL32(r, g, b, a);
 }
 
-void drawQuad(ImDrawList* d, const Vec3 q[4], const CameraView& cam, float fov,
-              float sw, float sh, ImU32 col)
+void drawQuad(ImDrawList* d, const Vec3 q[4], const CameraView& cam, ImU32 col)
 {
     Vec3 p[4];
     for (int i = 0; i < 4; ++i)
     {
-        if (!worldToScreen(q[i], cam.pos, cam.yaw, cam.pitch, fov, sw, sh, p[i]))
+        if (!cam.project(q[i], p[i]))
             return;
     }
     d->AddQuadFilled(ImVec2(p[0].x, p[0].y), ImVec2(p[1].x, p[1].y),
@@ -62,7 +61,7 @@ void drawQuad(ImDrawList* d, const Vec3 q[4], const CameraView& cam, float fov,
 
 void drawWings(ImDrawList* d, const Vec3& anchor, float yawDeg, float t,
                const WingStyleCfg& st, float flapSpeed, float size,
-               const CameraView& cam, float fov, float sw, float sh,
+               const CameraView& cam,
                const ImVec4& color, float opacity)
 {
     float yR = deg2rad(yawDeg);
@@ -109,21 +108,21 @@ void drawWings(ImDrawList* d, const Vec3& anchor, float yawDeg, float t,
                 tipG - perp * (wTip * 2.0f + wRoot * 1.6f),
                 tipG + perp * (wTip * 2.0f + wRoot * 1.6f),
             };
-            drawQuad(d, qg, cam, fov, sw, sh, withAlpha(color, k * 0.20f));
-            drawQuad(d, q, cam, fov, sw, sh, withAlpha(color, k));
+            drawQuad(d, qg, cam, withAlpha(color, k * 0.20f));
+            drawQuad(d, q, cam, withAlpha(color, k));
         }
     }
 }
 
 void drawHalo(ImDrawList* d, const Vec3& center, float radius, float t,
-              const CameraView& cam, float fov, float sw, float sh,
+              const CameraView& cam,
               const ImVec4& color, float opacity)
 {
     Vec3 c = center;
     c.y += std::sin(t * 1.7f) * 0.035f;
 
     Vec3 mid;
-    if (!worldToScreen(c, cam.pos, cam.yaw, cam.pitch, fov, sw, sh, mid))
+    if (!cam.project(c, mid))
         return;
     float th = clampf(180.0f / mid.z, 0.45f, 2.40f);
 
@@ -134,7 +133,7 @@ void drawHalo(ImDrawList* d, const Vec3& center, float radius, float t,
         float a = (float)i / (float)N * kPi * 2.0f;
         Vec3 p{c.x + std::cos(a) * radius, c.y, c.z + std::sin(a) * radius};
         Vec3 s;
-        if (!worldToScreen(p, cam.pos, cam.yaw, cam.pitch, fov, sw, sh, s))
+        if (!cam.project(p, s))
             return;
         pts[i] = ImVec2(s.x, s.y);
     }
@@ -168,12 +167,6 @@ void Cosmetics::onRender()
     if (!wings_ && !halo_)
         return;
 
-    if (!fovInited_)
-    {
-        fov_ = readGameFov();
-        fovInited_ = true;
-    }
-
     CameraView cam = getCameraView(local, game.client());
     ImDrawList* d = ImGui::GetForegroundDrawList();
     float t = (float)ImGui::GetTime();
@@ -187,7 +180,7 @@ void Cosmetics::onRender()
         p.feet = smooth::interp(smooth::channel::Cosmetics, base);
         p.yaw = local.yaw();
         p.height = local.height();
-        drawActor(d, p, cam, sw, sh, t);
+        drawActor(d, p, cam, t);
     }
 
     if (target_ != 0)
@@ -204,13 +197,13 @@ void Cosmetics::onRender()
             p.feet = anchor;
             p.yaw = other.yaw();
             p.height = other.height();
-            drawActor(d, p, cam, sw, sh, t);
+            drawActor(d, p, cam, t);
         }
     }
 }
 
 void Cosmetics::drawActor(ImDrawList* d, const Pose& p, const CameraView& cam,
-                          float sw, float sh, float t)
+                          float t)
 {
     // Camara encima del actor (1ª persona): no dibujar, taparia la pantalla.
     float dist = distance3D(cam.pos, {p.feet.x, p.feet.y + p.height * 0.6f, p.feet.z});
@@ -221,14 +214,14 @@ void Cosmetics::drawActor(ImDrawList* d, const Pose& p, const CameraView& cam,
     {
         const WingStyleCfg& st = kWingStyles[wingStyle_];
         Vec3 anchor{p.feet.x, p.feet.y + p.height * 0.74f, p.feet.z};
-        drawWings(d, anchor, p.yaw, t, st, flapSpeed_, size_, cam, fov_, sw, sh,
+        drawWings(d, anchor, p.yaw, t, st, flapSpeed_, size_, cam,
                   color_, opacity_);
     }
 
     if (halo_)
     {
         Vec3 hc{p.feet.x, p.feet.y + p.height + 0.26f * size_, p.feet.z};
-        drawHalo(d, hc, 0.30f * size_, t, cam, fov_, sw, sh, color_, opacity_);
+        drawHalo(d, hc, 0.30f * size_, t, cam, color_, opacity_);
     }
 }
 
@@ -249,7 +242,6 @@ void Cosmetics::drawSettings()
     widgets::Checkbox("Halo##cos", &halo_);
     widgets::CSlider("Opacity##cos", &opacity_, 0.10f, 1.00f, "%.2f");
     widgets::Checkbox("Smooth##cos", &smooth_);
-    widgets::CSlider("FOV##cos", &fov_, 30.0f, 130.0f, "%.0f");
     widgets::ColorEdit4("Color##cos", (float*)&color_);
     ImGui::TextDisabled("Wings render in world space (need 2nd/3rd person)");
 }

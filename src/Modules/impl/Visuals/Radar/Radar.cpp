@@ -9,7 +9,7 @@
 #include "Modules/ModuleManager.hpp"
 #include "Modules/impl/Misc/StaffDetector/StaffDetector.hpp"
 #include "Render/BlurHelper/BlurHelper.hpp"
-#include "SDK/Game.hpp"
+#include "SDK/Core/Game.hpp"
 
 #include <imgui.h>
 

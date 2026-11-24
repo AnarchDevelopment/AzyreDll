@@ -7,10 +7,7 @@
 
 namespace mc {
 
-// Spotify — widget HUD que muestra la cancion que se esta escuchando.
-// Usa el servidor callback localhost:8888 (abierto al inyectar la DLL) para
-// el flujo OAuth con Client ID/Secret de Spotify Developer guardados en
-// Azyre/Spotify/clientid.txt y clientsecret.txt.
+// Spotify — widget HUD que muestra la sesión publicada por Windows GSMTC.
 class Spotify : public Module
 {
 public:
@@ -60,11 +57,6 @@ private:
     bool showArtwork_ = true;
     bool showAlbum_ = true;
     int pollMs_ = 1000;
-
-    // buffers para los inputs de credenciales
-    char idBuf_[128] = {};
-    char secretBuf_[128] = {};
-    bool credsLoaded_ = false;
 
     // textura de la caratula (hilo de render)
     void* artSrv_ = nullptr;

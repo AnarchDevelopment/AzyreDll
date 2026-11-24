@@ -1,8 +1,8 @@
 #include "Trail.hpp"
 #include "GUI/Widgets.hpp"
 
-#include "SDK/Camera.hpp"
-#include "SDK/Game.hpp"
+#include "SDK/Client/Camera.hpp"
+#include "SDK/Core/Game.hpp"
 
 #include <algorithm>
 
@@ -59,12 +59,6 @@ void Trail::onRender()
     if (hist_.size() < 2)
         return;
 
-    if (!fovInited_)
-    {
-        fov_ = readGameFov();
-        fovInited_ = true;
-    }
-
     CameraView cam = getCameraView(local, game.client());
     ImDrawList* d = ImGui::GetForegroundDrawList();
     ImU32 baseCol = ImGui::ColorConvertFloat4ToU32(color_);
@@ -73,9 +67,9 @@ void Trail::onRender()
     for (size_t i = 1; i < n; ++i)
     {
         Vec3 s0, s1;
-        if (!worldToScreen(hist_[i - 1].pos, cam.pos, cam.yaw, cam.pitch, fov_, sw, sh, s0))
+        if (!cam.project(hist_[i - 1].pos, s0))
             continue;
-        if (!worldToScreen(hist_[i].pos, cam.pos, cam.yaw, cam.pitch, fov_, sw, sh, s1))
+        if (!cam.project(hist_[i].pos, s1))
             continue;
 
         float frac = (float)i / (float)(n - 1);
@@ -89,7 +83,6 @@ void Trail::drawSettings()
 {
     widgets::CSlider("Length##trl", &lengthSec_, 0.5f, 4.0f, "%.1f s");
     widgets::CSlider("Thickness##trl", &thickness_, 0.5f, 4.0f, "%.1f");
-    widgets::CSlider("FOV##trl", &fov_, 30.0f, 130.0f, "%.0f");
     widgets::ColorEdit4("Color##trl", (float*)&color_);
 }
 

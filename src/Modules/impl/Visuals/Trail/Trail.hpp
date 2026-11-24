@@ -24,7 +24,6 @@ public:
         return nlohmann::json{
             {"lengthSec", lengthSec_},
             {"thickness", thickness_},
-            {"fov", fov_},
             {"color", {color_.x, color_.y, color_.z, color_.w}},
         };
     }
@@ -33,7 +32,6 @@ public:
     {
         lengthSec_ = j.value("lengthSec", lengthSec_);
         thickness_ = j.value("thickness", thickness_);
-        fov_ = j.value("fov", fov_);
         if (j.contains("color") && j["color"].is_array() && j["color"].size() == 4)
         {
             color_.x = j["color"][0].get<float>();
@@ -54,8 +52,6 @@ private:
     ULONGLONG lastPush_ = 0;
     float lengthSec_ = 2.0f;
     float thickness_ = 1.5f;
-    float fov_ = 110.0f;
-    bool fovInited_ = false;
     ImVec4 color_ = ImVec4(0.84f, 0.86f, 0.90f, 0.85f);
 };
 

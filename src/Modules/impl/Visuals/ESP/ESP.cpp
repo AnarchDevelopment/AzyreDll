@@ -2,9 +2,9 @@
 #include "GUI/Widgets.hpp"
 
 #include "Framework/Math.hpp"
-#include "SDK/Camera.hpp"
+#include "SDK/Client/Camera.hpp"
 #include "Features/Friends.hpp"
-#include "SDK/Game.hpp"
+#include "SDK/Core/Game.hpp"
 #include "Features/Smoothing.hpp"
 
 namespace mc {
@@ -176,12 +176,6 @@ void ESP::onRender()
     if (sw <= 0.0f || sh <= 0.0f)
         return;
 
-    if (!fovInited_)
-    {
-        fov_ = readGameFov();
-        fovInited_ = true;
-    }
-
     CameraView cam = getCameraView(local, game.client());
     ImDrawList* d = ImGui::GetForegroundDrawList();
 
@@ -252,7 +246,7 @@ void ESP::onRender()
             bool visible = true;
             for (int i = 0; i < 8; ++i)
             {
-                if (!worldToScreen(corners[i], cam.pos, cam.yaw, cam.pitch, fov_, sw, sh, proj[i]))
+                if (!cam.project(corners[i], proj[i]))
                 {
                     visible = false;
                     break;
@@ -302,17 +296,17 @@ void ESP::onRender()
 
             Vec3 top{feet.x, feet.y + ht, feet.z};
             Vec3 sTop;
-            if (worldToScreen(top, cam.pos, cam.yaw, cam.pitch, fov_, sw, sh, sTop))
+            if (cam.project(top, sTop))
                 drawLabels(sTop.x, sTop.y, n, fr, dist);
 
             continue;
         }
 
         Vec3 sFeet, sHead;
-        if (!worldToScreen(feet, cam.pos, cam.yaw, cam.pitch, fov_, sw, sh, sFeet))
+        if (!cam.project(feet, sFeet))
             continue;
         Vec3 head{feet.x, feet.y + ht, feet.z};
-        if (!worldToScreen(head, cam.pos, cam.yaw, cam.pitch, fov_, sw, sh, sHead))
+        if (!cam.project(head, sHead))
             continue;
 
         float bH = sFeet.y - sHead.y;
@@ -375,7 +369,6 @@ void ESP::drawSettings()
         widgets::CSlider("Glow strength##esp", &shadowStrength_, 10.0f, 120.0f, "%.0f");
         ImGui::Unindent();
     }
-    widgets::CSlider("FOV##esp", &fov_, 30.0f, 130.0f, "%.0f");
     widgets::ColorEdit4("Color##esp", (float*)&color_);
 }
 

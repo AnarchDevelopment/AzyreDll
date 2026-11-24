@@ -65,9 +65,6 @@ private:
 
     std::mutex mapMutex_;
     std::map<std::tuple<int, int, int, int>, unsigned long long> placedBlocks_;
-
-    float fov_ = 110.0f;
-    bool fovInited_ = false;
 };
 
 }

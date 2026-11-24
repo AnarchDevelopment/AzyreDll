@@ -3,11 +3,13 @@
 
 #include "Features/Raycast.hpp"
 #include "Framework/Math.hpp"
-#include "SDK/Camera.hpp"
-#include "SDK/Game.hpp"
+#include "SDK/Client/Camera.hpp"
+#include "SDK/Core/Game.hpp"
 
 #include <imgui.h>
 #include <cmath>
+#include <cstdio>
+#include <vector>
 
 namespace mc {
 
@@ -26,25 +28,66 @@ Vec3 viewDir(const LocalPlayer& lp)
 
 // Ids clasicos (Java/Bedrock legacy) de lanzables; si el build usa otros,
 // basta con ajustar la tabla. Con autoItem_ desactivado se usan los sliders.
+// kind: 0 = velocidad fija, 1 = escala con la carga del arco.
 struct ItemTag
 {
     int first;
     int last;
     float speed;
     float gravity;
+    float drag;
+    int kind;
 };
 const ItemTag kTags[] = {
-    {344, 344, 1.5f, 0.03f},        // egg
-    {332, 332, 1.5f, 0.03f},        // snowball
-    {368, 368, 1.5f, 0.03f},        // ender pearl
-    {373, 373, 0.5f, 0.03f},        // splash potion
-    {378, 378, 0.5f, 0.03f},        // lingering potion
-    {261, 261, 3.0f, 0.05f},        // bow
-    {942, 942, 3.2f, 0.05f},        // crossbow (id variable segun linea)
-    {836, 836, 2.5f, 0.05f},        // trident
-    {346, 346, 1.5f, 0.04f},        // fishing rod
-    {384, 384, 0.75f, 0.04f},       // bottle o' enchanting
+    {344, 344, 1.5f, 0.03f, 0.99f, 0},  // egg
+    {332, 332, 1.5f, 0.03f, 0.99f, 0},  // snowball
+    {368, 368, 1.5f, 0.03f, 0.99f, 0},  // ender pearl
+    {373, 373, 0.5f, 0.03f, 0.99f, 0},  // splash potion
+    {378, 378, 0.5f, 0.03f, 0.99f, 0},  // lingering potion
+    {261, 261, 3.0f, 0.05f, 0.99f, 1},  // bow (escala con la carga)
+    {942, 942, 3.2f, 0.05f, 0.99f, 1},  // crossbow
+    {836, 836, 2.5f, 0.05f, 0.99f, 0},  // trident
+    {346, 346, 1.5f, 0.04f, 0.99f, 0},  // fishing rod
+    {384, 384, 0.75f, 0.04f, 0.99f, 0}, // bottle o' enchanting
 };
+
+// Test segmento (a -> b) contra un AABB. Devuelve true y el t del primer
+// contacto (0..1) para saber donde entra la curva.
+bool segmentHitsAabb(const Vec3& a, const Vec3& b, const Vec3& mn, const Vec3& mx, float& tHit)
+{
+    const float dir[3] = {b.x - a.x, b.y - a.y, b.z - a.z};
+    const float origin[3] = {a.x, a.y, a.z};
+    const float lo[3] = {mn.x, mn.y, mn.z};
+    const float hi[3] = {mx.x, mx.y, mx.z};
+
+    float tMin = 0.0f;
+    float tMax = 1.0f;
+    for (int i = 0; i < 3; ++i)
+    {
+        if (std::fabs(dir[i]) < 1e-6f)
+        {
+            if (origin[i] < lo[i] || origin[i] > hi[i])
+                return false;
+            continue;
+        }
+        float t1 = (lo[i] - origin[i]) / dir[i];
+        float t2 = (hi[i] - origin[i]) / dir[i];
+        if (t1 > t2)
+        {
+            const float tmp = t1;
+            t1 = t2;
+            t2 = tmp;
+        }
+        if (t1 > tMin)
+            tMin = t1;
+        if (t2 < tMax)
+            tMax = t2;
+        if (tMin > tMax)
+            return false;
+    }
+    tHit = tMin;
+    return true;
+}
 
 } // namespace
 
@@ -55,39 +98,78 @@ Trajectories::Trajectories()
     markHasSettings();
 }
 
-void Trajectories::itemParams(const ItemInstance& held)
+bool Trajectories::itemParams(const ItemInstance& held)
 {
-    int id = held.itemId();
+    const int id = held.itemId();
     if (id < 0)
-        return;
+        return false;
     for (const ItemTag& t : kTags)
     {
         if (id >= t.first && id <= t.last)
         {
             speed_ = t.speed;
             gravity_ = t.gravity;
-            drag_ = 0.99f;
-            return;
+            drag_ = t.drag;
+            if (t.kind == 1)
+            {
+                // La velocidad de salida del arco va de ~1 b/t (carga 0)
+                // hasta el maximo del item cuando esta cargado.
+                const float charge = clampf(bowCharge_, 0.0f, 1.0f);
+                speed_ = 1.0f + (t.speed - 1.0f) * charge;
+                gravity_ = t.gravity * (0.6f + 0.4f * charge);
+            }
+            return true;
         }
     }
+    return false;
 }
 
-void Trajectories::simulate(const LocalPlayer& lp, const BlockSource& bs,
-                            std::vector<Vec3>& pts, bool& landingValid, Vec3& landing)
+void Trajectories::simulate(const LocalPlayer& lp, const BlockSource& bs, SimResult& out)
 {
-    pts.clear();
-    landingValid = false;
+    out.points.clear();
+    out.landingValid = false;
+    out.entityHit = false;
+    out.distance = 0.0f;
+    out.flightTime = 0.0f;
 
-    Vec3 pos = lp.eyePos();
-    Vec3 vel = viewDir(lp) * speed_;
-    float ticks = maxTime_ * off::gameconst::Tps;
+    // El proyectil sale del ojo y no del centro del AABB: con el origen en
+    // eyePos puro la curva se desvia en tiros horizontales largos.
+    const Vec3 dir = normalize(viewDir(lp));
+    Vec3 pos = lp.eyePos() + dir * 0.1f;
+    const Vec3 origin = pos;
+    Vec3 vel = dir * speed_;
+
+    float ticks = maxTime_ * (float)off::gameconst::Tps;
     if (ticks > 400.0f)
         ticks = 400.0f;
 
+    // AABB de los jugadores visibles: corta el arco en el primero alcanzado.
+    struct Box
+    {
+        Vec3 mn;
+        Vec3 mx;
+    };
+    std::vector<Box> boxes;
+    if (hitEntities_)
+    {
+        for (const Actor& a : Game::get().remotePlayers())
+        {
+            if (!a.valid())
+                continue;
+            const Vec3 center = a.posExact();
+            const Vec3 feet = a.pos();
+            const float half = 0.3f;
+            boxes.push_back({Vec3{center.x - half, feet.y, center.z - half},
+                             Vec3{center.x + half, feet.y + a.height(), center.z + half}});
+        }
+    }
+
+    int bounces = 0;
     for (int i = 0; i < (int)ticks; ++i)
     {
+        out.flightTime = (float)i / (float)off::gameconst::Tps;
         if (i % 2 == 0) // muestrear a media resolucion para curvas largas
-            pts.push_back(pos);
+            out.points.push_back(pos);
 
         vel.y -= gravity_;
         vel = vel * drag_;
@@ -96,16 +178,61 @@ void Trajectories::simulate(const LocalPlayer& lp, const BlockSource& bs,
         if (step > 4.5f) // evita tunneling en saltos grandes
             return;
 
-        RaycastHit h = raycastBlock(bs, pos, vel, step);
-        if (h.hit)
+        const Vec3 next = pos + vel;
+
+        float entityT = 2.0f;
+        if (hitEntities_)
         {
-            landing = h.point;
-            landingValid = true;
-            pts.push_back(landing);
-            break;
+            for (const Box& b : boxes)
+            {
+                float t = 0.0f;
+                if (segmentHitsAabb(pos, next, b.mn, b.mx, t) && t < entityT)
+                    entityT = t;
+            }
         }
 
-        pos = pos + vel;
+        RaycastHit h = raycastBlock(bs, pos, vel, step);
+        if (entityT <= 1.0f && (!h.hit || entityT * step <= h.distance))
+        {
+            out.landing = pos + vel * entityT;
+            out.landingValid = true;
+            out.entityHit = true;
+            out.points.push_back(out.landing);
+            out.distance = distance3D(origin, out.landing);
+            return;
+        }
+
+        if (h.hit)
+        {
+            out.landing = h.point;
+            out.landingValid = true;
+            out.distance = distance3D(origin, h.point);
+            out.points.push_back(h.point);
+
+            if (bounce_ && bounces < 3 && h.face >= 0)
+            {
+                // Reflejar sobre la normal de la cara golpeada y perder energia.
+                Vec3 n{0.0f, 0.0f, 0.0f};
+                switch (h.face)
+                {
+                case 0: n = {0.0f, 1.0f, 0.0f}; break;  // abajo
+                case 1: n = {0.0f, -1.0f, 0.0f}; break; // arriba
+                case 2: n = {0.0f, 0.0f, 1.0f}; break;  // norte (-z)
+                case 3: n = {0.0f, 0.0f, -1.0f}; break; // sur (+z)
+                case 4: n = {1.0f, 0.0f, 0.0f}; break;  // oeste (-x)
+                case 5: n = {-1.0f, 0.0f, 0.0f}; break; // este (+x)
+                default: break;
+                }
+                vel = (vel - n * (2.0f * dot(vel, n))) * 0.5f;
+                pos = h.point + n * 0.01f;
+                out.landingValid = false;
+                ++bounces;
+                continue;
+            }
+            return;
+        }
+
+        pos = next;
         if (pos.y < -64.0f)
             break;
     }
@@ -124,8 +251,8 @@ void Trajectories::onRender()
     if (!held.valid() || held.count() <= 0 || held.isBlockItem())
         return; // bloque/mano vacia: nada que lanzar
 
-    if (autoItem_)
-        itemParams(held);
+    if (autoItem_ && !itemParams(held))
+        return; // item en mano no lanzable: no hay trayectoria que predecir
 
     BlockSource bs = game.blockSource();
     if (!bs.valid())
@@ -137,21 +264,14 @@ void Trajectories::onRender()
     if (sw <= 0.0f || sh <= 0.0f)
         return;
 
-    if (!fovInited_)
-    {
-        fov_ = readGameFov();
-        fovInited_ = true;
-    }
-
     CameraView cam = getCameraView(lp, game.client());
     ImDrawList* d = ImGui::GetForegroundDrawList();
-    ImU32 col = ImGui::ColorConvertFloat4ToU32(color_);
+    const ImU32 col = ImGui::ColorConvertFloat4ToU32(color_);
 
-    std::vector<Vec3> pts;
-    bool landingValid = false;
-    Vec3 landing;
-    simulate(lp, bs, pts, landingValid, landing);
+    SimResult sim;
+    simulate(lp, bs, sim);
 
+    const std::vector<Vec3>& pts = sim.points;
     if (pts.size() < 2)
         return;
 
@@ -161,7 +281,7 @@ void Trajectories::onRender()
     for (const Vec3& wp : pts)
     {
         Vec3 s;
-        if (!worldToScreen(wp, cam.pos, cam.yaw, cam.pitch, fov_, sw, sh, s))
+        if (!cam.project(wp, s))
         {
             if (!screen.empty())
                 break; // la curva escapo por detras: cortar
@@ -175,16 +295,29 @@ void Trajectories::onRender()
         d->AddCircleFilled(screen.front(), 2.5f, col, 12);
     }
 
-    if (drawLanding_ && landingValid)
+    if (drawLanding_ && sim.landingValid)
     {
         Vec3 s;
-        if (worldToScreen(landing, cam.pos, cam.yaw, cam.pitch, fov_, sw, sh, s))
+        if (cam.project(sim.landing, s))
         {
             ImVec2 sp(s.x, s.y);
-            const ImU32 r = col;
-            d->AddCircle(sp, 5.0f, r, 24, thickness_);
-            d->AddLine(ImVec2(sp.x - 3.0f, sp.y), ImVec2(sp.x + 3.0f, sp.y), r, thickness_);
-            d->AddLine(ImVec2(sp.x, sp.y - 3.0f), ImVec2(sp.x, sp.y + 3.0f), r, thickness_);
+            // Impacto en entidad: marcador relleno y en rojo para distinguirlo
+            // del impacto en bloque.
+            const ImU32 marker = sim.entityHit
+                ? IM_COL32(255, 80, 80, 220)
+                : col;
+            if (sim.entityHit)
+                d->AddCircleFilled(sp, 4.0f, marker, 20);
+            d->AddCircle(sp, 5.0f, marker, 24, thickness_);
+            d->AddLine(ImVec2(sp.x - 3.0f, sp.y), ImVec2(sp.x + 3.0f, sp.y), marker, thickness_);
+            d->AddLine(ImVec2(sp.x, sp.y - 3.0f), ImVec2(sp.x, sp.y + 3.0f), marker, thickness_);
+
+            if (showInfo_)
+            {
+                char info[64] = {};
+                snprintf(info, sizeof(info), "%.1f b  %.2f s", sim.distance, sim.flightTime);
+                d->AddText(ImVec2(sp.x + 9.0f, sp.y - 6.0f), marker, info);
+            }
         }
     }
 }
@@ -200,8 +333,17 @@ void Trajectories::drawSettings()
         widgets::CSlider("Drag##tj", &drag_, 0.90f, 1.0f, "%.3f");
         ImGui::Unindent(14.0f);
     }
+    else
+    {
+        ImGui::Indent(14.0f);
+        widgets::CSlider("Bow charge##tj", &bowCharge_, 0.0f, 1.0f, "%.2f");
+        ImGui::Unindent(14.0f);
+    }
     widgets::CSlider("Max time (s)##tj", &maxTime_, 0.5f, 5.0f, "%.1f");
     widgets::Checkbox("Landing marker##tj", &drawLanding_);
+    widgets::Checkbox("Show flight info##tj", &showInfo_);
+    widgets::Checkbox("Hit players##tj", &hitEntities_);
+    widgets::Checkbox("Bounce off blocks##tj", &bounce_);
     widgets::CSlider("Thickness##tj", &thickness_, 0.5f, 4.0f, "%.1f");
     widgets::ColorEdit4("Color##tj", (float*)&color_);
 }

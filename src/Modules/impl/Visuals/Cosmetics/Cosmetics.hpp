@@ -37,8 +37,6 @@ public:
             {"flapSpeed", flapSpeed_},
             {"opacity", opacity_},
             {"smooth", smooth_},
-            {"fovInited", fovInited_},
-            {"fov", fov_},
             {"color", {color_.x, color_.y, color_.z, color_.w}},
         };
     }
@@ -55,8 +53,6 @@ public:
         flapSpeed_ = clampf(j.value("flapSpeed", flapSpeed_), 0.3f, 4.0f);
         opacity_ = clampf(j.value("opacity", opacity_), 0.10f, 1.00f);
         smooth_ = j.value("smooth", smooth_);
-        fov_ = clampf(j.value("fov", fov_), 30.0f, 130.0f);
-        fovInited_ = j.value("fovInited", fovInited_);
         if (j.contains("color") && j["color"].is_array() && j["color"].size() == 4)
         {
             color_.x = j["color"][0].get<float>();
@@ -75,7 +71,7 @@ private:
     };
 
     void drawActor(ImDrawList* d, const Pose& pose, const CameraView& cam,
-                   float sw, float sh, float t);
+                   float t);
 
     int target_ = 2; // 0 = Self, 1 = Others, 2 = Both
     bool wings_ = true;
@@ -85,8 +81,6 @@ private:
     float flapSpeed_ = 1.2f;
     float opacity_ = 0.85f;
     bool smooth_ = true;
-    float fov_ = 110.0f;
-    bool fovInited_ = false;
     ImVec4 color_ = ImVec4(0.90f, 0.93f, 1.00f, 1.00f);
 };
 

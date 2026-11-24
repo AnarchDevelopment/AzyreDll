@@ -2,7 +2,7 @@
 
 #include "Features/Rotation.hpp"
 #include "Features/RotationHelper.hpp"
-#include "SDK/Game.hpp"
+#include "SDK/Core/Game.hpp"
 
 #include <cmath>
 

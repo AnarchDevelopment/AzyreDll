@@ -71,8 +71,6 @@ private:
     int range_ = 48;
     int refreshMs_ = 1000;
     int maxBlocks_ = 1500;
-    float fov_ = 110.0f;
-    bool fovInited_ = false;
     bool debug_ = false;
 };
 

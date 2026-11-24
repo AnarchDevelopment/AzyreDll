@@ -1,16 +1,19 @@
 #include "Watermark.hpp"
 
 #include "Config/Config.hpp"
+#include "Features/TextGradient.hpp"
+#include "Features/TextGlow.hpp"
 #include "Features/HudRegistry.hpp"
 #include "Framework/ColorUtils.hpp"
 #include "GUI/Theme.hpp"
 #include "GUI/Widgets.hpp"
 #include "Render/DX11.hpp"
-#include "SDK/Game.hpp"
+#include "SDK/Core/Game.hpp"
 
 #include <imgui.h>
 #include <windows.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <string>
@@ -34,7 +37,9 @@ void Watermark::onRender()
 
     ImDrawList* d = ImGui::GetForegroundDrawList();
 
-    if (style_ == 2)
+    if (style_ == 3)
+        renderPacket(d);
+    else if (style_ == 2)
         renderRise(d);
     else if (style_ == 1)
         renderSolstice(d);
@@ -251,14 +256,55 @@ void Watermark::renderRise(ImDrawList* d)
     }
 }
 
+// =============== MODO PACKET ===============
+// Client name with a theme gradient per glyph and a compact superscript version.
+void Watermark::renderPacket(ImDrawList* d)
+{
+    ImFont* font = dx11::hudFont(); // Product Sans Bold; falls back if the font resource is unavailable.
+    if (!font)
+        font = ImGui::GetFont();
+    if (!font)
+        return;
+
+    constexpr const char* kName = "Azyre";
+    constexpr const char* kVersion = "1.1.1";
+    const float kNameSize = std::clamp(packetSize_, 12.0f, 48.0f);
+    const float kVersionSize = std::max(7.0f, kNameSize * 0.40f);
+    constexpr float kVersionGap = 3.0f;
+
+    const float nameWidth = font->CalcTextSizeA(kNameSize, FLT_MAX, 0.0f, kName).x;
+    const float versionWidth = font->CalcTextSizeA(kVersionSize, FLT_MAX, 0.0f, kVersion).x;
+    const float height = std::max(kNameSize, kVersionSize + 5.0f);
+    const ImVec2 size(nameWidth + kVersionGap + versionWidth, height);
+
+    hud::Registry::get().setConfigPath(config::baseDir() + "\\hud.json");
+    const ImVec2 pos = hud::Registry::get().report(
+        "WatermarkPacket", ImVec2(12.0f, 12.0f), size);
+
+    features::addThemeTextGlow(d, font, kNameSize, pos, kName);
+    features::addThemeGradientText(d, font, kNameSize, pos, kName, 1.0f,
+        packetGradientDirectionEnabled_ ? packetGradientDirection_ : 0.0f);
+    d->AddText(font, kVersionSize,
+        ImVec2(pos.x + nameWidth + kVersionGap, pos.y + 1.0f),
+        IM_COL32(150, 150, 150, 255), kVersion);
+}
+
 void Watermark::drawSettings()
 {
-    const char* styles[] = {"Azyre", "Solstice", "Rise"};
-    widgets::CCombo("Style##wm", &style_, styles, 3);
+    const char* styles[] = {"Azyre", "Solstice", "Rise", "Packet"};
+    widgets::CCombo("Style##wm", &style_, styles, 4);
     if (style_ == 1)
         widgets::Checkbox("Glow##wm", &glow_);
     if (style_ == 2)
         widgets::InputText("Custom Name##wm", customName_, sizeof(customName_));
+    if (style_ == 3)
+    {
+        widgets::CSlider("Size##wm_packet", &packetSize_, 12.0f, 48.0f, "%.0f px");
+        widgets::Checkbox("Gradient Direction##wm_packet", &packetGradientDirectionEnabled_);
+        if (packetGradientDirectionEnabled_)
+            widgets::CSlider("Direction##wm_packet", &packetGradientDirection_,
+                0.0f, 360.0f, "%.0f°");
+    }
 }
 
 nlohmann::json Watermark::saveSettings() const
@@ -267,17 +313,25 @@ nlohmann::json Watermark::saveSettings() const
         {"style", style_},
         {"glow", glow_},
         {"customName", customName_},
+        {"packetSize", packetSize_},
+        {"packetGradientDirectionEnabled", packetGradientDirectionEnabled_},
+        {"packetGradientDirection", packetGradientDirection_},
     };
 }
 
 void Watermark::loadSettings(const nlohmann::json& j)
 {
     style_ = j.value("style", style_);
-    if (style_ < 0 || style_ > 2)
+    if (style_ < 0 || style_ > 3)
         style_ = 0;
     glow_ = j.value("glow", glow_);
     std::string cn = j.value("customName", std::string());
     snprintf(customName_, sizeof(customName_), "%s", cn.c_str());
+    packetSize_ = std::clamp(j.value("packetSize", packetSize_), 12.0f, 48.0f);
+    packetGradientDirectionEnabled_ = j.value(
+        "packetGradientDirectionEnabled", packetGradientDirectionEnabled_);
+    packetGradientDirection_ = std::clamp(
+        j.value("packetGradientDirection", packetGradientDirection_), 0.0f, 360.0f);
 }
 
 MC_REGISTER_MODULE(Watermark);

@@ -4,9 +4,9 @@
 #include "Framework/Math.hpp"
 #include "Render/DX11.hpp"
 #include "Render/BlurHelper/BlurHelper.hpp"
-#include "SDK/Camera.hpp"
+#include "SDK/Client/Camera.hpp"
 #include "Features/Friends.hpp"
-#include "SDK/Game.hpp"
+#include "SDK/Core/Game.hpp"
 #include "Features/Smoothing.hpp"
 
 #include <cstdio>
@@ -31,12 +31,6 @@ void NameTags::onRender()
     float sh = io.DisplaySize.y;
     if (sw <= 0.0f || sh <= 0.0f)
         return;
-
-    if (!fovInited_)
-    {
-        fov_ = readGameFov();
-        fovInited_ = true;
-    }
 
     CameraView cam = getCameraView(local, game.client());
     ImDrawList* d = ImGui::GetForegroundDrawList();
@@ -66,7 +60,7 @@ void NameTags::onRender()
         float ht = other.height();
         Vec3 head{feet.x, feet.y + ht + 0.40f, feet.z};
         Vec3 s;
-        if (!worldToScreen(head, cam.pos, cam.yaw, cam.pitch, fov_, sw, sh, s))
+        if (!cam.project(head, s))
             continue;
         if (s.x < -150.0f || s.x > sw + 150.0f || s.y < -80.0f || s.y > sh + 80.0f)
             continue;
@@ -96,14 +90,17 @@ void NameTags::onRender()
         // Fondo: blur del backdrop (mecanismo probado) o oscuro tradicional.
         // Siempre con glow negro estilo Fluent (como ArrayList y Watermark).
         widgets::SoftShadow(d, p0, p1, 4.0f, 34.0f, 14.0f);
-        if (blur_ && blur::wanted() && blur::ready())
+        if (blur_)
+            blur::requestFullRate();
+        void* blurTexture = (blur_ && blur::wanted() && blur::ready()) ? blur::srv() : nullptr;
+        if (blurTexture)
         {
             // Muestrear la sub-region del blur global para este rect.
             ImVec2 uv0(p0.x / sw, p0.y / sh);
             ImVec2 uv1(p1.x / sw, p1.y / sh);
-            d->AddImageRounded(ImTextureRef((void*)blur::srv()),
+            d->AddImageRounded(ImTextureRef(blurTexture),
                                p0, p1, uv0, uv1,
-                               IM_COL32(255, 255, 255, 235), 4.0f);
+                               IM_COL32(255, 255, 255, 255), 4.0f);
             // Scrim ligero para legibilidad.
             d->AddRectFilled(p0, p1, IM_COL32(10, 14, 20, 70), 4.0f);
         }
@@ -138,7 +135,6 @@ void NameTags::drawSettings()
     widgets::Checkbox("Blur background##nt", &blur_);
     widgets::CSlider("Font size##nt", &fontSize_, 10.0f, 24.0f, "%.0f");
     widgets::CSlider("Max distance##nt", &maxDistance_, 8.0f, 128.0f, "%.0f");
-    widgets::CSlider("FOV##nt", &fov_, 30.0f, 130.0f, "%.0f");
 }
 
 MC_REGISTER_MODULE(NameTags);

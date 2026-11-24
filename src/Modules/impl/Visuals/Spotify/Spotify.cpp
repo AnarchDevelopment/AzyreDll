@@ -7,7 +7,6 @@
 #include "GUI/Menu.hpp"
 #include "GUI/Theme.hpp"
 #include "GUI/Widgets.hpp"
-#include "Modules/ModuleManager.hpp"
 #include "Networking/Spotify/SpotifyService.hpp"
 #include "Render/BlurHelper/BlurHelper.hpp"
 #include "Render/DX11.hpp"
@@ -61,7 +60,7 @@ std::string ellipsize(const std::string& text, float size, float maxW)
 } // namespace
 
 Spotify::Spotify()
-    : Module("Spotify", "Now playing widget for Spotify (localhost:8888/callback)",
+    : Module("Spotify", "Now playing widget using Windows media sessions",
              Category::Visuals, 0)
 {
     markHasSettings();
@@ -69,24 +68,8 @@ Spotify::Spotify()
 
 void Spotify::onEnable()
 {
-    if (!credsLoaded_)
-    {
-        credsLoaded_ = true;
-        spotify::loadCredentials();
-        std::string id, secret;
-        spotify::getCredentials(id, secret);
-        snprintf(idBuf_, sizeof(idBuf_), "%s", id.c_str());
-        snprintf(secretBuf_, sizeof(secretBuf_), "%s", secret.c_str());
-    }
-
     spotify::setPollIntervalMs(pollMs_);
-    spotify::startServer(); // idempotente: garantiza el socket :8888
     spotify::startPolling();
-
-    if (!spotify::hasCredentials())
-        ModuleManager::get().notifyInfo("Spotify: set Client ID/Secret in settings");
-    else if (!spotify::authorized())
-        spotify::startAuthFlow();
 }
 
 void Spotify::onDisable()
@@ -336,75 +319,21 @@ void Spotify::onRender()
 
 void Spotify::drawSettings()
 {
-    if (!credsLoaded_)
-    {
-        credsLoaded_ = true;
-        spotify::loadCredentials();
-        std::string id, secret;
-        spotify::getCredentials(id, secret);
-        snprintf(idBuf_, sizeof(idBuf_), "%s", id.c_str());
-        snprintf(secretBuf_, sizeof(secretBuf_), "%s", secret.c_str());
-    }
-
-    ImGui::TextDisabled("Spotify Developer Dashboard credentials");
-    bool idCh = widgets::InputText("Client ID##sp", idBuf_, sizeof(idBuf_));
-    bool secCh = widgets::InputText("Client Secret##sp", secretBuf_, sizeof(secretBuf_));
-    if (idCh || secCh)
-        spotify::setCredentials(idBuf_, secretBuf_);
-
-    if (ImGui::Button("Connect##sp"))
-    {
-        if (spotify::hasCredentials())
-        {
-            if (spotify::startServer())
-                spotify::startAuthFlow();
-            else
-                ModuleManager::get().notifyInfo(spotify::lastError());
-        }
-        else
-            ModuleManager::get().notifyInfo("Spotify: set Client ID and Secret first");
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("Disconnect##sp"))
-        spotify::clearTokens();
-
-    // Estado
     switch (spotify::status())
     {
-    case spotify::Status::NoCredentials:
-        ImGui::TextColored(ImVec4(0.95f, 0.65f, 0.25f, 1.0f), "Status: no credentials");
-        break;
-    case spotify::Status::WaitingAuth:
-    {
-        ImGui::TextColored(ImVec4(0.95f, 0.85f, 0.35f, 1.0f),
-                           "Status: waiting for authorization...");
-        // El navegador no vuelve a localhost:8888 dentro del AppContainer
-        // del juego sin exemption de loopback. Ofrecer la via manual: la
-        // barra de direcciones del navegador queda con el code despues del
-        // redirect fallido — copiar y pegar aqui.
-        ImGui::TextDisabled("Si el navegador no logra abrir localhost:8888:");
-        ImGui::TextDisabled("cmd (admin): CheckNetIsolation LoopbackExempt");
-        ImGui::TextDisabled("-a -n=Microsoft.MinecraftUWP_8wekyb3d8bbwe");
-        static char pastedUrl[512] = "";
-        widgets::InputText("##sppaste", pastedUrl, sizeof(pastedUrl));
-        ImGui::SameLine();
-        if (ImGui::Button("Complete##sp"))
-        {
-            std::string s = pastedUrl;
-            if (!spotify::completeAuthWithUrl(s))
-                ModuleManager::get().notifyInfo("Spotify: no code found in the pasted text");
-            pastedUrl[0] = '\0';
-        }
-        break;
-    }
     case spotify::Status::Connected:
-        ImGui::TextColored(ImVec4(0.20f, 0.85f, 0.45f, 1.0f), "Status: connected");
+        ImGui::TextColored(ImVec4(0.20f, 0.85f, 0.45f, 1.0f), "Status: Spotify session found");
+        break;
+    case spotify::Status::NoSession:
+        ImGui::TextColored(ImVec4(0.95f, 0.65f, 0.25f, 1.0f), "Status: no Spotify session");
         break;
     }
     if (!spotify::lastError().empty())
-        ImGui::TextColored(ImVec4(0.95f, 0.40f, 0.40f, 1.0f), "%s",
-                           spotify::lastError().c_str());
-    ImGui::TextDisabled("Redirect URI: http://localhost:8888/callback");
+    {
+        ImGui::TextWrapped("%s", spotify::lastError().c_str());
+        ImGui::TextDisabled("This permission must be declared in Minecraft's package manifest; a DLL cannot grant it.");
+    }
+    ImGui::TextDisabled("Reads Spotify metadata from the Windows media session.");
 
     ImGui::Separator();
 

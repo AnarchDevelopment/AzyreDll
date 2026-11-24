@@ -35,8 +35,6 @@ public:
             {"size", size_},
             {"opacity", opacity_},
             {"customColor", customColor_},
-            {"fovInited", fovInited_},
-            {"fov", fov_},
             {"color", {color_.x, color_.y, color_.z, color_.w}},
         };
     }
@@ -53,8 +51,6 @@ public:
         size_ = clampf(j.value("size", size_), 0.5f, 4.0f);
         opacity_ = clampf(j.value("opacity", opacity_), 0.05f, 1.00f);
         customColor_ = j.value("customColor", customColor_);
-        fov_ = clampf(j.value("fov", fov_), 30.0f, 130.0f);
-        fovInited_ = j.value("fovInited", fovInited_);
         if (j.contains("color") && j["color"].is_array() && j["color"].size() == 4)
         {
             color_.x = j["color"][0].get<float>();
@@ -85,8 +81,6 @@ private:
     float size_ = 1.6f;
     float opacity_ = 0.75f;
     bool customColor_ = false;
-    float fov_ = 110.0f;
-    bool fovInited_ = false;
     ImVec4 color_ = ImVec4(1.00f, 1.00f, 1.00f, 1.00f);
 };
 

@@ -1,12 +1,12 @@
 #include "BlockESP.hpp"
 
-#include "Features/WorldChunks.hpp"
+#include "SDK/World/LevelChunkCache.hpp"
 #include "Framework/Log.hpp"
 #include "GUI/Widgets.hpp"
-#include "SDK/Camera.hpp"
-#include "SDK/Game.hpp"
-#include "SDK/Offsets.hpp"
-#include "SDK/VTables.hpp"
+#include "SDK/Client/Camera.hpp"
+#include "SDK/Core/Game.hpp"
+#include "SDK/Engine/Memory/Offsets.hpp"
+#include "SDK/Engine/VTable/VTables.hpp"
 
 #include <imgui.h>
 #include <windows.h>
@@ -289,12 +289,6 @@ void BlockESP::onRender()
     if (sw <= 0.0f || sh <= 0.0f)
         return;
 
-    if (!fovInited_)
-    {
-        fov_ = readGameFov();
-        fovInited_ = true;
-    }
-
     CameraView cam = getCameraView(lp, game.client());
     ImDrawList* d = ImGui::GetForegroundDrawList();
 
@@ -308,7 +302,7 @@ void BlockESP::onRender()
         int validCount = 0;
         for (int i = 0; i < 8; ++i)
         {
-            ok[i] = worldToScreen(corners[i], cam.pos, cam.yaw, cam.pitch, fov_, sw, sh, proj[i]);
+            ok[i] = cam.project(corners[i], proj[i]);
             if (ok[i])
                 ++validCount;
         }
@@ -360,7 +354,7 @@ nlohmann::json BlockESP::saveSettings() const
         {"coal", mCoal},       {"redstone", mRedstone}, {"lapis", mLapis}, {"chests", mChests},
         {"spawners", mSpawners}, {"lava", mLava}, {"water", mWater},
         {"onlyExposed", mOnlyExposed}, {"renderMode", renderMode_},
-        {"range", range_}, {"refreshMs", refreshMs_}, {"maxBlocks", maxBlocks_}, {"fov", fov_},
+        {"range", range_}, {"refreshMs", refreshMs_}, {"maxBlocks", maxBlocks_},
     };
 }
 
@@ -382,7 +376,6 @@ void BlockESP::loadSettings(const nlohmann::json& j)
     range_ = j.value("range", range_);
     refreshMs_ = j.value("refreshMs", refreshMs_);
     maxBlocks_ = j.value("maxBlocks", maxBlocks_);
-    fov_ = j.value("fov", fov_);
     lastScan_ = 0;
 }
 
@@ -420,7 +413,6 @@ void BlockESP::drawSettings()
     ImGui::SliderInt("Range##besp", &range_, 8, 128);
     ImGui::SliderInt("Update (ms)##besp", &refreshMs_, 200, 3000);
     ImGui::SliderInt("Max blocks##besp", &maxBlocks_, 100, 8000);
-    ImGui::SliderFloat("FOV##besp", &fov_, 30.0f, 130.0f, "%.0f");
     ImGui::Checkbox("Debug##besp", &debug_);
 }
 

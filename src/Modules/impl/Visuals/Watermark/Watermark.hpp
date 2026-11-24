@@ -19,11 +19,15 @@ private:
     void renderAzyre(ImDrawList* d, float sw, float sh, ImGuiIO& io);
     void renderSolstice(ImDrawList* d);
     void renderRise(ImDrawList* d);
+    void renderPacket(ImDrawList* d);
 
     int style_ = 0;      // 0 = Azyre, 1 = Solstice, 2 = Rise
     bool glow_ = true;   // mGlow de Solstice
     float anim_ = 0.0f;   // slide/fade del modo Solstice
     char customName_[64] = ""; // Custom Client Name de Rise (vacio = nombre del jugador)
+    float packetSize_ = 25.0f;
+    bool packetGradientDirectionEnabled_ = false;
+    float packetGradientDirection_ = 0.0f;
 };
 
 }

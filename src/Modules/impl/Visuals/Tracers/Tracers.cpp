@@ -2,8 +2,8 @@
 #include "GUI/Widgets.hpp"
 
 #include "Framework/Math.hpp"
-#include "SDK/Camera.hpp"
-#include "SDK/Game.hpp"
+#include "SDK/Client/Camera.hpp"
+#include "SDK/Core/Game.hpp"
 #include "Features/Smoothing.hpp"
 
 namespace mc {
@@ -27,12 +27,6 @@ void Tracers::onRender()
     if (sw <= 0.0f || sh <= 0.0f)
         return;
 
-    if (!fovInited_)
-    {
-        fov_ = readGameFov();
-        fovInited_ = true;
-    }
-
     CameraView cam = getCameraView(local, game.client());
     ImU32 col = ImGui::ColorConvertFloat4ToU32(color_);
     ImDrawList* d = ImGui::GetForegroundDrawList();
@@ -45,7 +39,7 @@ void Tracers::onRender()
 
         Vec3 feet = smooth::entityPos(other.address(), other.pos());
         Vec3 s;
-        if (!worldToScreen(feet, cam.pos, cam.yaw, cam.pitch, fov_, sw, sh, s))
+        if (!cam.project(feet, s))
             continue;
 
         if (s.x < -200.0f || s.x > sw + 200.0f || s.y < -200.0f || s.y > sh + 200.0f)
@@ -57,7 +51,6 @@ void Tracers::onRender()
 
 void Tracers::drawSettings()
 {
-    widgets::CSlider("FOV##tr", &fov_, 30.0f, 130.0f, "%.0f");
     widgets::CSlider("Thickness##tr", &thickness_, 0.5f, 4.0f, "%.1f");
     widgets::ColorEdit4("Color##tr", (float*)&color_);
 }

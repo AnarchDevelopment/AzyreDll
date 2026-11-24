@@ -1,7 +1,7 @@
 #include "ArrayList.hpp"
 
+#include "Features/TextGradient.hpp"
 #include "Framework/ColorUtils.hpp"
-#include "Framework/ImTween.hpp"
 #include "GUI/Menu.hpp"
 #include "GUI/Theme.hpp"
 #include "GUI/Widgets.hpp"
@@ -25,8 +25,13 @@ namespace {
 
 struct RowState
 {
-    float anim = 0.0f; // 0 = fuera, 1 = dentro
-    std::unique_ptr<ImTween<float>> tween;
+    float anim = 0.0f;
+    float animFrom = 0.0f;
+    float animTarget = 0.0f;
+    float animElapsed = 0.0f;
+    float animDuration = 0.22f;
+    float layoutY = 0.0f;
+    bool layoutInitialized = false;
 };
 
 std::map<const Module*, RowState>& rowStates()
@@ -136,6 +141,40 @@ void glowRect(ImDrawList* d, const ImVec2& min, const ImVec2& max,
     }
 }
 
+// Rise's original bloom pass gaussian-blurs filled color masks. Approximate
+// that mask in the ImGui path with nested low-alpha fills; unlike glowRect,
+// this does not draw hard concentric outlines around every row.
+void riseBloomRect(ImDrawList* d, const ImVec2& min, const ImVec2& max,
+                   ImU32 color, float strength, float radius)
+{
+    constexpr int layers = 7;
+    for (int layer = layers; layer >= 1; --layer)
+    {
+        const float t = (float)layer / (float)layers;
+        const float pad = radius * t;
+        const float weight = (1.0f - t) * (1.0f - t);
+        const int alpha = (int)(strength * weight);
+        if (alpha <= 0)
+            continue;
+        const ImU32 tint = (color & 0x00FFFFFFu) | ((ImU32)alpha << 24);
+        d->AddRectFilled(ImVec2(min.x - pad, min.y - pad),
+                         ImVec2(max.x + pad, max.y + pad), tint, 1.0f + pad * 0.25f);
+    }
+}
+
+void riseBloomText(ImDrawList* d, ImFont* font, float fontSize, const ImVec2& pos,
+                   const char* text, ImU32 color, float strength)
+{
+    const ImVec2 offsets[] = {
+        ImVec2(-2.0f, 0.0f), ImVec2(2.0f, 0.0f), ImVec2(0.0f, -2.0f), ImVec2(0.0f, 2.0f),
+        ImVec2(-1.0f, -1.0f), ImVec2(1.0f, -1.0f), ImVec2(-1.0f, 1.0f), ImVec2(1.0f, 1.0f)
+    };
+    const int alpha = (int)(strength / 8.0f);
+    const ImU32 tint = (color & 0x00FFFFFFu) | ((ImU32)alpha << 24);
+    for (const ImVec2& offset : offsets)
+        d->AddText(font, fontSize, ImVec2(pos.x + offset.x, pos.y + offset.y), tint, text);
+}
+
 } // namespace
 
 // HSV -> RGB inline (ImGui no expone ColorHSV como funcion publica)
@@ -193,11 +232,13 @@ void ArrayList::onRender()
     if (sw <= 1.0f || sh <= 1.0f)
         return;
 
-    ULONGLONG now = GetTickCount64();
     ImDrawList* d = ImGui::GetForegroundDrawList();
     auto& states = rowStates();
+    const float dt = std::clamp(io.DeltaTime, 0.0f, 0.05f);
+    const float layoutBlend = 1.0f - std::exp(-20.0f * dt);
 
-    // --- Actualizar tweens de todos los modulos ---
+    // Each row has its own reversible, time-based transition. The old
+    // frame-speed tween moved linearly and made the stack jump on reordering.
     std::vector<const Module*> dead;
     for (auto& up : ModuleManager::get().all())
     {
@@ -205,19 +246,34 @@ void ArrayList::onRender()
         auto it = states.find(m);
         if (it == states.end())
         {
-            it = states.emplace(m, RowState{}).first;
-            RowState& st = it->second;
-            // La copia vendoreada tiene el miembro por valor: la factory es
-            // segura (el original colgaba la referencia).
-            st.tween = std::make_unique<ImTween<float>>(
-                ImTween<float>::Tween(std::make_tuple(0.0f, 1.0f, &st.anim)));
-            st.tween->OfType(ImTween<float>::PingPong).When([m] { return m->enabled(); });
+            RowState initial;
+            initial.animTarget = m->enabled() ? 1.0f : 0.0f;
+            it = states.emplace(m, std::move(initial)).first;
         }
 
         RowState& st = it->second;
-        // Velocidad escalada por dt (independiente de los FPS del juego).
-        st.tween->Speed(0.09f * io.DeltaTime * 60.0f);
-        st.tween->Tick();
+        const float requestedTarget = m->enabled() ? 1.0f : 0.0f;
+        if (requestedTarget != st.animTarget)
+        {
+            st.animFrom = st.anim;
+            st.animTarget = requestedTarget;
+            st.animElapsed = 0.0f;
+            // 0.25% faster than the previous 240/190 ms timings.
+            st.animDuration = (style_ == 3) ? 0.10f
+                : (requestedTarget > 0.5f ? 0.2394f : 0.1895f);
+        }
+
+        if (st.anim != st.animTarget)
+        {
+            st.animElapsed = std::min(st.animElapsed + dt, st.animDuration);
+            const float t = st.animDuration > 0.0f
+                ? std::clamp(st.animElapsed / st.animDuration, 0.0f, 1.0f)
+                : 1.0f;
+            const float eased = t * t * (3.0f - 2.0f * t); // smoothstep
+            st.anim = st.animFrom + (st.animTarget - st.animFrom) * eased;
+            if (t >= 1.0f)
+                st.anim = st.animTarget;
+        }
 
         if (!m->enabled() && st.anim <= 0.0f)
             dead.push_back(m);
@@ -232,7 +288,21 @@ void ArrayList::onRender()
     bool usingRise = (style_ == 3) && riseF != nullptr;
     ImFont* font = usingHud ? hudFont : (usingRise ? riseF : ImGui::GetFont());
     float fs = (style_ == 2) ? fontSize_
-                              : ((style_ == 3) ? riseFontSize_ : ImGui::GetFontSize());
+                              : ((style_ == 3) ? riseFontSize_
+                              : ((style_ == 4) ? auFontSize_ : ImGui::GetFontSize()));
+
+    auto drawModuleName = [&](const ImVec2& pos, const std::string& text,
+                              ImU32 fallbackColor, float alpha) {
+        if (advancedGradient_)
+        {
+            features::addThemeGradientText(d, font, fs, pos, text.c_str(),
+                                           alpha, gradientDirection_);
+        }
+        else
+        {
+            d->AddText(font, fs, pos, fallbackColor, text.c_str());
+        }
+    };
 
     struct Row
     {
@@ -244,12 +314,17 @@ void ArrayList::onRender()
         float w;
         float h;
         float eased;
+        float y;
     };
     std::vector<Row> rows;
     rows.reserve(states.size());
     for (auto& [m, st] : states)
     {
-        if (st.anim <= 0.001f)
+        if (m == this || st.anim <= 0.001f)
+            continue;
+        if (style_ == 3 && m->name() == "ClickGUI")
+            continue;
+        if ((style_ == 2 || style_ == 3 || style_ == 4) && visIdx_ == 1 && m->keybind() == 0)
             continue;
 
         std::string nameStr = formatModuleName(m->name(), charStyle_);
@@ -262,12 +337,44 @@ void ArrayList::onRender()
         float totalW = tsName.x + tsSfx.x;
         float totalH = std::max(tsName.y, tsSfx.y);
 
-        rows.push_back({m, nameWithSpace, sfxStr, tsName.x, tsSfx.x, totalW, totalH + 7.0f, easeOutCubic(st.anim)});
+        rows.push_back({m, nameWithSpace, sfxStr, tsName.x, tsSfx.x,
+                        totalW, totalH + 7.0f, easeOutCubic(st.anim), 0.0f});
     }
-    std::sort(rows.begin(), rows.end(), [](const Row& a, const Row& b) { return a.w > b.w; });
+    std::stable_sort(rows.begin(), rows.end(), [](const Row& a, const Row& b) {
+        if (std::fabs(a.w - b.w) > 0.01f)
+            return a.w > b.w;
+        return a.nameStr < b.nameStr;
+    });
 
     if (rows.empty())
         return;
+
+    float layoutY = (style_ == 2) ? 5.0f
+        : ((style_ == 3) ? 10.0f : ((style_ == 4) ? 12.0f : 14.0f));
+    const float riseStep = font->CalcTextSizeA(fs, FLT_MAX, 0.0f, "Ag").y + 1.0f;
+    for (Row& row : rows)
+    {
+        RowState& state = states[row.m];
+        const float targetY = layoutY;
+        if (!state.layoutInitialized)
+        {
+            state.layoutY = targetY;
+            state.layoutInitialized = true;
+        }
+        else
+        {
+            state.layoutY += (targetY - state.layoutY) * layoutBlend;
+        }
+        row.y = state.layoutY;
+
+        const float rowStep = (style_ == 2) ? (row.h - 7.0f)
+            : ((style_ == 3) ? riseStep
+            : (row.h + (style_ == 0 ? 4.0f : (style_ == 4 ? auGap_ : 0.0f))));
+        if (style_ == 3)
+            layoutY += rowStep * (row.m->enabled() ? 1.0f : 0.0f);
+        else
+            layoutY += rowStep * row.eased;
+    }
 
     if (style_ == 2)
     {
@@ -298,14 +405,9 @@ void ArrayList::onRender()
         };
         std::vector<SRow> lrows;
 
-        float y = 5.0f;
         for (const Row& row : rows)
         {
-            if (row.m == this)
-                continue; // no auto-listarse (el mVisibleInArrayList de Solstice)
-            if (visIdx_ == 1 && row.m->keybind() == 0)
-                continue;
-
+            const float y = row.y;
             ImVec2 ts(row.w, row.h - 7.0f);
             float endX = anchor - ts.x;
             float x = sw + 14.0f + (endX - (sw + 14.0f)) * row.eased;
@@ -326,7 +428,6 @@ void ArrayList::onRender()
                          mouse.y >= sr.rect.y && mouse.y <= sr.rect.w;
             lrows.push_back(sr);
 
-            y += ts.y * row.eased;
         }
 
         if (lrows.empty())
@@ -392,13 +493,13 @@ void ArrayList::onRender()
             ImU32 textCol = colU32(sr, sr.a);
             ImU32 sfxCol = IM_COL32(165, 170, 180, (int)(255.0f * sr.a));
 
-            d->AddText(font, fs, sr.pos, textCol, sr.nameStr.c_str());
+            drawModuleName(sr.pos, sr.nameStr, textCol, sr.a);
             if (solBold_ && !usingHud)
             {
                 // Bold por doble pasada con offset sub-pixel (solo para el
                 // font default; el hud font ya es bold).
-                d->AddText(font, fs, ImVec2(sr.pos.x + 0.7f, sr.pos.y), textCol,
-                           sr.nameStr.c_str());
+                drawModuleName(ImVec2(sr.pos.x + 0.7f, sr.pos.y),
+                               sr.nameStr, textCol, sr.a);
             }
 
             if (!sr.sfxStr.empty())
@@ -524,23 +625,20 @@ void ArrayList::onRender()
 
         bool menuOpen = menu::visible();
         ImVec2 mouse = io.MousePos;
+        if (riseBg_ && riseBlur_)
+            blur::requestFullRate();
         bool hasBlur = riseBlur_ && blur::wanted() && blur::ready() && blur::srv();
 
-        float y = edge;
         for (const Row& row : rows)
         {
-            if (row.m == this)
-                continue;
-            if (visIdx_ == 1 && row.m->keybind() == 0)
-                continue;
-
+            const float y = row.y;
             float a = row.eased;
             float w = row.w;
 
             // Slide-in desde la derecha + colapso vertical (Rise: animationTime)
             float slideOff = (1.0f - a) * (w + 60.0f);
             float x = (sw - edge - w) + slideOff;
-            float rH = spacing * a;
+            const float rH = spacing;
             float rowTop = y - 3.0f;        // fondo sube 3px (Rise: d5 - 3.0)
 
             // Color: default Fade = getAccentColor((0, y)) -> gradiente animado.
@@ -552,21 +650,64 @@ void ArrayList::onRender()
                 col = theme::AccentAt4(0.0f, 0.0f);         // Breathe
             else
                 col = theme::AccentAt4(0.0f, y);            // Fade
-            ImU32 colU32 = ImGui::ColorConvertFloat4ToU32(ImVec4(col.x, col.y, col.z, a));
+            ImU32 colU32 = ImGui::ColorConvertFloat4ToU32(ImVec4(col.x, col.y, col.z, 1.0f));
+
+            const ImVec2 bgMin(x - d2, rowTop);
+            const ImVec2 bgMax(x - d2 + w + 5.0f, rowTop + rH);
+            const ImVec2 textMin(x, y - 0.5f);
+            const ImVec2 textMax(x + w + 2.0f, y + spacing);
+
+            // Rise queues these shapes through BLOOM before the regular pass.
+            // The shared DX11 path has a Gaussian backdrop shader but no
+            // per-widget bloom queue, so build the same soft colored halo in
+            // the ImGui draw list while retaining the real backdrop blur below.
+            const ImU32 bloomColor = colU32 & 0x00FFFFFFu;
+            if (riseShaderEffect_ == 0)
+            {
+                if (riseBg_)
+                    riseBloomRect(d, bgMin, bgMax, bloomColor | 0xFF000000u, 34.0f, 13.0f);
+                else
+                {
+                    riseBloomText(d, font, fs, textMin, row.nameStr.c_str(), colU32, 78.0f);
+                    if (!row.sfxStr.empty())
+                        riseBloomText(d, font, fs, ImVec2(x + row.nameW + 3.0f, y - 0.5f),
+                                      row.sfxStr.c_str(), colU32, 70.0f);
+                }
+            }
+            else
+            {
+                if (riseBg_)
+                    riseBloomRect(d, bgMin, bgMax, IM_COL32(0, 0, 0, 255), 26.0f, 13.0f);
+                else
+                {
+                    riseBloomText(d, font, fs, ImVec2(textMin.x + 1.0f, textMin.y + 1.0f),
+                                  row.nameStr.c_str(), IM_COL32(0, 0, 0, 255), 70.0f);
+                    if (!row.sfxStr.empty())
+                        riseBloomText(d, font, fs,
+                                      ImVec2(x + row.nameW + 4.0f, y + 0.5f),
+                                      row.sfxStr.c_str(), IM_COL32(0, 0, 0, 255), 70.0f);
+                }
+            }
+
+            // The tag is drawn 3px after the module name. Include that gap in
+            // the sidebar anchor so it begins 2px after the visible text end.
+            const float displayedTextW = row.nameW + (row.sfxStr.empty() ? 0.0f : 3.0f + row.sfxW);
+            const ImVec2 sidebarMin(x + displayedTextW + 2.0f, y - 1.5f);
+            const ImVec2 sidebarMax(sidebarMin.x + 2.0f, sidebarMin.y + 9.0f);
+            if (riseSidebar_)
+                riseBloomRect(d, sidebarMin, sidebarMax, bloomColor | 0xFF000000u, 38.0f, 9.0f);
 
             // Fondo (Background = Normal): rect negro alpha 150 (Themes.rK)
             if (riseBg_)
             {
-                ImVec2 bgMin(x - d2, rowTop);
-                ImVec2 bgMax(x - d2 + w + 5.0f, rowTop + rH);
                 if (hasBlur)
                 {
                     ImVec2 uv0(bgMin.x / sw, bgMin.y / sh);
                     ImVec2 uv1(bgMax.x / sw, bgMax.y / sh);
                     d->AddImage(ImTextureRef((void*)blur::srv()), bgMin, bgMax, uv0, uv1,
-                                IM_COL32(255, 255, 255, (int)(255.0f * a)));
+                                IM_COL32(255, 255, 255, 255));
                 }
-                d->AddRectFilled(bgMin, bgMax, IM_COL32(0, 0, 0, (int)(150.0f * a)));
+                d->AddRectFilled(bgMin, bgMax, IM_COL32(0, 0, 0, 150));
             }
 
             // Texto con drop shadow (Rise: drawStringWithShadow)
@@ -574,21 +715,20 @@ void ArrayList::onRender()
             if (riseShadow_)
             {
                 d->AddText(font, fs, ImVec2(tp.x + 1.0f, tp.y + 1.0f),
-                           IM_COL32(0, 0, 0, (int)(255.0f * a)), row.nameStr.c_str());
+                           IM_COL32(0, 0, 0, 255), row.nameStr.c_str());
                 if (!row.sfxStr.empty())
                     d->AddText(font, fs, ImVec2(tp.x + row.nameW + 4.0f, tp.y + 1.0f),
-                               IM_COL32(0, 0, 0, (int)(255.0f * a)), row.sfxStr.c_str());
+                               IM_COL32(0, 0, 0, 255), row.sfxStr.c_str());
             }
-            d->AddText(font, fs, tp, colU32, row.nameStr.c_str());
+            drawModuleName(tp, row.nameStr, colU32, row.eased);
             if (!row.sfxStr.empty())
                 d->AddText(font, fs, ImVec2(tp.x + row.nameW + 3.0f, tp.y),
-                           IM_COL32(204, 204, 204, (int)(255.0f * a)), row.sfxStr.c_str());
+                           IM_COL32(204, 204, 204, 255), row.sfxStr.c_str());
 
             // Sidebar: barra de acento 2x9 (radio 1) a la derecha del texto
             if (riseSidebar_)
             {
-                d->AddRectFilled(ImVec2(x + w + 2.0f, y - 1.5f),
-                                 ImVec2(x + w + 4.0f, y - 1.5f + 9.0f), colU32, 1.0f);
+                d->AddRectFilled(sidebarMin, sidebarMax, colU32, 1.0f);
             }
 
             // Hover + click para togglear (consistente con el resto de modos)
@@ -596,7 +736,7 @@ void ArrayList::onRender()
                 mouse.y >= rowTop && mouse.y <= rowTop + rH)
             {
                 d->AddRectFilled(ImVec2(x - d2, rowTop), ImVec2(x + w + 4.0f, rowTop + rH),
-                                 IM_COL32(255, 255, 255, (int)(18.0f * a)));
+                                 IM_COL32(255, 255, 255, 18));
                 if (!menuOpen && ImGui::IsMouseClicked(0))
                 {
                     if (Module* mod = ModuleManager::get().find(row.m->name()))
@@ -604,12 +744,183 @@ void ArrayList::onRender()
                 }
             }
 
-            y += rH;
         }
         return;
     }
 
-    float y = 14.0f;
+    if (style_ == 4)
+    {
+        // =============== MODO AURORA (preset propio) ===============
+        // Pildoras alineadas a la derecha, cada una con SU ancho (escalera).
+        // Cada pildora: fondo esmerilado (blur) o solido, barra de acento a la
+        // izquierda con gradiente + glow, borde de 1px del color de la fila y el
+        // sufijo como chip. Entrada en tres variantes (slide con overshoot,
+        // fade, drop); el hover ilumina la pildora y el click togglea el modulo.
+        const float time = (float)ImGui::GetTime();
+        const float edge = 10.0f;
+        const float padX = auPadding_;
+        const float rnd = auRounding_;
+        const float barW = 3.0f;
+        const size_t n = rows.size();
+
+        const bool menuOpen = menu::visible();
+        const ImVec2 mouse = io.MousePos;
+        const bool hasBlur = auBlur_ && blur::wanted() && blur::ready() && blur::srv();
+
+        auto colU32 = [](const ImVec4& c, float a) {
+            return ImGui::ColorConvertFloat4ToU32(ImVec4(c.x, c.y, c.z, a));
+        };
+
+        for (size_t i = 0; i < n; ++i)
+        {
+            const Row& row = rows[i];
+            const float p = row.eased;
+            if (p <= 0.001f)
+                continue;
+
+            // Color de la fila (Accent / gradiente por fila / Aurora / blanco).
+            ImVec4 col;
+            switch (auColorMode_)
+            {
+            case 0:
+                col = theme::Accent;
+                break;
+            case 1:
+            {
+                const float k = n > 1 ? (float)i / (float)(n - 1) : 0.0f;
+                col = ImVec4(theme::Accent.x + (theme::Accent2.x - theme::Accent.x) * k,
+                             theme::Accent.y + (theme::Accent2.y - theme::Accent.y) * k,
+                             theme::Accent.z + (theme::Accent2.z - theme::Accent.z) * k,
+                             1.0f);
+                break;
+            }
+            case 2:
+                // Aurora: el gradiente del tema se desplaza con el tiempo, asi
+                // la columna entera ondula como si fuera una sola ola.
+                col = theme::AccentAt4(0.0f, (float)i * 34.0f - time * 70.0f);
+                break;
+            default:
+                col = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
+                break;
+            }
+
+            const float w = row.w + padX * 2.0f + barW + 1.0f;
+            const float h = row.h;
+
+            // Animacion de entrada.
+            float slide = 0.0f;
+            float drop = 0.0f;
+            const float fade = p;
+            if (auAnim_ == 0)
+            {
+                // Slide con overshoot leve: e adelanta 10% en la mitad del
+                // recorrido y vuelve a 1 al final (entrada con vida).
+                float e = p + 0.10f * std::sin(p * 3.14159265f);
+                if (e > 1.0f)
+                    e = 1.0f;
+                slide = (1.0f - e) * (w + 70.0f);
+            }
+            else if (auAnim_ == 2)
+            {
+                drop = (1.0f - p) * 20.0f; // cae desde arriba
+            }
+
+            ImVec2 rMin(sw - edge - w + slide, row.y + drop);
+            ImVec2 rMax(sw - edge + slide, row.y + drop + h);
+
+            const bool hovered = !menuOpen &&
+                mouse.x >= rMin.x && mouse.x <= rMax.x &&
+                mouse.y >= rMin.y && mouse.y <= rMax.y;
+            if (hovered)
+            {
+                // 2px a la izquierda: la pildora "sale" hacia el jugador.
+                rMin.x -= 2.0f;
+                rMax.x -= 2.0f;
+            }
+
+            // Asiento: sombra suave 1.5/2px por debajo.
+            if (fade > 0.05f)
+            {
+                d->AddRectFilled(ImVec2(rMin.x + 1.5f, rMin.y + 2.0f),
+                                 ImVec2(rMax.x + 1.5f, rMax.y + 2.0f),
+                                 IM_COL32(0, 0, 0, (int)(44.0f * fade)), rnd);
+            }
+
+            // Fondo: blur (panel esmerilado) + velo oscuro.
+            if (hasBlur)
+            {
+                ImVec2 uv0(rMin.x / sw, rMin.y / sh);
+                ImVec2 uv1(rMax.x / sw, rMax.y / sh);
+                d->AddImageRounded(ImTextureRef((void*)blur::srv()), rMin, rMax, uv0, uv1,
+                                   IM_COL32(255, 255, 255, (int)(255.0f * fade)), rnd);
+            }
+            d->AddRectFilled(rMin, rMax,
+                             IM_COL32(13, 15, 21, (int)(255.0f * auBgAlpha_ * fade)), rnd);
+
+            if (hovered)
+            {
+                d->AddRectFilled(rMin, rMax, IM_COL32(255, 255, 255, (int)(20.0f * fade)),
+                                 rnd);
+            }
+
+            // Barra de acento: dos tramos (solido arriba, translucido abajo)
+            // para simular el gradiente vertical sin un shader.
+            const ImVec2 bMin(rMin.x + 1.0f, rMin.y + 2.0f);
+            const ImVec2 bMax(bMin.x + barW, rMax.y - 2.0f);
+            const float bMid = (bMin.y + bMax.y) * 0.5f;
+            d->AddRectFilled(ImVec2(bMin.x, bMin.y), ImVec2(bMin.x + barW, bMid), colU32(col, fade),
+                             barW * 0.5f);
+            d->AddRectFilled(ImVec2(bMin.x, bMid), bMax, colU32(col, 0.45f * fade), barW * 0.5f);
+
+            if (auGlow_)
+            {
+                glowRect(d, bMin, bMax, colU32(col, 0.0f) & 0x00FFFFFFu,
+                         120.0f * auGlowStrength_ * fade, 10.0f, 1.0f);
+            }
+
+            if (auBorder_)
+                d->AddRect(rMin, rMax, colU32(col, 0.30f * fade), rnd, 0, 1.0f);
+
+            // Texto: nombre en casi blanco, sufijo en el color de la fila.
+            const float textX = rMin.x + barW + padX - 1.0f;
+            const float textY = rMin.y + 3.0f;
+            const ImU32 txtCol = IM_COL32(238, 241, 246, (int)(255.0f * fade));
+            const ImU32 sfxCol = colU32(col, 0.92f * fade);
+
+            if (auGlow_)
+            {
+                d->AddText(font, fs, ImVec2(textX + 1.0f, textY + 1.0f),
+                           IM_COL32(0, 0, 0, (int)(140.0f * fade)), row.nameStr.c_str());
+            }
+            drawModuleName(ImVec2(textX, textY), row.nameStr, txtCol, fade);
+
+            if (!row.sfxStr.empty())
+            {
+                if (auChip_)
+                {
+                    const ImVec2 cMin(textX + row.nameW + 1.0f, rMin.y + 4.0f);
+                    const ImVec2 cMax(cMin.x + row.sfxW + 7.0f, rMax.y - 4.0f);
+                    d->AddRectFilled(cMin, cMax, colU32(col, 0.16f * fade), 3.0f);
+                    d->AddText(font, fs * 0.92f, ImVec2(cMin.x + 3.5f, cMin.y + 1.0f), sfxCol,
+                               row.sfxStr.c_str());
+                }
+                else
+                {
+                    d->AddText(font, fs, ImVec2(textX + row.nameW + 2.0f, textY), sfxCol,
+                               row.sfxStr.c_str());
+                }
+            }
+
+            if (hovered && ImGui::IsMouseClicked(0))
+            {
+                if (Module* mod = ModuleManager::get().find(row.m->name()))
+                    mod->toggle();
+            }
+        }
+        return;
+    }
+
+    const float topY = 14.0f;
     float right = sw - 12.0f;
 
     if (style_ == 1)
@@ -636,7 +947,7 @@ void ArrayList::onRender()
         if (outlineMode_ == 2)
         {
             float bgW = maxW + padX * 2.0f + barW;
-            d->AddRect(ImVec2(right - bgW, y), ImVec2(right, y + totalH),
+            d->AddRect(ImVec2(right - bgW, topY), ImVec2(right, topY + totalH),
                        theme::AccentU32(0.75f), 0.0f, 0, 1.0f);
         }
 
@@ -668,26 +979,26 @@ void ArrayList::onRender()
                 }
             };
 
-            float yPass = y;
+            float listBottom = topY;
             for (const Row& row : rows)
             {
                 float slideOff = (1.0f - row.eased) * (row.w + 60.0f);
                 float rowW = row.w + padX * 2.0f + barW;
                 float x1 = right + slideOff;
                 float x0 = x1 - rowW;
+                const float yPass = row.y;
                 
                 // Sombra de cada fila: expande Izquierda, Tope y Base (expand = 1)
                 // NO expande a la derecha para no sumar 15 capas de sombra.
                 if (row.eased > 0.05f)
                     DrawShadow(ImVec2(x0, yPass), ImVec2(x1, yPass + row.h), row.eased, 1);
 
-                yPass += row.h * row.eased;
+                listBottom = std::max(listBottom, yPass + row.h * row.eased);
             }
 
             // Sombra unificada para el lado Derecho (expand = 2)
             // Se dibuja solo una vez para toda la altura de la lista.
-            float totalH = yPass - y;
-            DrawShadow(ImVec2(right - 20.0f, y), ImVec2(right, y + totalH), 1.0f, 2);
+            DrawShadow(ImVec2(right - 20.0f, topY), ImVec2(right, listBottom), 1.0f, 2);
         }
 
 
@@ -695,6 +1006,7 @@ void ArrayList::onRender()
         for (size_t idx = 0; idx < rows.size(); ++idx)
         {
             const Row& row = rows[idx];
+            const float y = row.y;
             float slideOff = (1.0f - row.eased) * (row.w + 60.0f);
             float rowW = row.w + padX * 2.0f + barW;
             float x1 = right + slideOff;
@@ -734,9 +1046,8 @@ void ArrayList::onRender()
 
             // Texto: LEFT-ALIGNED dentro de SU propia tira
             float tx = (outlineMode_ == 1) ? x0 + barW + padX : x0 + padX;
-            d->AddText(ImVec2(tx, y + 3.0f),
-                       IM_COL32(240, 242, 245, (int)(255 * row.eased)),
-                       row.nameStr.c_str());
+            drawModuleName(ImVec2(tx, y + 3.0f), row.nameStr,
+                           IM_COL32(240, 242, 245, (int)(255 * row.eased)), row.eased);
             if (!row.sfxStr.empty())
             {
                 d->AddText(ImVec2(tx + row.nameW, y + 3.0f),
@@ -744,7 +1055,6 @@ void ArrayList::onRender()
                            row.sfxStr.c_str());
             }
 
-            y += row.h * row.eased;
         }
         return;
     }
@@ -752,6 +1062,7 @@ void ArrayList::onRender()
     // =============== MODO AZYRE (acrilico con paneles) ===============
     for (const Row& row : rows)
     {
+        const float y = row.y;
         // Desplazamiento deslizante desde la derecha + colapso vertical suave.
         float slideOff = (1.0f - row.eased) * (row.w + 40.0f);
         float x0 = right - row.w - 16.0f + slideOff;
@@ -764,8 +1075,8 @@ void ArrayList::onRender()
         d->AddRectFilled(ImVec2(rMax.x - 3.0f, y), ImVec2(rMax.x, y + row.h),
                          (gui::style() == 2) ? theme::AccentAtU32(0.0f, y, row.eased)
                                              : theme::AccentU32(row.eased), 4.0f);
-        d->AddText(ImVec2(x0 + 7.0f, y + 3.0f),
-                   IM_COL32(240, 242, 245, (int)(255 * row.eased)), row.nameStr.c_str());
+        drawModuleName(ImVec2(x0 + 7.0f, y + 3.0f), row.nameStr,
+                       IM_COL32(240, 242, 245, (int)(255 * row.eased)), row.eased);
         if (!row.sfxStr.empty())
         {
             d->AddText(ImVec2(x0 + 7.0f + row.nameW, y + 3.0f),
@@ -773,20 +1084,21 @@ void ArrayList::onRender()
                        row.sfxStr.c_str());
         }
 
-        y += (row.h + 4.0f) * row.eased;
     }
-
-    (void)now;
 }
 
 void ArrayList::drawSettings()
 {
-    const char* styles[] = {"Azyre", "Typical", "Solstice", "Rise"};
-    widgets::CCombo("Style##al", &style_, styles, 4);
+    const char* styles[] = {"Azyre", "Typical", "Solstice", "Rise", "Aurora"};
+    widgets::CCombo("Style##al", &style_, styles, 5);
 
     const char* charStyles[] = {"lowercase", "lowercase spaced", "Normalcase", "Normalcase separated"};
     widgets::CCombo("Character Style##al", &charStyle_, charStyles, 4);
     widgets::Checkbox("Suffixs##al", &suffixes_);
+    widgets::Checkbox("Advanced Gradient##al", &advancedGradient_);
+    if (advancedGradient_)
+        widgets::CSlider("Gradient Direction##al", &gradientDirection_,
+                         0.0f, 360.0f, "%.0f°");
 
     if (style_ == 1)
     {
@@ -837,6 +1149,9 @@ void ArrayList::drawSettings()
         else if (riseColorMode_ == 2)
             ImGui::TextDisabled("(Breathe = pulso global)");
 
+        const char* shaderEffects[] = {"Glow", "Shadow"};
+        widgets::CCombo("Shader Effect##al_rise", &riseShaderEffect_, shaderEffects, 2);
+
         const char* bgStyle[] = {"Off", "Normal"};
         int bg = riseBg_ ? 1 : 0;
         if (widgets::CCombo("Background##al", &bg, bgStyle, 2))
@@ -850,6 +1165,31 @@ void ArrayList::drawSettings()
         widgets::CSlider("Tamano fuente##al", &riseFontSize_, 10.0f, 30.0f, "%.0f");
         ImGui::Unindent();
     }
+    else if (style_ == 4)
+    {
+        ImGui::Indent();
+        const char* colors[] = {"Accent", "Gradient", "Aurora", "White"};
+        widgets::CCombo("Color##al", &auColorMode_, colors, 4);
+        if (auColorMode_ == 2)
+            ImGui::TextDisabled("(wave animado del tema)");
+
+        const char* anims[] = {"Slide", "Fade", "Drop"};
+        widgets::CCombo("Animation##al", &auAnim_, anims, 3);
+
+        widgets::Checkbox("Border##al", &auBorder_);
+        widgets::Checkbox("Glow##al", &auGlow_);
+        if (auGlow_)
+            widgets::CSlider("Glow strength##al", &auGlowStrength_, 0.2f, 1.0f, "%.2f");
+        widgets::Checkbox("Suffix chip##al", &auChip_);
+        widgets::Checkbox("Blur background##al", &auBlur_);
+        ImGui::Separator();
+        widgets::CSlider("Background##al", &auBgAlpha_, 0.0f, 1.0f, "%.2f");
+        widgets::CSlider("Padding##al", &auPadding_, 5.0f, 16.0f, "%.0f");
+        widgets::CSlider("Gap##al", &auGap_, 0.0f, 8.0f, "%.0f");
+        widgets::CSlider("Rounding##al", &auRounding_, 0.0f, 12.0f, "%.0f");
+        widgets::CSlider("Font size##al", &auFontSize_, 12.0f, 30.0f, "%.0f");
+        ImGui::Unindent();
+    }
 
     widgets::ColorEdit4("Accent##al", (float*)&theme::Accent);
 }
@@ -860,6 +1200,8 @@ nlohmann::json ArrayList::saveSettings() const
         {"style", style_},
         {"charStyle", charStyle_},
         {"suffixes", suffixes_},
+        {"advancedGradient", advancedGradient_},
+        {"gradientDirection", gradientDirection_},
         {"outlineMode", outlineMode_},
         {"bgOpacity", bgOpacity_},
         {"barRounding", barRounding_},
@@ -877,11 +1219,24 @@ nlohmann::json ArrayList::saveSettings() const
         {"solFont", solFont_},
         {"fontSize", fontSize_},
         {"riseColorMode", riseColorMode_},
+        {"riseShaderEffect", riseShaderEffect_},
         {"riseBg", riseBg_},
         {"riseShadow", riseShadow_},
         {"riseSidebar", riseSidebar_},
         {"riseBlur", riseBlur_},
         {"riseFontSize", riseFontSize_},
+        {"auColorMode", auColorMode_},
+        {"auAnim", auAnim_},
+        {"auBorder", auBorder_},
+        {"auGlow", auGlow_},
+        {"auGlowStrength", auGlowStrength_},
+        {"auChip", auChip_},
+        {"auBlur", auBlur_},
+        {"auBgAlpha", auBgAlpha_},
+        {"auPadding", auPadding_},
+        {"auGap", auGap_},
+        {"auRounding", auRounding_},
+        {"auFontSize", auFontSize_},
         {"accent", {theme::Accent.x, theme::Accent.y, theme::Accent.z, theme::Accent.w}},
     };
 }
@@ -889,12 +1244,15 @@ nlohmann::json ArrayList::saveSettings() const
 void ArrayList::loadSettings(const nlohmann::json& j)
 {
     style_ = j.value("style", style_);
-    if (style_ < 0 || style_ > 3)
+    if (style_ < 0 || style_ > 4)
         style_ = 0;
     charStyle_ = j.value("charStyle", charStyle_);
     if (charStyle_ < 0 || charStyle_ > 3)
         charStyle_ = 2;
     suffixes_ = j.value("suffixes", suffixes_);
+    advancedGradient_ = j.value("advancedGradient", advancedGradient_);
+    gradientDirection_ = std::clamp(
+        j.value("gradientDirection", gradientDirection_), 0.0f, 360.0f);
     outlineMode_ = j.value("outlineMode", outlineMode_);
     bgOpacity_ = j.value("bgOpacity", bgOpacity_);
     barRounding_ = j.value("barRounding", barRounding_);
@@ -934,6 +1292,9 @@ void ArrayList::loadSettings(const nlohmann::json& j)
     riseColorMode_ = j.value("riseColorMode", riseColorMode_);
     if (riseColorMode_ < 0 || riseColorMode_ > 2)
         riseColorMode_ = 1;
+    riseShaderEffect_ = j.value("riseShaderEffect", riseShaderEffect_);
+    if (riseShaderEffect_ < 0 || riseShaderEffect_ > 1)
+        riseShaderEffect_ = 1;
     riseBg_ = j.value("riseBg", riseBg_);
     riseShadow_ = j.value("riseShadow", riseShadow_);
     riseSidebar_ = j.value("riseSidebar", riseSidebar_);
@@ -943,6 +1304,47 @@ void ArrayList::loadSettings(const nlohmann::json& j)
         riseFontSize_ = 10.0f;
     if (riseFontSize_ > 30.0f)
         riseFontSize_ = 30.0f;
+
+    auColorMode_ = j.value("auColorMode", auColorMode_);
+    if (auColorMode_ < 0 || auColorMode_ > 3)
+        auColorMode_ = 2;
+    auAnim_ = j.value("auAnim", auAnim_);
+    if (auAnim_ < 0 || auAnim_ > 2)
+        auAnim_ = 0;
+    auBorder_ = j.value("auBorder", auBorder_);
+    auGlow_ = j.value("auGlow", auGlow_);
+    auGlowStrength_ = j.value("auGlowStrength", auGlowStrength_);
+    if (auGlowStrength_ < 0.2f)
+        auGlowStrength_ = 0.2f;
+    if (auGlowStrength_ > 1.0f)
+        auGlowStrength_ = 1.0f;
+    auChip_ = j.value("auChip", auChip_);
+    auBlur_ = j.value("auBlur", auBlur_);
+    auBgAlpha_ = j.value("auBgAlpha", auBgAlpha_);
+    if (auBgAlpha_ < 0.0f)
+        auBgAlpha_ = 0.0f;
+    if (auBgAlpha_ > 1.0f)
+        auBgAlpha_ = 1.0f;
+    auPadding_ = j.value("auPadding", auPadding_);
+    if (auPadding_ < 5.0f)
+        auPadding_ = 5.0f;
+    if (auPadding_ > 16.0f)
+        auPadding_ = 16.0f;
+    auGap_ = j.value("auGap", auGap_);
+    if (auGap_ < 0.0f)
+        auGap_ = 0.0f;
+    if (auGap_ > 8.0f)
+        auGap_ = 8.0f;
+    auRounding_ = j.value("auRounding", auRounding_);
+    if (auRounding_ < 0.0f)
+        auRounding_ = 0.0f;
+    if (auRounding_ > 12.0f)
+        auRounding_ = 12.0f;
+    auFontSize_ = j.value("auFontSize", auFontSize_);
+    if (auFontSize_ < 12.0f)
+        auFontSize_ = 12.0f;
+    if (auFontSize_ > 30.0f)
+        auFontSize_ = 30.0f;
     if (j.contains("accent") && j["accent"].is_array() && j["accent"].size() == 4)
     {
         theme::Accent.x = j["accent"][0].get<float>();

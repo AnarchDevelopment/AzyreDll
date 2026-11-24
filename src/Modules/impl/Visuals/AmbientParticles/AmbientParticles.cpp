@@ -1,8 +1,8 @@
 #include "AmbientParticles.hpp"
 #include "GUI/Widgets.hpp"
 
-#include "SDK/Camera.hpp"
-#include "SDK/Game.hpp"
+#include "SDK/Client/Camera.hpp"
+#include "SDK/Core/Game.hpp"
 
 #include <windows.h>
 #include <algorithm>
@@ -78,12 +78,6 @@ void AmbientParticles::onRender()
     if (sw <= 0.0f || sh <= 0.0f)
         return;
 
-    if (!fovInited_)
-    {
-        fov_ = readGameFov();
-        fovInited_ = true;
-    }
-
     while ((int)parts_.size() < count_)
     {
         Part p;
@@ -154,7 +148,7 @@ void AmbientParticles::onRender()
     {
         Vec3 world{c.x + p.off.x, c.y + p.off.y, c.z + p.off.z};
         Vec3 s;
-        if (!worldToScreen(world, cam.pos, cam.yaw, cam.pitch, fov_, sw, sh, s))
+        if (!cam.project(world, s))
             continue;
         if (s.z > maxRange)
             continue;
@@ -202,7 +196,6 @@ void AmbientParticles::drawSettings()
         widgets::ColorEdit4("Color##amb", (float*)&color_);
         ImGui::Unindent();
     }
-    widgets::CSlider("FOV##amb", &fov_, 30.0f, 130.0f, "%.0f");
     ImGui::TextDisabled("Snow: falls / Ember: rises / Petal: swirls / Spark: twinkles");
 }
 

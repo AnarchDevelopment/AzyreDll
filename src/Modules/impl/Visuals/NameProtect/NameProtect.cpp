@@ -2,8 +2,8 @@
 #include "GUI/Widgets.hpp"
 
 #include "Framework/Memory.hpp"
-#include "SDK/Game.hpp"
-#include "SDK/Offsets.hpp"
+#include "SDK/Core/Game.hpp"
+#include "SDK/Engine/Memory/Offsets.hpp"
 
 #include <imgui.h>
 
@@ -83,7 +83,7 @@ bool writeGameString(uintptr_t strAddr, const std::string& v)
     if (!mem::isReadable(strAddr, 0x20))
         return false;
 
-    uint64_t cap = mem::read<uint64_t>(strAddr + 0x18);
+    uint64_t cap = mem::read<uint64_t>(strAddr + off::player::NameStringCapacity);
     if (cap >= 16)
     {
         // Heap: reutiliza el buffer existente (la capacidad no cambia, el
@@ -94,7 +94,7 @@ bool writeGameString(uintptr_t strAddr, const std::string& v)
         if (!buf || !mem::isReadable(buf, v.size() + 1))
             return false;
         mem::rawWrite(buf, v.c_str(), v.size() + 1);
-        mem::write<uint64_t>(strAddr + 0x10, v.size());
+        mem::write<uint64_t>(strAddr + off::player::NameStringSize, v.size());
         return true;
     }
 
@@ -104,7 +104,7 @@ bool writeGameString(uintptr_t strAddr, const std::string& v)
     char buf[16] = {};
     memcpy(buf, v.c_str(), v.size());
     mem::rawWrite(strAddr, buf, 16);
-    mem::write<uint64_t>(strAddr + 0x10, v.size());
+    mem::write<uint64_t>(strAddr + off::player::NameStringSize, v.size());
     return true;
 }
 
@@ -407,7 +407,7 @@ void NameProtect::onTick()
 
     // Presupuesto real: 15 en SSO o la capacidad del buffer heap actual
     // (nombres largos del servidor dan room extra para el gradient).
-    uint64_t cap = mem::read<uint64_t>(nameAddr + 0x18);
+    uint64_t cap = mem::read<uint64_t>(nameAddr + off::player::NameStringCapacity);
     size_t budget = (cap >= 16 && cap < 0x1000) ? (size_t)cap : 15;
 
     std::string fake = generateStyled(budget);

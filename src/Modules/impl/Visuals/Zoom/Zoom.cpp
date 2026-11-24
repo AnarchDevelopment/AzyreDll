@@ -5,7 +5,8 @@
 #include "GUI/Menu.hpp"
 #include "GUI/Widgets.hpp"
 #include "Input/KeyNames.hpp"
-#include "SDK/Game.hpp"
+#include "SDK/Core/Game.hpp"
+#include "SDK/Client/CameraPatch.hpp"
 
 #include <imgui.h>
 #include <windows.h>
@@ -27,16 +28,7 @@ float zoomFovFactor()
     return g_fovFactor;
 }
 
-// Firma de CE (aobscanmodule INJECT, F3 0F 10 87 48 17 00 00):
-//   movss xmm0, [rdi+0x1748]  <- carga el FOV de la camara.
-// El cave re-ejecuta la instruccion original y multiplica xmm0 por un factor
-// nuestro (1.0 = passthrough exacto, el FOV del juego queda intacto):
-//   [0..8)   movss xmm0, [rdi+0x1748]     (original)
-//   [8..16)  mulss xmm0, [rip+factorSlot] (F3 0F 59 05 <disp32>)
-//   [16..21) jmp  site+8                  (E9 <rel32>)
-//   [24]     factorSlot: float
-static const unsigned char kFovPattern[] = {0xF3, 0x0F, 0x10, 0x87, 0x48, 0x17, 0x00, 0x00};
-static constexpr size_t kFactorOffset = 24;
+// The executable pattern and trampoline layout belong to the SDK's build map.
 
 Zoom::Zoom()
     : Module("Zoom", "Smooth zoom with scroll adjustment", Category::Visuals, 0)
@@ -48,7 +40,7 @@ bool Zoom::ensurePatch()
 {
     if (!site_)
     {
-        site_ = patch::patternScanImage(kFovPattern, sizeof(kFovPattern));
+        site_ = patch::patternScanImage(off::camera::ZoomFovPattern, sizeof(off::camera::ZoomFovPattern));
         if (site_)
             MC_LOG("[Zoom] FOV site found at 0x%p", (void*)site_);
         else
@@ -58,36 +50,36 @@ bool Zoom::ensurePatch()
         }
     }
 
-    if (!patch_.init(site_, 8))
+    if (!patch_.init(site_, off::camera::ZoomOverwrittenBytes))
         return false;
     if (!patch_.allocCave())
         return false;
 
-    unsigned char shell[32] = {};
+    unsigned char shell[off::camera::ZoomCaveSize] = {};
 
     // movss xmm0, [rdi+0x1748] — instruccion original (preserva el
     // comportamiento del juego: sprint, spyglass, etc).
-    memcpy(shell + 0, kFovPattern, 8);
+    memcpy(shell, off::camera::ZoomFovPattern, off::camera::ZoomOverwrittenBytes);
 
     // mulss xmm0, [rip+disp32] -> factorSlot en cave+24.
     // RIP tras la instruccion = cave+16 -> disp = 24 - 16 = 8.
-    shell[8] = 0xF3;
-    shell[9] = 0x0F;
-    shell[10] = 0x59;
-    shell[11] = 0x05;
-    int32_t disp = (int32_t)kFactorOffset - 16;
-    memcpy(shell + 12, &disp, 4);
+    shell[off::camera::ZoomMultiplyInstructionOffset] = 0xF3;
+    shell[off::camera::ZoomMultiplyInstructionOffset + 1] = 0x0F;
+    shell[off::camera::ZoomMultiplyInstructionOffset + 2] = 0x59;
+    shell[off::camera::ZoomMultiplyInstructionOffset + 3] = 0x05;
+    int32_t disp = (int32_t)off::camera::ZoomFactorSlotOffset - (int32_t)off::camera::ZoomMultiplyRipAfterInstruction;
+    memcpy(shell + off::camera::ZoomMultiplyInstructionOffset + 4, &disp, 4);
 
     // jmp site+8 (RIP tras el jmp = cave+21).
-    shell[16] = 0xE9;
-    int32_t relBack = (int32_t)((uintptr_t)(site_ + 8) - (patch_.caveAddr() + 21));
-    memcpy(shell + 17, &relBack, 4);
+    shell[off::camera::ZoomJumpInstructionOffset] = 0xE9;
+    int32_t relBack = (int32_t)((uintptr_t)(site_ + off::camera::ZoomOverwrittenBytes) - (patch_.caveAddr() + off::camera::ZoomJumpRipAfterInstruction));
+    memcpy(shell + off::camera::ZoomJumpInstructionOffset + 1, &relBack, 4);
 
-    if (!patch_.writeCave(0, shell, 21))
+    if (!patch_.writeCave(0, shell, off::camera::ZoomJumpRipAfterInstruction))
         return false;
 
     float one = 1.0f;
-    if (!patch_.writeCave(kFactorOffset, &one, 4))
+    if (!patch_.writeCave(off::camera::ZoomFactorSlotOffset, &one, sizeof(one)))
         return false;
 
     if (!patch_.enableJmpToCave())
@@ -164,7 +156,7 @@ void Zoom::onRender()
         factor_ = target;
     }
 
-    patch_.writeCave(kFactorOffset, &factor_, 4);
+    patch_.writeCave(off::camera::ZoomFactorSlotOffset, &factor_, sizeof(factor_));
     g_fovFactor = factor_;
 
     // ========================================================================

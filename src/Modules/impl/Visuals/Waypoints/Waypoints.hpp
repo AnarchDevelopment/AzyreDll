@@ -51,8 +51,6 @@ private:
     bool labels_ = true;
     float maxDistance_ = 0.0f; // 0 = sin limite
     ImVec4 color_ = ImVec4(0.55f, 0.85f, 1.0f, 1.0f);
-    float fov_ = 110.0f;
-    bool fovInited_ = false;
 };
 
 }

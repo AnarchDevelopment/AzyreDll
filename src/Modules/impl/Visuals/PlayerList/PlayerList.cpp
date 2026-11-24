@@ -6,7 +6,7 @@
 #include "Networking/IRC/IRC.hpp"
 #include "Render/DX11.hpp"
 #include "Render/ResourceSprites.hpp"
-#include "SDK/Game.hpp"
+#include "SDK/Core/Game.hpp"
 #include "resource.h"
 
 #include <imgui.h>

@@ -21,7 +21,6 @@ public:
             {"scaleDistance", scaleDistance_},
             {"fontSize", fontSize_},
             {"maxDistance", maxDistance_},
-            {"fov", fov_},
             {"blur", blur_},
             {"smooth", smooth_},
         };
@@ -33,7 +32,6 @@ public:
         scaleDistance_ = j.value("scaleDistance", scaleDistance_);
         fontSize_ = j.value("fontSize", fontSize_);
         maxDistance_ = j.value("maxDistance", maxDistance_);
-        fov_ = j.value("fov", fov_);
         blur_ = j.value("blur", blur_);
         smooth_ = j.value("smooth", smooth_);
     }
@@ -47,8 +45,6 @@ private:
     bool smooth_ = true;
     float maxDistance_ = 64.0f;
     float fontSize_ = 14.0f;
-    float fov_ = 110.0f;
-    bool fovInited_ = false;
 };
 
 }
