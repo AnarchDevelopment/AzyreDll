@@ -8,9 +8,10 @@ gh-pages
 
 # Agents
 opencode
+.agents
 .freebuff
 .claude
-rea/
+.rea/
 gitdiff.txt
 gitstatus_stdout.txt
 make_commits.sh

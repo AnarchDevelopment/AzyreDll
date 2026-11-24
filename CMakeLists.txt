@@ -44,13 +44,22 @@ FetchContent_Declare(
     URL https://github.com/skypjack/entt/archive/refs/heads/master.tar.gz
 )
 
+# GLM (header-only): matematicas de camara (matrices view/proj, proyeccion
+# de mundo a pantalla). Lo usan SDK/Client/Camera.hpp y los visuales.
+set(GLM_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(GLM_BUILD_INSTALL OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(
+    glm
+    URL https://github.com/g-truc/glm/archive/refs/heads/master.tar.gz
+)
+
 # Luau: solo librerias (VM + Compiler), sin herramientas de desarrollo.
 set(LUAU_BUILD_CLI OFF CACHE BOOL "" FORCE)
 set(LUAU_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(LUAU_BUILD_FUZZER OFF CACHE BOOL "" FORCE)
 set(LUAU_BUILD_ANALYSIS OFF CACHE BOOL "" FORCE)
 
-FetchContent_MakeAvailable(imgui minhook json luau soloud entt)
+FetchContent_MakeAvailable(imgui minhook json luau soloud entt glm)
 
 set(IMGUI_SOURCES
     ${imgui_SOURCE_DIR}/imgui.cpp
@@ -222,6 +231,7 @@ target_link_libraries(AzyreSDK PRIVATE
     Luau.Compiler
     Luau.VM
     EnTT::EnTT
+    glm::glm
 )
 
 # Toolchains no-MSVC (GCC/MinGW): DLL autocontenida — no depender de
@@ -232,6 +242,17 @@ endif()
 
 if(MSVC)
     target_link_options(AzyreSDK PRIVATE "/MAP")
+
+    # Keep Release optimizations while emitting full symbols for the final DLL.
+    # The linker PDB lives beside AzyreSDK.dll; compiler PDBs stay in the
+    # target's intermediate directory to avoid colliding with the linker PDB.
+    target_compile_options(AzyreSDK PRIVATE "$<$<CONFIG:Release>:/Zi>")
+    target_link_options(AzyreSDK PRIVATE "$<$<CONFIG:Release>:/DEBUG:FULL>")
+    set_target_properties(AzyreSDK PROPERTIES
+        PDB_NAME "AzyreSDK"
+        PDB_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>"
+        COMPILE_PDB_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/AzyreSDK.dir/$<CONFIG>/compile"
+    )
 endif()
 
 set_target_properties(AzyreSDK PROPERTIES OUTPUT_NAME "AzyreSDK")
