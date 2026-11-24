@@ -84,7 +84,7 @@ El usuario informó que KillAura no aplicaba rotación visual hasta activar Scaf
 
 ## Archivos inspeccionados
 
-- `src/SDK/VTables.hpp`, `src/SDK/Offsets.hpp`, `src/SDK/Classes/GameMode.hpp/.cpp`, `src/SDK/Classes/Actor.hpp`, `src/SDK/Classes/LocalPlayer.hpp`, `src/SDK/Game.hpp/.cpp`, `src/Framework/Math.hpp`, `src/Features/Rotation.hpp`, `src/Features/RotationHelper.hpp`, `src/Features/Friends.hpp`, `src/Modules/ModuleManager.cpp`, `src/Render/DX11.cpp`.
+- `src/SDK/Engine/VTable/VTables.hpp`, `src/SDK/Engine/Memory/Offsets.hpp`, `src/SDK/Gameplay/GameMode.hpp/.cpp`, `src/SDK/Entity/Actor.hpp`, `src/SDK/Entity/LocalPlayer.hpp`, `src/SDK/Core/Game.hpp/.cpp`, `src/Framework/Math.hpp`, `src/Features/Rotation.hpp`, `src/Features/RotationHelper.hpp`, `src/Features/Friends.hpp`, `src/Modules/ModuleManager.cpp`, `src/Render/DX11.cpp`.
 - Módulos existentes revisados como referencias: `AimAssist`, `Backtrack`, `AutoClicker`, `RapidHit`.
 
 ## Seguimiento: el servidor aún no aplicaba el hit (2026-10-20)

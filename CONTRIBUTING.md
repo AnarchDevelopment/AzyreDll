@@ -93,7 +93,17 @@ src/
 ├── Modules/         Feature modules (Combat / Movement / Visuals / Misc / Interface)
 ├── Networking/      IRC bridge, Spotify service
 ├── Render/          DX11 Present hook, BlurHelper, EffectSprites, ResourceSprites, D2D
-├── SDK/             Game SDK: offsets, vtables, classes, code patches, effects hook
+├── SDK/             Game SDK, grouped by engine subsystem
+│   ├── Client/      Client, camera view, and move input
+│   ├── Core/        Game facade and runtime discovery
+│   ├── Entity/      Actor and LocalPlayer
+│   ├── World/       Level, blocks, and block sources
+│   ├── Gameplay/    GameMode and effects
+│   ├── Inventory/   Inventory and item instances
+│   ├── Network/     Packet definitions and packet classes
+│   ├── UI/          Chat and chat hooks
+│   ├── Engine/      Memory patches, offsets, and vtables
+│   └── SDK.hpp      Umbrella include for broad integration points
 └── Scripting/       Luau runtime and native bindings
 ```
 
@@ -101,7 +111,7 @@ src/
 
 | Rule | Explanation |
 |------|-------------|
-| **Modules never touch raw offsets** | Go through the ECS (`Features/ECS/`) or the `SDK/Game` facade. |
+| **Modules never touch raw offsets** | Go through the ECS (`Features/ECS/`) or the `SDK/Core/Game` facade. |
 | **Lifecycle hooks are guarded** | `ModuleManager` wraps every dispatch in SEH + `try/catch`. A faulty module is disabled, never crashes the process. |
 | **Thread safety** | Commands are queued from the network thread and drained in `onTick` (Present thread). Never call `ModuleManager::add/remove` from a non-Present thread. |
 | **Compiler portability** | MSVC-specific SEH is remapped via `Framework/Compat.hpp`. All three toolchains must compile cleanly. |
@@ -192,7 +202,7 @@ private:
 ```cpp
 #include "MyModule.hpp"
 
-#include "SDK/Game.hpp"
+#include "SDK/Core/Game.hpp"
 
 #include <imgui.h>
 
@@ -273,7 +283,7 @@ Commands live under `src/Commands/impl/` as header-only classes.
 #include "Commands/Command.hpp"
 
 #include "Framework/Log.hpp"
-#include "SDK/ChatHook.hpp"
+#include "SDK/UI/Hooks/ChatHook.hpp"
 
 namespace mc {
 
